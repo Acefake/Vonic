@@ -61,6 +61,12 @@ export const app: AppAPI = {
 
   /** 是否开发环境 */
   isDev: import.meta.env.DEV,
+
+  /** 调用exe API */
+  callExe: async (exeName: string): Promise<any> => {
+    const result = await window.electron.ipcRenderer.invoke('call-exe', exeName)
+    return result
+  },
 }
 
 if (import.meta.env.DEV && typeof window !== 'undefined') {

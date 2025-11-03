@@ -1,6 +1,5 @@
 import type { ProductConfig } from './product'
 
-/** 功率分析配置 */
 const powerAnalysisConfig: ProductConfig = {
   id: 'powerAnalysis',
   name: '功率分析',
@@ -24,6 +23,15 @@ const powerAnalysisConfig: ProductConfig = {
   java: {
     jvmArgs: ['-Xmx512m', '-Xms256m'],
     startupTimeout: 30000,
+  },
+  doe: {
+    port: 25504,
+    startupTimeout: 30000,
+    enabled: true,
+  },
+  services: {
+    startupMode: 'parallel',
+    errorStrategy: 'stop-all',
   },
 }
 

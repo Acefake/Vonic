@@ -275,6 +275,8 @@ export interface FileAPI {
   openExternal: (url: string) => Promise<void>
   /** 在文件管理器中显示文件 */
   showInFolder: (path: string) => Promise<void>
+  /** 读取 dat 文件内容 */
+  readDatFile: (filePath: string) => Promise<string>
 }
 
 // ==================== HTTP 相关类型 ====================
@@ -481,4 +483,17 @@ export interface AppAPI {
   version: string
   /** 是否开发环境 */
   isDev: boolean
+  /** 调用exe API */
+  callExe: (exeName: string) => Promise<callExeRes>
+}
+
+interface callExeRes {
+  /** 状态 */
+  status: 'started' | 'exited' | 'failed_to_start' | 'failed'
+  /** 原因 */
+  reason: string
+  /** 进程ID */
+  pid?: number
+  /** 启动时间（仅在 started 状态下） */
+  startTime?: string
 }

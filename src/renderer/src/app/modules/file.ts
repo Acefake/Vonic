@@ -96,4 +96,13 @@ export const fileAPI: FileAPI = {
   async showInFolder(path: string): Promise<void> {
     await window.electron.ipcRenderer.invoke('shell:show-in-folder', path)
   },
+
+  /**
+   * 读取 dat 文件内容
+   * @param filePath dat 文件路径
+   * @returns 文件内容（文本）
+   */
+  async readDatFile(filePath: string): Promise<string> {
+    return window.electron.ipcRenderer.invoke('file:read-dat', filePath)
+  },
 }

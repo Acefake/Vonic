@@ -48,6 +48,22 @@ export interface ProductConfig {
     /** 启动超时时间 */
     startupTimeout?: number
   }
+  /** DOE 服务配置 */
+  doe?: {
+    /** DOE 服务端口 */
+    port?: number
+    /** 启动超时时间 */
+    startupTimeout?: number
+    /** 是否启用 DOE 服务 */
+    enabled?: boolean
+  }
+  /** 服务管理配置 */
+  services?: {
+    /** 启动模式：parallel（并行）或 sequential（顺序） */
+    startupMode?: 'parallel' | 'sequential'
+    /** 错误处理策略：stop-all（停止所有）或 continue（继续运行） */
+    errorStrategy?: 'stop-all' | 'continue'
+  }
   /** 其他自定义配置 */
   [key: string]: unknown
 }

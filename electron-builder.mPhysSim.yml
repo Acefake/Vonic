@@ -15,16 +15,15 @@ files:
 asarUnpack:
   - resources/**
 
-# 打包额外资源
-extraResources:
-  # 包含后端 JAR 文件
-  - from: jar
-    to: jar
-    filter:
-      - '**/*.jar'
-      - '**/*.json'
-      - '**/*.yml'
-      - '**/*.yaml'
+# extraResources:
+#   # 包含 DOE 服务文件
+#   - from: src/main/services/doeService
+#     to: services/doeService
+#     filter:
+#       - '**/*.jar'
+#       - '**/*.bat'
+#       - '**/*.exe'
+#       - 'Python/**/*'
 
 win:
   executableName: mPhysSim

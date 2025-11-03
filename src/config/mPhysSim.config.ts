@@ -28,6 +28,15 @@ const mPhysSimConfig: ProductConfig = {
     jvmArgs: ['-Xmx512m', '-Xms256m'],
     startupTimeout: 30000,
   },
+  doe: {
+    port: 25504,
+    startupTimeout: 30000,
+    enabled: true,
+  },
+  services: {
+    startupMode: 'parallel',
+    errorStrategy: 'stop-all',
+  },
 }
 
 export default mPhysSimConfig
