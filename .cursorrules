@@ -1,0 +1,365 @@
+# Tianjin App - Electron + Vue 3 + TypeScript 项目规则
+
+## 技术栈
+- **框架**: Electron + Vue 3 + TypeScript
+- **构建工具**: Electron Vite
+- **UI 库**: Ant Design Vue 4
+- **状态管理**: Pinia
+- **路由**: Vue Router
+- **代码规范**: @antfu/eslint-config
+
+## TypeScript 规范
+
+### 1. 禁止使用 any
+- 使用 `unknown` 替代 `any`
+- 使用泛型 `<T>` 为动态类型
+- 使用联合类型或交叉类型
+- 必须为函数返回值添加类型注解
+
+```typescript
+// ❌ 错误
+function getData(): any { }
+const data: any = {}
+
+// ✅ 正确
+function getData(): Promise<UserData> { }
+function getData<T>(): Promise<T> { }
+const data: unknown = {}
+```
+
+### 2. 类型定义规范
+- 优先使用 `interface` 定义对象类型
+- 使用 `type` 定义联合类型、工具类型
+- 导出类型使用 `export interface` 或 `export type`
+- 类型导入使用 `import type { ... }`
+
+```typescript
+// ✅ 正确
+export interface UserInfo {
+  name: string
+  age: number
+}
+
+export type UserRole = 'admin' | 'user'
+
+import type { WindowConfig } from './types'
+```
+
+### 3. 泛型使用
+- Composables 应支持泛型
+- 默认泛型使用 `unknown` 而非 `any`
+
+```typescript
+// ✅ 正确
+export function useWindow<T = unknown>(): UseWindowReturn<T> {
+  const data = ref<T | null>(null)
+  // ...
+}
+```
+
+## Vue 3 规范
+
+### 1. 组合式 API
+- 统一使用 `<script setup lang="ts">`
+- 使用 Composition API
+- Props 使用 `defineProps<T>()`
+- Emits 使用 `defineEmits<T>()`
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+
+interface Props {
+  title: string
+  count?: number
+}
+
+const props = defineProps<Props>()
+const emit = defineEmits<{
+  update: [value: number]
+}>()
+</script>
+```
+
+### 2. Ref 类型注解
+- 明确指定 ref 类型
+- 可为 null 的使用 `Ref<T | null>`
+
+```typescript
+// ✅ 正确
+const count = ref<number>(0)
+const user = ref<User | null>(null)
+const items = ref<Item[]>([])
+```
+
+### 3. 响应式规范
+- 使用 `ref` 处理基础类型
+- 使用 `reactive` 处理对象（可选）
+- 使用 `computed` 处理派生状态
+- 避免解构响应式对象，使用 `toRefs` 或 `storeToRefs`
+
+## Electron 规范
+
+### 1. 进程通信
+- 主进程使用 `ipcMain.on` / `ipcMain.handle`
+- 渲染进程使用 `ipcRenderer.send` / `ipcRenderer.invoke`
+- 类型安全的 IPC 通信
+
+```typescript
+// 主进程
+ipcMain.handle('getData', async (_event, userId: string) => {
+  return await fetchUserData(userId)
+})
+
+// 渲染进程
+const data = await window.electron.ipcRenderer.invoke('getData', 'user123')
+```
+
+### 2. 窗口管理
+- 使用 WindowManager 统一管理窗口
+- 窗口配置通过 `config.ts` 集中管理
+- 支持懒加载和单例模式
+
+### 3. 安全规范
+- 启用 contextIsolation
+- 禁用 nodeIntegration
+- 使用 preload 脚本暴露 API
+
+## 代码风格
+
+### 1. 命名规范
+- **文件名**: kebab-case (如 `window-manager.ts`)
+- **组件名**: PascalCase (如 `UserProfile.vue`)
+- **函数/变量**: camelCase (如 `getUserData`)
+- **常量**: UPPER_SNAKE_CASE (如 `MAX_COUNT`)
+- **类型/接口**: PascalCase (如 `UserData`)
+
+### 2. 函数规范
+- 纯函数优先
+- 单一职责
+- 明确的输入输出类型
+- 添加 JSDoc 注释
+
+```typescript
+/**
+ * 获取用户信息
+ * @param userId 用户 ID
+ * @returns 用户信息对象
+ */
+async function getUserInfo(userId: string): Promise<UserInfo> {
+  // ...
+}
+```
+
+### 3. 导入顺序
+```typescript
+// 1. Node.js 内置模块
+import { join } from 'node:path'
+import process from 'node:process'
+
+// 2. 第三方库
+import { BrowserWindow } from 'electron'
+import { ref, computed } from 'vue'
+
+// 3. 类型导入
+import type { WindowConfig } from './types'
+
+// 4. 本地模块
+import { getWindowConfig } from './config'
+import { WindowManager } from './WindowManager'
+```
+
+## 项目结构规范
+
+### 1. 主进程 (src/main)
+```
+src/main/
+├── index.ts              # 入口文件
+├── window/               # 窗口管理
+│   ├── WindowManager.ts  # 窗口管理器
+│   ├── config.ts         # 窗口配置
+│   └── types.ts          # 类型定义
+└── store/                # 状态管理
+    └── storeManage.ts    # 多窗口状态同步
+```
+
+### 2. 渲染进程 (src/renderer/src)
+```
+src/renderer/src/
+├── main.ts               # 入口文件
+├── App.vue               # 根组件
+├── components/           # 公共组件
+│   └── Layout/           # 布局组件
+├── views/                # 页面
+├── router/               # 路由配置
+├── store/                # Pinia store
+│   ├── index.ts          # Store 定义
+│   └── syncPlugin.ts     # 多窗口同步插件
+├── hooks/                # 组合式函数
+└── assets/               # 静态资源
+```
+
+### 3. 共享代码 (src/shared)
+```
+src/shared/
+├── constants.ts          # 共享常量
+├── types.ts              # 共享类型
+└── index.ts              # 导出
+```
+
+## Pinia 规范
+
+### 1. Store 定义
+```typescript
+export const useUserStore = defineStore('user', {
+  state: () => ({
+    name: '',
+    age: 0,
+  }),
+  
+  getters: {
+    isAdult: (state): boolean => state.age >= 18,
+  },
+  
+  actions: {
+    updateName(name: string): void {
+      this.name = name
+    },
+  },
+})
+```
+
+### 2. 多窗口同步
+- 使用 syncPlugin 自动同步
+- 状态在主进程集中管理
+- 避免手动 IPC 调用
+
+## 路由规范
+
+### 1. 路由配置
+```typescript
+const routes: RouteRecordRaw[] = [
+  {
+    path: '/',
+    name: 'Home',
+    component: () => import('../views/Home.vue'),
+    meta: {
+      title: '主页',
+      icon: 'HomeOutlined',
+      order: 1,
+    },
+  },
+]
+```
+
+### 2. Meta 字段
+- `title`: 页面标题（必填）
+- `icon`: 菜单图标（可选）
+- `order`: 菜单排序（可选）
+- `hidden`: 是否隐藏（可选）
+
+## 错误处理
+
+### 1. 统一错误处理
+```typescript
+try {
+  const result = await someAsyncOperation()
+  return result
+}
+catch (error) {
+  console.error('操作失败:', error)
+  // 错误处理逻辑
+}
+```
+
+### 2. Promise 处理
+- 使用 async/await
+- 避免未捕获的 Promise rejection
+
+## 性能优化
+
+### 1. 组件懒加载
+```typescript
+const Home = () => import('../views/Home.vue')
+```
+
+### 2. 窗口懒加载
+- 设置 `lazy: true` 配置
+- 窗口关闭时隐藏而非销毁
+
+### 3. 状态管理优化
+- 合理拆分 Store
+- 使用 computed 缓存计算结果
+- 避免不必要的响应式
+
+## 注释规范
+
+### 1. 文件注释
+```typescript
+/**
+ * 窗口管理器
+ * 统一管理所有窗口的生命周期
+ */
+```
+
+### 2. 函数注释
+```typescript
+/**
+ * 创建新窗口
+ * @param windowName 窗口名称
+ * @param options 窗口选项
+ * @returns 窗口实例
+ */
+```
+
+### 3. 复杂逻辑注释
+- 解释为什么这样做（Why）
+- 而不仅仅是做了什么（What）
+
+## 测试规范
+
+### 1. 单元测试
+- 关键业务逻辑必须测试
+- 工具函数必须测试
+- Composables 必须测试
+
+### 2. E2E 测试
+- 关键用户流程测试
+- 窗口交互测试
+
+## Git 提交规范
+
+```
+feat: 新功能
+fix: 修复 bug
+docs: 文档更新
+style: 代码格式调整
+refactor: 重构
+perf: 性能优化
+test: 测试相关
+chore: 构建/工具链相关
+```
+
+## 禁止事项
+
+❌ 禁止使用 `any` 类型
+❌ 禁止在渲染进程直接使用 Node.js API
+❌ 禁止绕过 preload 安全机制
+❌ 禁止在主进程使用 Vue API
+❌ 禁止在生产环境启用 devTools
+❌ 禁止硬编码配置（使用环境变量）
+❌ 禁止未处理的 Promise rejection
+❌ 禁止使用 `@ts-ignore`（使用 `@ts-expect-error` 并说明原因）
+
+## 最佳实践
+
+✅ 使用 TypeScript 严格模式
+✅ 使用 ESLint + Prettier 格式化代码
+✅ 使用组合式 API
+✅ 使用路由懒加载
+✅ 使用窗口管理器统一管理窗口
+✅ 使用 Pinia 管理状态
+✅ 使用 IPC 进行进程间通信
+✅ 添加详细的类型注解和注释
+✅ 保持代码简洁、可读、可维护
+

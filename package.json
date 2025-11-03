@@ -1,0 +1,65 @@
+{
+  "name": "mPhysSim",
+  "version": "1.0.0",
+  "description": "多物理场数值模拟仿真计算",
+  "author": "hua wang",
+  "homepage": "",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "format": "prettier --write .",
+    "lint": "eslint --cache .",
+    "lint:fix": "eslint --fix .",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "start": "electron-vite preview",
+    "dev": "electron-vite dev",
+    "dev:mPhysSim": "chcp 65001 >nul && cross-env VITE_APP_PRODUCT=mPhysSim electron-vite dev --mode mPhysSim",
+    "dev:powerAnalysis": "chcp 65001 >nul && cross-env VITE_APP_PRODUCT=powerAnalysis electron-vite dev --mode powerAnalysis",
+    "build": "npm run typecheck && electron-vite build",
+    "build:mPhysSim": "npm run typecheck && cross-env VITE_APP_PRODUCT=mPhysSim electron-vite build --mode mPhysSim && electron-builder --win --config electron-builder.mPhysSim.yml",
+    "build:powerAnalysis": "npm run typecheck && cross-env VITE_APP_PRODUCT=powerAnalysis electron-vite build --mode powerAnalysis && electron-builder --win --config electron-builder.powerAnalysis.yml",
+    "postinstall": "electron-builder install-app-deps",
+    "build:unpack": "npm run build && electron-builder --dir"
+  },
+  "dependencies": {
+    "@electron-toolkit/preload": "^3.0.2",
+    "@electron-toolkit/utils": "^4.0.0",
+    "ant-design-vue": "~4.2.6",
+    "axios": "^1.13.1",
+    "binary-parser": "^2.2.1",
+    "electron-updater": "^6.3.9",
+    "iconv-lite": "^0.7.0",
+    "json5": "^2.2.3",
+    "pinia": "^3.0.3",
+    "pinia-plugin-persistedstate": "^4.7.1",
+    "vue-router": "^4.6.3"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^6.1.0",
+    "@electron-toolkit/eslint-config-prettier": "3.0.0",
+    "@electron-toolkit/eslint-config-ts": "^3.1.0",
+    "@electron-toolkit/tsconfig": "^2.0.0",
+    "@types/node": "^22.18.6",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "cross-env": "^7.0.3",
+    "electron": "^38.1.2",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^4.0.1",
+    "eslint": "^9.36.0",
+    "eslint-plugin-vue": "^10.4.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.2",
+    "unplugin-vue-components": "^30.0.0",
+    "vite": "^7.1.6",
+    "vue": "^3.5.21",
+    "vue-eslint-parser": "^10.2.0",
+    "vue-tsc": "^3.0.7"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild"
+    ]
+  }
+}
