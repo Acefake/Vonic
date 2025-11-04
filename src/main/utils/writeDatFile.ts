@@ -20,9 +20,17 @@ export function writeDatFile(designData: any): { code: number, message: string, 
       targetDir = path.join(process.cwd(), 'testFile')
     }
     else {
-      // 生产环境：写到应用可执行文件同级目录（与 Fortran 可执行文件同目录）
-      // 注意：app.getAppPath() 在打包后会指向 asar 包，不适合写入；应使用 exe 路径的上级目录
-      targetDir = path.dirname(app.getPath('exe'))
+      // 生产环境：写到外部程序所在目录（常见：exe 同级 / resources / resources/unpacked）
+      // 注意：app.getAppPath() 在打包后会指向 asar 包，不适合写入；应使用 exe 路径或资源目录
+      const exeDir = path.dirname(app.getPath('exe'))
+      const candidateDirs = [
+        exeDir,
+        path.join(exeDir, 'resources'),
+        path.join(exeDir, 'resources', 'unpacked'),
+      ]
+      // 优先选择存在 ns-linear.exe 的目录，以确保 Fortran 程序能读取到 input.dat
+      const preferredDir = candidateDirs.find(dir => fs.existsSync(path.join(dir, 'ns-linear.exe')))
+      targetDir = preferredDir || exeDir
     }
 
     // 确保目录存在

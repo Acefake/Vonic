@@ -41,22 +41,18 @@ extraResources:
 #   # 禁用差异更新支持
 #   differentialPackage: false
 
+# win:
+#   executableName: mPhysSim
+#   target: portable
+
 win:
   executableName: mPhysSim
-  target: portable
-
-linux:
   target:
-    - AppImage
-    - snap
-    - deb
-  maintainer: electronjs.org
-  category: Utility
+    - zip
+
 appImage:
-  artifactName: ${name}-mPhysSim-${version}.${ext}
+  artifactName: ${name}-mPhysSim.${ext}
 npmRebuild: false
-publish:
-  provider: generic
-  url: https://example.com/auto-updates
+publish: false # 无需发布，关闭自动更新处理
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/

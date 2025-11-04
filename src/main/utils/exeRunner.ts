@@ -110,17 +110,27 @@ export async function runExe(exeName: string) {
       })
     }
     return new Promise((resolve) => {
-      const exePath = path.join(__dirname, exeName)
+      // 生产环境：定位 exe 所在目录（常见位置：exe 同级、resources、resources/unpacked）
+      const exeDir = path.dirname(app.getPath('exe'))
+      const candidatePaths = [
+        path.join(exeDir, exeName),
+        path.join(exeDir, 'resources', exeName),
+        path.join(exeDir, 'resources', 'unpacked', exeName),
+      ]
+      const exePath = candidatePaths.find(p => existsSync(p))
+
       // 生产环境：启动前检查文件存在
-      if (!existsSync(exePath)) {
+      if (!exePath) {
         resolve({
           status: 'failed_to_start',
           reason: '文件不存在或路径错误',
-          details: exePath,
+          details: candidatePaths.join(' | '),
           pid: null,
         })
         return
       }
+      const logger: Logger = new Logger()
+      logger.log('info', `正在启动外部程序: ${exePath}`)
       const child = execFile(exePath, (error) => {
         if (error) {
           resolve({

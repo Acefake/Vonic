@@ -1,5 +1,6 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { app } from 'electron'
 
 /**
  * 根据运行环境读取指定文件内容
@@ -19,8 +20,16 @@ export function readFileData(fileName: string): string {
     filePath = path.join(process.cwd(), 'testFile', fileName)
   }
   else {
-    // 生产环境：读取当前执行文件同级目录下的文件
-    filePath = path.join(__dirname, fileName)
+    // 生产环境：读取应用可执行文件同级目录或资源目录下的文件（与 Fortran 可执行文件同目录）
+    // 注意：__dirname 在打包后指向 asar 包，不适合用于查找外部生成的 .dat 文件
+    const exeDir = path.dirname(app.getPath('exe'))
+    const candidatePaths = [
+      path.join(exeDir, fileName),
+      path.join(exeDir, 'resources', fileName),
+      path.join(exeDir, 'resources', 'unpacked', fileName),
+    ]
+    const foundPath = candidatePaths.find(p => fs.existsSync(p))
+    filePath = foundPath || path.join(exeDir, fileName)
   }
 
   if (!fs.existsSync(filePath)) {
