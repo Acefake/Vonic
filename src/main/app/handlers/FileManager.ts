@@ -1,6 +1,8 @@
 import { access, readFile as fsReadFile, unlink, writeFile } from 'node:fs/promises'
 import { extname } from 'node:path'
 import { ipcMain } from 'electron'
+import { readFileData } from '@/main/utils/readFileData'
+import { writeDatFile } from '@/main/utils/writeDatFile'
 import { ALLOWED_DELETE_EXTENSIONS, ALLOWED_READ_EXTENSIONS, ALLOWED_WRITE_EXTENSIONS } from '@/shared/files-config'
 
 /**
@@ -15,7 +17,8 @@ export class FileManager {
     ipcMain.handle('file:write', this.writeFile.bind(this))
     ipcMain.handle('file:exists', this.fileExists.bind(this))
     ipcMain.handle('file:delete', this.deleteFile.bind(this))
-    ipcMain.handle('file:read-dat', this.readDatFile.bind(this))
+    ipcMain.handle('file:read-dat', this.readFileDataIpc.bind(this))
+    ipcMain.handle('file:write-dat', this.writeDatFileIpc.bind(this))
   }
 
   /**
@@ -122,25 +125,26 @@ export class FileManager {
   }
 
   /**
-   * 读取dat文件
-   * @param _ IPC 事件对象
-   * @param filePath dat文件路径
+   * 读取文件数据
+   * @param filePath 文件路径
    * @returns 文件内容（文本）
    */
-  private async readDatFile(_: Electron.IpcMainInvokeEvent, filePath: string): Promise<string> {
-    try {
-      // 验证文件类型
-      if (!this.isFileTypeAllowed(filePath, ['.dat'])) {
-        const ext = extname(filePath)
-        throw new Error(`不允许读取该类型的文件: ${ext || '(无扩展名)'}。允许的文件类型: .dat`)
-      }
+  private async readFileDataIpc(_: Electron.IpcMainInvokeEvent, filePath: string): Promise<string> {
+    const content = await readFileData(filePath)
+    return content
+  }
 
-      const content = await fsReadFile(filePath, 'utf-8')
-      return content
-    }
-    catch (error) {
-      console.error('读取dat文件失败:', error)
-      throw new Error(`读取dat文件失败: ${error instanceof Error ? error.message : String(error)}`)
-    }
+  /**
+   * 生成 dat 文件内容
+   * @param designData 设计数据
+   * @returns 操作结果
+   */
+
+  private async writeDatFileIpc(_: Electron.IpcMainInvokeEvent, arg1: any, arg2?: any): Promise<{ code: number, message: string, filePath: string }> {
+    // 兼容两种调用方式：
+    // 1) invoke('file:write-dat', designData)
+    // 2) invoke('file:write-dat', fileName, designData)
+    const designData = (arg2 !== undefined) ? arg2 : arg1
+    return await writeDatFile(designData)
   }
 }

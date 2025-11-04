@@ -105,4 +105,16 @@ export const fileAPI: FileAPI = {
   async readDatFile(filePath: string): Promise<string> {
     return window.electron.ipcRenderer.invoke('file:read-dat', filePath)
   },
+
+  /**
+   * 写入 dat 文件内容
+   * @param filePath dat 文件路径
+   * @param content 文件内容（文本）
+   */
+  async writeDatFile(arg1: string | Record<string, unknown>, arg2?: Record<string, unknown>): Promise<{ code: number, message: string, filePath: string }> {
+    // 兼容两种调用方式：
+    // 1) writeDatFile(designData)
+    // 2) writeDatFile(filePath, designData)
+    return window.electron.ipcRenderer.invoke('file:write-dat', arg1, arg2)
+  },
 }

@@ -128,7 +128,6 @@ export function createSyncPlugin() {
     // 对于 log store，使用防抖避免快速连续更新导致的循环
     store.$subscribe((_mutation, _state) => {
       if (isSyncing()) {
-        console.log(`[Store Sync] 跳过同步（正在同步中）- store: ${store.$id}`)
         return // 如果正在同步，跳过
       }
 
@@ -146,7 +145,6 @@ export function createSyncPlugin() {
         const timer = setTimeout(() => {
           // 在防抖回调中重新获取最新状态，确保发送的是最新的
           const latestState = serializeState(store.$state)
-          console.log(`[Store Sync] 发送状态到主进程（防抖）- store: ${store.$id}`, latestState)
           window.electron.ipcRenderer.send('store:update', {
             key: storeKey,
             value: latestState,
@@ -158,7 +156,6 @@ export function createSyncPlugin() {
       }
       else {
         // 其他 store 立即发送
-        console.log(`[Store Sync] 发送状态到主进程 - store: ${store.$id}`, serializedState)
         window.electron.ipcRenderer.send('store:update', {
           key: storeKey,
           value: serializedState,
@@ -195,13 +192,11 @@ export function createSyncPlugin() {
           }
 
           if (!stateChanged) {
-            console.log(`[Store Sync] 状态未变化，跳过更新 - store: ${storeId}`)
             return
           }
 
           // 检查目标 store 是否正在同步
           if (syncingStores.get(storeId)) {
-            console.log(`[Store Sync] 跳过同步（目标 store 正在同步中）- store: ${storeId}`)
             return
           }
 
@@ -251,7 +246,6 @@ export function createSyncPlugin() {
             }
 
             if (!stateChanged) {
-              console.log(`[Store Sync] 初始化状态未变化，跳过更新 - store: ${store.$id}`)
               return
             }
 

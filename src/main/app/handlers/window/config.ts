@@ -1,7 +1,7 @@
 import type { BrowserWindowConstructorOptions } from 'electron'
 import type { WindowConfig } from './types'
 import { join } from 'node:path'
-import { is } from '@electron-toolkit/utils'
+// import { is } from '@electron-toolkit/utils'
 
 import { WindowName } from '@/shared/constants'
 
@@ -17,7 +17,7 @@ const browserWindowDefaultOptions: BrowserWindowConstructorOptions = {
     contextIsolation: true,
     nodeIntegration: false,
     preload: join(__dirname, '../preload/index.js'),
-    devTools: is.dev, // 仅在开发环境启用 devTools
+    devTools: true,
     webSecurity: false,
   },
 }

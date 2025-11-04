@@ -1,4 +1,4 @@
-import type { AppAPI } from './types'
+import type { AppAPI, callExeRes } from './types'
 import { getProductConfig } from '../../../config/product.config'
 import { clipboardAPI } from './modules/clipboard'
 import { debugAPI } from './modules/debug'
@@ -63,7 +63,7 @@ export const app: AppAPI = {
   isDev: import.meta.env.DEV,
 
   /** 调用exe API */
-  callExe: async (exeName: string): Promise<any> => {
+  callExe: async (exeName: string): Promise<callExeRes> => {
     const result = await window.electron.ipcRenderer.invoke('call-exe', exeName)
     return result
   },

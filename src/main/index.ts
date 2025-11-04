@@ -16,6 +16,26 @@ let logger: Logger
 let serviceManager: DoeServiceManager
 let isQuitting = false
 
+// 单实例锁：只允许启动一个应用实例
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  // 如果无法获取锁，说明已有实例在运行，直接退出当前进程
+  app.quit()
+}
+else {
+  // 当用户尝试启动第二个实例时，聚焦现有窗口
+  app.on('second-instance', () => {
+    const windowManager = getWindowManager()
+    const mainWindow = windowManager.getWindowByName(WindowName.MAIN)
+    if (mainWindow) {
+      if (mainWindow.isMinimized())
+        mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  })
+}
+
 ipcMain.handle('call-exe', async (_, exeName) => {
   console.log('主进程接收到调用请求，exe名称：', exeName)
   const result = await runExe(exeName) // 调用exe并等待结果

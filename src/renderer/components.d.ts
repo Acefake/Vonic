@@ -30,6 +30,7 @@ declare module 'vue' {
     ALayoutSider: typeof import('ant-design-vue/es')['LayoutSider']
     AMenu: typeof import('ant-design-vue/es')['Menu']
     AMenuItem: typeof import('ant-design-vue/es')['MenuItem']
+    AProgress: typeof import('ant-design-vue/es')['Progress']
     ARadio: typeof import('ant-design-vue/es')['Radio']
     ARadioGroup: typeof import('ant-design-vue/es')['RadioGroup']
     AResult: typeof import('ant-design-vue/es')['Result']

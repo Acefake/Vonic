@@ -1,11 +1,14 @@
 import type { ChildProcess } from 'node:child_process'
 import type { Logger } from '@/main/app/handlers/LogerManager'
-import { spawn } from 'node:child_process'
+import { exec, spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
+import util from 'node:util'
 import axios from 'axios'
 import { app } from 'electron'
+
+const execAsync = util.promisify(exec)
 
 /**
  * 获取DOE服务的路径
@@ -71,6 +74,9 @@ export class DoeProcessManager {
     this.isStarting = true
 
     try {
+      // 启动前先尝试杀死占用端口的进程
+      await this.killProcessOnPort(this.config.port!)
+
       // 检查 start.bat 文件是否存在
       if (!existsSync(this.config.batPath)) {
         throw new Error(`start.bat 文件不存在: ${this.config.batPath}`)
@@ -132,6 +138,53 @@ export class DoeProcessManager {
       this.isRunning = false
       await this.logger?.log('error', `启动 DOE 服务失败: ${error}`)
       throw error
+    }
+  }
+
+  /**
+   * 查找并终止占用指定端口的进程
+   * @param port 端口号
+   */
+  private async killProcessOnPort(port: number): Promise<void> {
+    if (process.platform !== 'win32') {
+      this.logger?.log('info', 'Skipping kill-process-on-port, not on Windows.')
+      return
+    }
+
+    let pids: string[]
+    try {
+      const command = `netstat -aon | findstr ":${port}" | findstr "LISTENING"`
+      const { stdout } = await execAsync(command)
+      const lines = stdout.trim().split('\n')
+      const pidSet = new Set<string>()
+      for (const line of lines) {
+        const parts = line.trim().split(/\s+/)
+        const pid = parts[parts.length - 1]
+        if (pid && pid !== '0') {
+          pidSet.add(pid)
+        }
+      }
+      pids = [...pidSet]
+    }
+    catch (error) {
+      await this.logger?.log('error', `查找并终止占用端口 ${port} 的进程失败: ${error}`)
+      return
+    }
+
+    if (pids.length === 0) {
+      return
+    }
+
+    for (const pid of pids) {
+      try {
+        await this.logger?.log('info', `找到占用端口 ${port} 的进程，PID: ${pid}，正在终止...`)
+        await execAsync(`taskkill /F /PID ${pid}`)
+        await this.logger?.log('info', `进程 ${pid} 已成功终止。`)
+      }
+      catch (killError) {
+        console.error(killError)
+        await this.logger?.log('warn', `终止进程 ${pid} 时出错 (可能已终止)`)
+      }
     }
   }
 

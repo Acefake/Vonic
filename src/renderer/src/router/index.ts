@@ -30,6 +30,7 @@ const routes: RouteRecordRaw[] = [
       title: 'Demo',
       icon: 'CodeOutlined',
       order: 0,
+      feature: 'demo',
     },
   },
   {

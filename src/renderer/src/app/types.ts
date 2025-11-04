@@ -277,9 +277,9 @@ export interface FileAPI {
   showInFolder: (path: string) => Promise<void>
   /** 读取 dat 文件内容 */
   readDatFile: (filePath: string) => Promise<string>
+  /** 写入 dat 文件内容 */
+  writeDatFile: (arg1: string | Record<string, unknown>, arg2?: Record<string, unknown>) => Promise<{ code: number, message: string, filePath: string }>
 }
-
-// ==================== HTTP 相关类型 ====================
 
 export interface RequestConfig {
   url: string
@@ -487,13 +487,20 @@ export interface AppAPI {
   callExe: (exeName: string) => Promise<callExeRes>
 }
 
-interface callExeRes {
+export interface callExeRes {
   /** 状态 */
-  status: 'started' | 'exited' | 'failed_to_start' | 'failed'
+  status: 'started' | 'exited' | 'failed_to_start' | 'failed' | 'close'
   /** 原因 */
   reason: string
   /** 进程ID */
   pid?: number
   /** 启动时间（仅在 started 状态下） */
   startTime?: string
+  /** 结束时间（仅在 exited 状态下） */
+  endTime?: string
+  /** 运行时长（毫秒） */
+  runTime?: number
+  /** 是否成功退出 */
+  isSuccess?: boolean
+  code?: string
 }

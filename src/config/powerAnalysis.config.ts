@@ -20,10 +20,6 @@ const powerAnalysisConfig: ProductConfig = {
     initialDesign: true,
     schemeOptimization: true,
   },
-  java: {
-    jvmArgs: ['-Xmx512m', '-Xms256m'],
-    startupTimeout: 30000,
-  },
   doe: {
     port: 25504,
     startupTimeout: 30000,
