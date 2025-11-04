@@ -674,71 +674,69 @@ onMounted(() => {
 
 <template>
   <div class="scheme-chart-container">
-    <a-card :title="title" :body-style="{ padding: '16px' }">
-      <div class="chart-layout">
-        <!-- 图表区域 -->
-        <div class="chart-area">
-          <VChart v-if="hasValidData" class="chart" :option="chartOption" autoresize />
-          <a-empty v-else description="暂无数据" />
-        </div>
-
-        <!-- 右侧控制面板 -->
-        <div class="chart-controls">
-          <a-card size="small">
-            <div class="control-item">
-              <span class="control-label">曲线类型</span>
-              <a-select v-model:value="chartType" style="width: 100%">
-                <a-select-option v-for="option in chartTypeOptions" :key="option" :value="option">
-                  {{ option }}
-                </a-select-option>
-              </a-select>
-            </div>
-
-            <div v-if="showXAxisSelector" class="control-item">
-              <span class="control-label">X轴</span>
-              <a-select v-model:value="xAxisField" style="width: 100%">
-                <a-select-option v-for="option in xFieldOptions" :key="option.value" :value="option.value">
-                  {{ option.label }}
-                </a-select-option>
-              </a-select>
-            </div>
-
-            <div v-if="showYAxisSelector" class="control-item">
-              <span class="control-label">Y轴</span>
-              <a-select v-model:value="yAxisField" style="width: 100%">
-                <a-select-option v-for="option in yFieldOptions" :key="option.value" :value="option.value">
-                  {{ option.label }}
-                </a-select-option>
-              </a-select>
-            </div>
-
-            <div class="color-item-group">
-              <div class="control-item">
-                <span class="control-label">仿真曲线颜色</span>
-                <div class="color-picker-wrapper">
-                  <input v-model="curveColor" type="color" class="color-input">
-                </div>
-              </div>
-
-              <div class="control-item">
-                <span class="control-label">标题颜色</span>
-                <div class="color-picker-wrapper">
-                  <input v-model="titleColor" type="color" class="color-input">
-                </div>
-              </div>
-            </div>
-            <div class="control-item">
-              <span class="control-label">图表字体</span>
-              <a-select v-model:value="chartFont" style="width: 100%">
-                <a-select-option v-for="font in fontOptions" :key="font" :value="font">
-                  {{ font }}
-                </a-select-option>
-              </a-select>
-            </div>
-          </a-card>
-        </div>
+    <div class="chart-layout">
+      <!-- 图表区域 -->
+      <div class="chart-area">
+        <VChart v-if="hasValidData" class="chart" :option="chartOption" autoresize />
+        <a-empty v-else description="暂无数据" />
       </div>
-    </a-card>
+
+      <!-- 右侧控制面板 -->
+      <div class="chart-controls">
+        <a-card size="small">
+          <div class="control-item">
+            <span class="control-label">曲线类型</span>
+            <a-select v-model:value="chartType" style="width: 100%">
+              <a-select-option v-for="option in chartTypeOptions" :key="option" :value="option">
+                {{ option }}
+              </a-select-option>
+            </a-select>
+          </div>
+
+          <div v-if="showXAxisSelector" class="control-item">
+            <span class="control-label">X轴</span>
+            <a-select v-model:value="xAxisField" style="width: 100%">
+              <a-select-option v-for="option in xFieldOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </a-select-option>
+            </a-select>
+          </div>
+
+          <div v-if="showYAxisSelector" class="control-item">
+            <span class="control-label">Y轴</span>
+            <a-select v-model:value="yAxisField" style="width: 100%">
+              <a-select-option v-for="option in yFieldOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </a-select-option>
+            </a-select>
+          </div>
+
+          <div class="color-item-group">
+            <div class="control-item">
+              <span class="control-label">仿真曲线颜色</span>
+              <div class="color-picker-wrapper">
+                <input v-model="curveColor" type="color" class="color-input">
+              </div>
+            </div>
+
+            <div class="control-item">
+              <span class="control-label">标题颜色</span>
+              <div class="color-picker-wrapper">
+                <input v-model="titleColor" type="color" class="color-input">
+              </div>
+            </div>
+          </div>
+          <div class="control-item">
+            <span class="control-label">图表字体</span>
+            <a-select v-model:value="chartFont" style="width: 100%">
+              <a-select-option v-for="font in fontOptions" :key="font" :value="font">
+                {{ font }}
+              </a-select-option>
+            </a-select>
+          </div>
+        </a-card>
+      </div>
+    </div>
   </div>
 </template>
 

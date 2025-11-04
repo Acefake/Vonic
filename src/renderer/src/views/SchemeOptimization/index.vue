@@ -649,7 +649,7 @@ watch(optimizationAlgorithm, async (algo) => {
   try {
     await app.storage.set(STORAGE_ALGO_KEY, algo)
   }
-  catch {}
+  catch { }
 })
 
 watch(designFactors, async (factors) => {
@@ -658,7 +658,7 @@ watch(designFactors, async (factors) => {
       await app.storage.set(STORAGE_MOPSO_FACTORS_KEY, factors)
     }
   }
-  catch {}
+  catch { }
 }, { deep: true })
 
 /**
@@ -705,10 +705,8 @@ function onFactorCountChange(value: number | null): void {
           <a-card title="优化算法" class="algorithm-card">
             <a-form layout="vertical" :model="{}">
               <a-form-item label="优化算法">
-                <a-select
-                  :value="optimizationAlgorithm" style="width: 100%"
-                  @update:value="(val) => optimizationAlgorithm = val as OptimizationAlgorithm"
-                >
+                <a-select :value="optimizationAlgorithm" style="width: 100%"
+                  @update:value="(val) => optimizationAlgorithm = val as OptimizationAlgorithm">
                   <a-select-option v-for="option in algorithmOptions" :key="option.value" :value="option.value">
                     {{ option.label }}
                   </a-select-option>
@@ -721,28 +719,20 @@ function onFactorCountChange(value: number | null): void {
               <a-form layout="vertical" :model="{}">
                 <div class="form-row">
                   <a-form-item label="因子数量" class="form-col">
-                    <a-input-number
-                      :value="factorCount" disabled :min="1" style="width: 100%"
-                      @update:value="(val) => { factorCount = val ?? 3; onFactorCountChange(val) }"
-                    />
+                    <a-input-number :value="factorCount" disabled :min="1" style="width: 100%"
+                      @update:value="(val) => { factorCount = val ?? 3; onFactorCountChange(val) }" />
                   </a-form-item>
 
                   <a-form-item label="样本点数" class="form-col">
-                    <a-input-number
-                      :value="samplePointCount" :min="1" style="width: 100%"
-                      @update:value="(val) => samplePointCount = val ?? 50"
-                    />
+                    <a-input-number :value="samplePointCount" :min="1" style="width: 100%"
+                      @update:value="(val) => samplePointCount = val ?? 50" />
                   </a-form-item>
 
                   <a-form-item label="采样准则" class="form-col">
-                    <a-select
-                      :value="samplingCriterion" style="width: 100%"
-                      @update:value="(val) => samplingCriterion = val as SamplingCriterion"
-                    >
-                      <a-select-option
-                        v-for="option in samplingCriterionOptions" :key="option.value"
-                        :value="option.value"
-                      >
+                    <a-select :value="samplingCriterion" style="width: 100%"
+                      @update:value="(val) => samplingCriterion = val as SamplingCriterion">
+                      <a-select-option v-for="option in samplingCriterionOptions" :key="option.value"
+                        :value="option.value">
                         {{ option.label }}
                       </a-select-option>
                     </a-select>
@@ -767,10 +757,8 @@ function onFactorCountChange(value: number | null): void {
                   </template>
                   添加参数
                 </a-button>
-                <a-button
-                  danger size="small" :disabled="selectedDesignFactorIds.length === 0"
-                  @click="deleteSelectedDesignFactors"
-                >
+                <a-button danger size="small" :disabled="selectedDesignFactorIds.length === 0"
+                  @click="deleteSelectedDesignFactors">
                   <template #icon>
                     <DeleteOutlined />
                   </template>
@@ -778,20 +766,18 @@ function onFactorCountChange(value: number | null): void {
                 </a-button>
               </a-space>
             </div>
-            <a-table
-              size="small" :columns="[
-                { title: '序号', dataIndex: 'id', key: 'id', width: 80 },
-                { title: '名称', dataIndex: 'name', key: 'name', width: 200 },
-                { title: '类型', dataIndex: 'type', key: 'type', width: 120 },
-                { title: '下限', dataIndex: 'lowerLimit', key: 'lowerLimit', width: 150 },
-                { title: '上限', dataIndex: 'upperLimit', key: 'upperLimit', width: 150 },
-                { title: '水平数', dataIndex: 'levelCount', key: 'levelCount', width: 120 },
-                { title: '取值', dataIndex: 'values', key: 'values', width: 200 },
-              ]" :data-source="designFactors" :pagination="false" :row-selection="{
+            <a-table size="small" :columns="[
+              { title: '序号', dataIndex: 'id', key: 'id', width: 80 },
+              { title: '名称', dataIndex: 'name', key: 'name', width: 200 },
+              { title: '类型', dataIndex: 'type', key: 'type', width: 120 },
+              { title: '下限', dataIndex: 'lowerLimit', key: 'lowerLimit', width: 150 },
+              { title: '上限', dataIndex: 'upperLimit', key: 'upperLimit', width: 150 },
+              { title: '水平数', dataIndex: 'levelCount', key: 'levelCount', width: 120 },
+              { title: '取值', dataIndex: 'values', key: 'values', width: 200 },
+            ]" :data-source="designFactors" :pagination="false" :row-selection="{
                 selectedRowKeys: selectedDesignFactorIds,
                 onChange: (keys) => selectedDesignFactorIds = keys as number[],
-              }" row-key="id"
-            >
+              }" row-key="id">
               <template #bodyCell="{ column, record, index }">
                 <template v-if="column.key === 'id'">
                   {{ index + 1 }}
@@ -803,11 +789,8 @@ function onFactorCountChange(value: number | null): void {
                   <span>{{ record.type }}</span>
                 </template>
                 <template v-else-if="column.key === 'lowerLimit'">
-                  <a-input-number
-                    :value="record.lowerLimit" style="width: 100%"
-                    :min="0"
-                    :disabled="optimizationAlgorithm === 'MOPSO' && hasValues(record)"
-                    @update:value="(val) => {
+                  <a-input-number :value="record.lowerLimit" style="width: 100%" :min="0"
+                    :disabled="optimizationAlgorithm === 'MOPSO' && hasValues(record)" @update:value="(val) => {
                       const factor = designFactors.find(f => f.id === record.id)
                       if (!factor) return
                       const prev = factor.lowerLimit
@@ -817,15 +800,11 @@ function onFactorCountChange(value: number | null): void {
                       if (factor.upperLimit !== undefined && newVal >= factor.upperLimit) { app.message.error(`【 ${factor.name} 】下限应小于上限`); factor.lowerLimit = prev; return }
                       factor.lowerLimit = newVal
                       if (optimizationAlgorithm === 'MOPSO') { factor.values = undefined }
-                    }"
-                  />
+                    }" />
                 </template>
                 <template v-else-if="column.key === 'upperLimit'">
-                  <a-input-number
-                    :value="record.upperLimit" style="width: 100%"
-                    :min="0"
-                    :disabled="optimizationAlgorithm === 'MOPSO' && hasValues(record)"
-                    @update:value="(val) => {
+                  <a-input-number :value="record.upperLimit" style="width: 100%" :min="0"
+                    :disabled="optimizationAlgorithm === 'MOPSO' && hasValues(record)" @update:value="(val) => {
                       const factor = designFactors.find(f => f.id === record.id)
                       if (!factor) return
                       const prev = factor.upperLimit
@@ -835,12 +814,10 @@ function onFactorCountChange(value: number | null): void {
                       if (factor.lowerLimit !== undefined && newVal <= factor.lowerLimit) { app.message.error(`【 ${factor.name} 】上限应大于下限`); factor.upperLimit = prev; return }
                       factor.upperLimit = newVal
                       if (optimizationAlgorithm === 'MOPSO') { factor.values = undefined }
-                    }"
-                  />
+                    }" />
                 </template>
                 <template v-else-if="column.key === 'levelCount'">
-                  <a-input-number
-                    :value="record.levelCount" :min="3" style="width: 100%"
+                  <a-input-number :value="record.levelCount" :min="3" style="width: 100%"
                     :disabled="optimizationAlgorithm === 'NSGA-II' || (optimizationAlgorithm === 'MOPSO' && hasValues(record))"
                     @update:value="(val) => {
                       const factor = designFactors.find(f => f.id === record.id)
@@ -851,12 +828,10 @@ function onFactorCountChange(value: number | null): void {
                       if (!Number.isInteger(newVal) || newVal <= 2) { app.message.error(`【 ${factor.name} 】水平数应为大于2的正整数`); factor.levelCount = prev; return }
                       factor.levelCount = newVal
                       if (optimizationAlgorithm === 'MOPSO') { factor.values = undefined }
-                    }"
-                  />
+                    }" />
                 </template>
                 <template v-else-if="column.key === 'values'">
-                  <a-input
-                    :value="record.values" placeholder="示例：[10,12,33]"
+                  <a-input :value="record.values" placeholder="示例：[10,12,33]"
                     :disabled="optimizationAlgorithm === 'NSGA-II' || (optimizationAlgorithm === 'MOPSO' && hasBoundsOrLevels(record))"
                     @update:value="(val) => {
                       const factor = designFactors.find(f => f.id === record.id)
@@ -882,8 +857,7 @@ function onFactorCountChange(value: number | null): void {
                         app.message.error(`【 ${factor.name} 】取值格式错误，应为实数数组，如：[10,12,33]`)
                         factor.values = prev
                       }
-                    }"
-                  />
+                    }" />
                 </template>
               </template>
             </a-table>
@@ -893,15 +867,10 @@ function onFactorCountChange(value: number | null): void {
 
           <!-- 响应值 -->
           <a-card title="响应值">
-            <a-table
-              :columns="[
-                { title: '序号', dataIndex: 'id', key: 'id', width: 80 },
-                { title: '名称', dataIndex: 'name', key: 'name' },
-              ]" :data-source="responseValues" :pagination="false" :row-selection="{
-                selectedRowKeys: selectedResponseValueIds,
-                onChange: (keys) => selectedResponseValueIds = keys as number[],
-              }" size="small" row-key="id"
-            >
+            <a-table :columns="[
+              { title: '序号', dataIndex: 'id', key: 'id', width: 80 },
+              { title: '名称', dataIndex: 'name', key: 'name' },
+            ]" :data-source="responseValues" :pagination="false" size="small" row-key="id">
               <template #bodyCell="{ column, record, index }">
                 <template v-if="column.key === 'id'">
                   {{ index + 1 }}
@@ -911,6 +880,15 @@ function onFactorCountChange(value: number | null): void {
                 </template>
               </template>
             </a-table>
+
+            <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
+              <a-button>
+                <template #icon>
+                  <PlusOutlined />
+                </template>
+                添加响应值
+              </a-button>
+            </div>
           </a-card>
         </div>
       </div>
@@ -919,10 +897,8 @@ function onFactorCountChange(value: number | null): void {
 
       <!-- 样本空间 -->
       <a-card title="样本空间">
-        <a-table
-          :columns="sampleSpaceColumns" :data-source="sampleSpaceData" :pagination="{ pageSize: 10 }"
-          size="small" row-key="id"
-        >
+        <a-table :columns="sampleSpaceColumns" :data-source="sampleSpaceData" :pagination="{ pageSize: 10 }"
+          size="small" row-key="id">
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'id'">
               {{ record.id }}

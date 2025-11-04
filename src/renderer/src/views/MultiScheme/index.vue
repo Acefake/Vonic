@@ -188,10 +188,10 @@ onMounted(() => {
         :columns="columns"
         :data-source="schemes"
         :loading="loading"
-        :pagination="{ pageSize: 20, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` }"
+        :pagination="{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` }"
         :row-class-name="(record) => isMaxSepPowerRow(record) ? 'max-power-row' : ''"
         row-key="index"
-        size="middle"
+        size="small"
         :scroll="{ x: 800 }"
       >
         <template #bodyCell="{ column, record }">
@@ -220,13 +220,21 @@ onMounted(() => {
     </a-card>
 
     <!-- 方案对比图表 -->
-    <SchemeChart :data="schemes" :x-columns="xColumns" :y-columns="yColumns" />
+    <a-card>
+      <template #title>
+        <span>方案对比图表</span>
+      </template>
+      <SchemeChart :data="schemes" :x-columns="xColumns" :y-columns="yColumns" />
+    </a-card>
   </div>
 </template>
 
 <style scoped>
 .multi-scheme-container {
   padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .max-power {
