@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { ref, watch } from 'vue'
 
 import { useApp } from '../../../app'
+import { useWindowParams } from '../../../hooks/useWindowParams'
 import { getFieldLabel } from '../../../utils/field-labels'
 
 interface FieldItem {
@@ -15,7 +16,15 @@ interface FieldGroup {
   items: FieldItem[]
 }
 
+interface WindowData {
+  selectedKeys?: string[]
+  selected?: Array<{ key: string, label?: string }>
+}
+
 const app = useApp()
+
+// 使用 hook 获取窗口参数，自动处理数据获取和 IPC 监听
+const { data: windowData } = useWindowParams<WindowData>()
 
 // 将设计表单中的字段分组，并显示中文名
 const fieldGroups = ref<FieldGroup[]>([
@@ -66,32 +75,28 @@ const fieldGroups = ref<FieldGroup[]>([
   },
 ])
 
-// 打开窗口时，读取父窗口传入的数据，预勾选已有项
-onMounted(async () => {
-  try {
-    const data = await app.window.current.getData<{
-      selectedKeys?: string[]
-      selected?: Array<{ key: string, label?: string }>
-    }>()
+/**
+ * 更新选中状态
+ */
+function updateCheckedState(data: WindowData | null): void {
+  const keys: string[] = Array.isArray(data?.selectedKeys)
+    ? (data!.selectedKeys as string[])
+    : Array.isArray(data?.selected)
+      ? (data!.selected!.map(item => item.key))
+      : []
 
-    const keys: string[] = Array.isArray(data?.selectedKeys)
-      ? (data!.selectedKeys as string[])
-      : Array.isArray(data?.selected)
-        ? (data!.selected!.map(item => item.key))
-        : []
+  // 重置所有选中状态
+  fieldGroups.value.forEach((group) => {
+    group.items.forEach((item) => {
+      item.checked = keys.includes(item.key)
+    })
+  })
+}
 
-    if (keys.length > 0) {
-      fieldGroups.value.forEach((group) => {
-        group.items.forEach((item) => {
-          item.checked = keys.includes(item.key)
-        })
-      })
-    }
-  }
-  catch (e) {
-    console.error('读取窗口数据失败:', e)
-  }
-})
+// 监听窗口数据变化，自动更新选中状态（包括懒加载窗口重新打开的场景）
+watch(windowData, (newData) => {
+  updateCheckedState(newData)
+}, { immediate: true })
 
 function onConfirm(): void {
   const selected = fieldGroups.value.flatMap(group => group.items.filter(i => i.checked))

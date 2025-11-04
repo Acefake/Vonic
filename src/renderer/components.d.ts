@@ -48,5 +48,6 @@ declare module 'vue' {
     LogLayout: typeof import('./src/components/Layout/LogLayout.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SchemeChart: typeof import('./src/components/SchemeChart/index.vue')['default']
   }
 }

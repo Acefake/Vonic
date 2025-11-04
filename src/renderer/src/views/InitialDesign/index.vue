@@ -329,11 +329,13 @@ async function simulateCalculation(): Promise<void> {
     startProgress()
   }
   else {
-    logStore.info('Fortran调用失败')
-    logStore.info(result.reason)
+    logStore.error('Fortran调用失败')
+    logStore.error(result.reason)
+    message.error(`仿真计算启动失败: ${result.reason}`)
     completeProgress(false)
     stopProgress()
     isLoading.value = false
+    return // 调用失败时立即停止，不继续执行
   }
 }
 

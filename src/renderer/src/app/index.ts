@@ -63,8 +63,8 @@ export const app: AppAPI = {
   isDev: import.meta.env.DEV,
 
   /** 调用exe API */
-  callExe: async (exeName: string): Promise<callExeRes> => {
-    const result = await window.electron.ipcRenderer.invoke('call-exe', exeName)
+  callExe: async (exeName: string, workingDir?: string): Promise<callExeRes> => {
+    const result = await window.electron.ipcRenderer.invoke('call-exe', exeName, workingDir)
     return result
   },
 }

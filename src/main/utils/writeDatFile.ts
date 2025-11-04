@@ -5,32 +5,40 @@ import { app } from 'electron'
 /**
  * 根据传入的参数和值生成input.dat
  * @param designData 设计数据对象，将被序列化写入文件
+ * @param customDir 可选的自定义目录路径，如果提供则使用该目录，否则使用默认目录
  * 生产环境：在同级目录生成 input.dat 文件
  * 开发环境：在项目根目录的testFile文件夹生成 input.dat 文件
  * @returns res 写入成功返回 true，失败返回 false
  */
-export function writeDatFile(designData: any): { code: number, message: string, filePath: string } {
+export function writeDatFile(designData: any, customDir?: string): { code: number, message: string, filePath: string } {
   try {
-    // 与 readFileData 保持一致的开发环境判断：以项目根目录是否存在 testFile 目录为准
-    const isDev = fs.existsSync(path.join(process.cwd(), 'testFile'))
-
     let targetDir: string
-    if (isDev) {
-      // 开发环境：写到项目根目录的 testFile 目录
-      targetDir = path.join(process.cwd(), 'testFile')
+
+    if (customDir) {
+      // 如果提供了自定义目录，直接使用
+      targetDir = customDir
     }
     else {
-      // 生产环境：写到外部程序所在目录（常见：exe 同级 / resources / resources/unpacked）
-      // 注意：app.getAppPath() 在打包后会指向 asar 包，不适合写入；应使用 exe 路径或资源目录
-      const exeDir = path.dirname(app.getPath('exe'))
-      const candidateDirs = [
-        exeDir,
-        path.join(exeDir, 'resources'),
-        path.join(exeDir, 'resources', 'unpacked'),
-      ]
-      // 优先选择存在 ns-linear.exe 的目录，以确保 Fortran 程序能读取到 input.dat
-      const preferredDir = candidateDirs.find(dir => fs.existsSync(path.join(dir, 'ns-linear.exe')))
-      targetDir = preferredDir || exeDir
+      // 与 readFileData 保持一致的开发环境判断：以项目根目录是否存在 testFile 目录为准
+      const isDev = fs.existsSync(path.join(process.cwd(), 'testFile'))
+
+      if (isDev) {
+        // 开发环境：写到项目根目录的 testFile 目录
+        targetDir = path.join(process.cwd(), 'testFile')
+      }
+      else {
+        // 生产环境：写到外部程序所在目录（常见：exe 同级 / resources / resources/unpacked）
+        // 注意：app.getAppPath() 在打包后会指向 asar 包，不适合写入；应使用 exe 路径或资源目录
+        const exeDir = path.dirname(app.getPath('exe'))
+        const candidateDirs = [
+          exeDir,
+          path.join(exeDir, 'resources'),
+          path.join(exeDir, 'resources', 'unpacked'),
+        ]
+        // 优先选择存在 ns-linear.exe 的目录，以确保 Fortran 程序能读取到 input.dat
+        const preferredDir = candidateDirs.find(dir => fs.existsSync(path.join(dir, 'ns-linear.exe')))
+        targetDir = preferredDir || exeDir
+      }
     }
 
     // 确保目录存在

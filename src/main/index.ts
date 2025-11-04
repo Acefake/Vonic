@@ -36,9 +36,9 @@ else {
   })
 }
 
-ipcMain.handle('call-exe', async (_, exeName) => {
-  console.log('主进程接收到调用请求，exe名称：', exeName)
-  const result = await runExe(exeName) // 调用exe并等待结果
+ipcMain.handle('call-exe', async (_, exeName, workingDir) => {
+  console.log('主进程接收到调用请求，exe名称：', exeName, '工作目录：', workingDir)
+  const result = await runExe(exeName, workingDir) // 调用exe并等待结果
   return result
 })
 

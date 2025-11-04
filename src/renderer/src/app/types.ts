@@ -276,9 +276,24 @@ export interface FileAPI {
   /** 在文件管理器中显示文件 */
   showInFolder: (path: string) => Promise<void>
   /** 读取 dat 文件内容 */
-  readDatFile: (filePath: string) => Promise<string>
+  readDatFile: (filePath: string, customDir?: string) => Promise<string>
   /** 写入 dat 文件内容 */
-  writeDatFile: (arg1: string | Record<string, unknown>, arg2?: Record<string, unknown>) => Promise<{ code: number, message: string, filePath: string }>
+  writeDatFile: (arg1: string | Record<string, unknown>, arg2?: Record<string, unknown>, arg3?: string) => Promise<{ code: number, message: string, filePath: string }>
+  /** 读取多个方案数据 */
+  readMultiSchemes: () => Promise<Array<{
+    index: number
+    fileName: string
+    angularVelocity: number
+    feedFlowRate: number
+    feedAxialDisturbance: number
+    sepPower: number | null
+    sepFactor: number | null
+  }>>
+  /** 获取工作目录 */
+  getWorkDir: () => Promise<string>
+  createOutputDir: (baseDir: string) => Promise<string>
+  /** 删除目录（递归删除） */
+  deleteDir: (dirPath: string) => Promise<void>
 }
 
 export interface RequestConfig {
@@ -484,7 +499,7 @@ export interface AppAPI {
   /** 是否开发环境 */
   isDev: boolean
   /** 调用exe API */
-  callExe: (exeName: string) => Promise<callExeRes>
+  callExe: (exeName: string, workingDir?: string) => Promise<callExeRes>
 }
 
 export interface callExeRes {

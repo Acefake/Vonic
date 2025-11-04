@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { copyFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { app, BrowserWindow } from 'electron'
 import { Logger } from '@/main/app/handlers/LogerManager'
@@ -10,17 +10,38 @@ let currentExeProcess: ReturnType<typeof execFile> | null = null
 /**
  * 调用同级目录下的exe程序并返回启动状态
  * @param {string} exeName - 目标exe文件名（如 "myTool.exe"）
+ * @param {string} workingDir - 可选的工作目录，如果提供则在该目录中执行
  * @returns {Promise<object>} 启动状态结果
  */
-export async function runExe(exeName: string) {
+export async function runExe(exeName: string, workingDir?: string) {
   const logger: Logger = new Logger()
 
   // 获取主窗口实例用于发送IPC消息
   const mainWindow = BrowserWindow.getAllWindows()[0]
   // 如果是开发环境则找到项目根目录的testFile文件夹
   if (!app.isPackaged) {
-    const testFileDir = path.join(__dirname, '../../testFile')
-    const exePath = path.join(testFileDir, exeName)
+    // 确定工作目录和exe路径
+    let workingDirectory: string | undefined
+    let exePath: string
+
+    if (workingDir) {
+      // 如果指定了工作目录，在工作目录中执行
+      workingDirectory = workingDir
+      exePath = path.join(workingDir, exeName)
+      // 如果工作目录中没有exe，尝试从testFile目录查找
+      if (!existsSync(exePath)) {
+        const testFileDir = path.join(__dirname, '../../testFile')
+        const testFileExePath = path.join(testFileDir, exeName)
+        if (existsSync(testFileExePath)) {
+          exePath = testFileExePath
+        }
+      }
+    }
+    else {
+      const testFileDir = path.join(__dirname, '../../testFile')
+      exePath = path.join(testFileDir, exeName)
+    }
+
     // 若已有程序在运行，直接返回已在运行状态
     if (currentExeProcess && !currentExeProcess.killed) {
       return Promise.resolve({
@@ -39,7 +60,7 @@ export async function runExe(exeName: string) {
       })
     }
     return new Promise((resolve) => {
-      const child = execFile(exePath, (error) => {
+      const child = execFile(exePath, { cwd: workingDirectory }, (error) => {
         if (error) {
           resolve({
             status: 'failed',
@@ -129,9 +150,20 @@ export async function runExe(exeName: string) {
         })
         return
       }
+
+      // 生产环境：如果提供了工作目录，使用该目录作为执行目录
+      // 这样程序输出的文件（如 Sep_power.dat）会输出到工作目录中
+      const execOptions: { cwd?: string } = {}
+      if (workingDir) {
+        execOptions.cwd = workingDir
+      }
+
       const logger: Logger = new Logger()
+      if (workingDir) {
+        logger.log('info', `将在工作目录中执行: ${workingDir}`)
+      }
       logger.log('info', `正在启动外部程序: ${exePath}`)
-      const child = execFile(exePath, (error) => {
+      const child = execFile(exePath, execOptions, (error) => {
         if (error) {
           resolve({
             status: 'failed',
@@ -164,8 +196,52 @@ export async function runExe(exeName: string) {
         currentExeProcess = null
       })
 
-      child.on('close', (code, signal) => {
+      child.on('close', async (code, signal) => {
         console.log(code, signal)
+
+        // 生产环境：如果提供了工作目录，程序执行完成后，将输出文件从 exe 所在目录的 out 文件夹复制到目标目录
+        if (workingDir) {
+          try {
+            // 获取 exe 所在目录
+            const exeDirectory = path.dirname(exePath)
+            const exeOutDir = path.join(exeDirectory, 'out')
+
+            // 检查 exe 所在目录的 out 文件夹是否存在
+            if (existsSync(exeOutDir)) {
+              logger.log('info', `检查输出目录: ${exeOutDir}`)
+
+              // 读取 out 目录中的所有文件
+              const files = readdirSync(exeOutDir)
+              const copiedFiles: string[] = []
+
+              for (const file of files) {
+                const sourcePath = path.join(exeOutDir, file)
+                const targetPath = path.join(workingDir, file)
+
+                // 只复制文件，跳过目录
+                const stats = statSync(sourcePath)
+                if (stats.isFile()) {
+                  copyFileSync(sourcePath, targetPath)
+                  copiedFiles.push(file)
+                  logger.log('info', `已复制输出文件: ${file} -> ${targetPath}`)
+                }
+              }
+
+              if (copiedFiles.length > 0) {
+                logger.log('info', `成功复制 ${copiedFiles.length} 个输出文件到工作目录: ${workingDir}`)
+              }
+              else {
+                logger.log('info', `输出目录 ${exeOutDir} 中未找到输出文件`)
+              }
+            }
+            else {
+              logger.log('info', `输出目录不存在: ${exeOutDir}`)
+            }
+          }
+          catch (error) {
+            logger.log('error', `复制输出文件时出错: ${error instanceof Error ? error.message : String(error)}`)
+          }
+        }
 
         const closeResult = {
           status: 'close',
@@ -176,7 +252,7 @@ export async function runExe(exeName: string) {
 
         // 通知渲染进程exe已关闭
         if (mainWindow && !mainWindow.isDestroyed()) {
-          logger.log('info', `程序 ${exePath[0]} 已退出（PID: ${child.pid}）`)
+          logger.log('info', `程序 ${exePath} 已退出（PID: ${child.pid}）`)
           mainWindow.webContents.send('exe-closed', exeName, closeResult)
         }
         currentExeProcess = null

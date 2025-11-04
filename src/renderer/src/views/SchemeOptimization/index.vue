@@ -3,6 +3,7 @@ import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { computed, onMounted, ref, watch } from 'vue'
 
 import { useApp } from '../../app'
+import { useDesignStore } from '../../store/designStore'
 import { useLogStore } from '../../store/logStore'
 import { FIELD_LABELS } from '../../utils/field-labels'
 
@@ -63,6 +64,7 @@ interface SampleData {
 
 const app = useApp()
 const logStore = useLogStore()
+const designStore = useDesignStore()
 
 // 优化算法
 const optimizationAlgorithm = ref<OptimizationAlgorithm>('NSGA-II')
@@ -260,8 +262,101 @@ function deleteSelectedDesignFactors(): void {
 }
 
 /**
+ * 根据设计因子名称获取字段key
+ */
+function getFieldKeyByLabel(label: string): string | null {
+  for (const [key, map] of Object.entries(FIELD_LABELS)) {
+    if (map['zh-CN'] === label)
+      return key
+  }
+  return null
+}
+
+/**
+ * 获取未添加至设计因子的所有参数
+ */
+function getNonFactorParams(): Record<string, any> {
+  // 获取设计因子名称列表
+  const factorNames = designFactors.value.map(f => f.name)
+  const factorKeys = factorNames
+    .map(name => getFieldKeyByLabel(name))
+    .filter((key): key is string => !!key)
+
+  // 从设计存储中获取所有参数
+  const allParams = {
+    ...designStore.topLevelParams,
+    ...designStore.operatingParams,
+    ...designStore.drivingParams,
+    ...designStore.separationComponents,
+  }
+
+  // 过滤掉设计因子对应的参数
+  const nonFactorParams: Record<string, any> = {}
+  for (const [key, value] of Object.entries(allParams)) {
+    if (!factorKeys.includes(key) && value !== undefined && value !== null) {
+      nonFactorParams[key] = value
+    }
+  }
+
+  return nonFactorParams
+}
+
+/**
+ * 将样本空间数据中的中文名称转换为字段key
+ */
+function convertSampleDataToKeys(sample: SampleData): Record<string, any> {
+  const result: Record<string, any> = {}
+  for (const [key, value] of Object.entries(sample)) {
+    if (key === 'id')
+      continue
+    const fieldKey = getFieldKeyByLabel(key)
+    if (fieldKey) {
+      result[fieldKey] = value
+    }
+  }
+  return result
+}
+
+/**
+ * 解析Sep_power.dat内容（在渲染进程中实现）
+ */
+function parseSepPower(content: string): { actualSepPower: number | null, actualSepFactor: number | null } {
+  const lineArr = content
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .filter(line => line.trim() !== '')
+
+  const regex = /^([^=]+)=(\d+)$/
+  const result: Record<string, number> = {}
+
+  lineArr.forEach((line) => {
+    const match = line.match(regex)
+    if (match) {
+      const key = match[1].trim()
+      const value = Number(match[2])
+      result[key] = value
+    }
+  })
+
+  return {
+    actualSepPower: result['ACTURAL SEPERATIVE POWER'] ?? result['ACTUAL SEPERATIVE POWER'] ?? null,
+    actualSepFactor: result['ACTURAL SEPERATIVE FACTOR'] ?? result['ACTUAL SEPERATIVE FACTOR'] ?? null,
+  }
+}
+
+/**
+ * 获取工作目录（testFile或exe同级目录）
+ * 通过IPC调用主进程获取
+ */
+async function getWorkBaseDir(): Promise<string> {
+  return await app.file.getWorkDir()
+}
+
+/**
  * 仿真优化计算
  */
+const isOptimizing = ref(false)
+
 async function performOptimization(): Promise<void> {
   if (designFactors.value.length === 0) {
     app.message.warning('请先添加设计因子')
@@ -278,21 +373,233 @@ async function performOptimization(): Promise<void> {
     return
   }
 
+  isOptimizing.value = true
   const hideLoading = app.message.loading('正在进行仿真优化计算...', 0)
 
   try {
-    // 模拟计算过程
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    logStore.info('开始仿真优化计算')
+    const totalSampleCount = samplePointCount.value
+    logStore.info(`算法=${optimizationAlgorithm.value}, 样本点数=${totalSampleCount}, 样本空间数据=${sampleSpaceData.value.length}`)
+
+    const baseDir = await getWorkBaseDir()
+    const exeName = 'ns-linear.exe'
+    const results: Array<{
+      index: number
+      sampleData: SampleData
+      sepPower: number | null
+      sepFactor: number | null
+      dirName: string // 保存目录名
+    }> = []
+    let hasExeFailure = false // 标记是否有exe调用失败
+
+    // 循环处理每个样本（使用算法参数设置的样本点数）
+    for (let i = 0; i < totalSampleCount; i++) {
+      // 从样本空间数据中获取样本（如果索引超出范围，使用取模循环使用）
+      const sampleIndex = i % sampleSpaceData.value.length
+      const sample = sampleSpaceData.value[sampleIndex]
+      const sampleId = i + 1 // 使用循环序号作为样本ID
+      logStore.info(`处理样本 ${i + 1}/${totalSampleCount}: 样本数据索引=${sampleIndex}, 数据ID=${sample.id}`)
+
+      // 为每个样本创建唯一的工作目录（out/out_XXXXXX 格式，自动避免重复）
+      const workDir = await app.file.createOutputDir(baseDir)
+      const dirName = workDir.split(/[/\\]/).pop() || '' // 提取目录名（如 out_000001）
+      logStore.info(`样本 ${sampleId} 创建输出目录: ${workDir}`)
+
+      // 组合数据：样本空间数据 + 未添加至设计因子的参数
+      const sampleParams = convertSampleDataToKeys(sample)
+      const nonFactorParams = getNonFactorParams()
+      const combinedParams = {
+        ...nonFactorParams,
+        ...sampleParams,
+      }
+
+      // 写入 input.dat（在子文件夹内）
+      const writeResult = await app.file.writeDatFile('input.dat', combinedParams, workDir)
+      if (writeResult.code !== 200) {
+        logStore.error(`样本 ${sampleId} 写入input.dat失败: ${writeResult.message}`)
+        results.push({
+          index: sampleId,
+          sampleData: sample,
+          sepPower: null,
+          sepFactor: null,
+          dirName,
+        })
+        continue
+      }
+
+      logStore.info(`样本 ${sampleId} input.dat写入成功`)
+
+      // 调用 exe
+      const exeResult = await app.callExe(exeName, workDir)
+      if (exeResult.status !== 'started') {
+        logStore.error(`样本 ${sampleId} 调用exe失败: ${exeResult.reason}`)
+        // 调用失败时，删除该样本的目录
+        try {
+          await app.file.deleteDir(workDir)
+          logStore.info(`样本 ${sampleId} 失败目录已删除: ${workDir}`)
+        }
+        catch (error) {
+          logStore.error(`样本 ${sampleId} 删除失败目录时出错: ${error instanceof Error ? error.message : String(error)}`)
+        }
+        results.push({
+          index: sampleId,
+          sampleData: sample,
+          sepPower: null,
+          sepFactor: null,
+          dirName,
+        })
+        // 调用失败时，停止整个优化流程，不继续处理后续样本
+        const remainingCount = totalSampleCount - i
+        logStore.error(`优化流程因exe调用失败而终止：已处理 ${i}/${totalSampleCount} 个样本，剩余 ${remainingCount} 个样本未处理`)
+        hasExeFailure = true
+        break
+      }
+
+      logStore.info(`样本 ${sampleId} exe启动成功，等待完成...`)
+
+      // 等待exe完成（通过事件监听）
+      await new Promise<void>((resolve) => {
+        const handler = async (_: any, _exeName: string, result: any) => {
+          if (result.isSuccess === false) {
+            logStore.error(`样本 ${sampleId} exe执行失败: 退出码=${result.exitCode}`)
+            results.push({
+              index: sampleId,
+              sampleData: sample,
+              sepPower: null,
+              sepFactor: null,
+              dirName,
+            })
+            resolve()
+            return
+          }
+
+          try {
+            // 读取 Sep_power.dat
+            const content = await app.file.readDatFile('Sep_power.dat', workDir)
+            const parsedData = parseSepPower(content)
+
+            results.push({
+              index: sampleId,
+              sampleData: sample,
+              sepPower: parsedData.actualSepPower,
+              sepFactor: parsedData.actualSepFactor,
+              dirName,
+            })
+
+            logStore.info(`样本 ${sampleId} 完成: 分离功率=${parsedData.actualSepPower}, 分离系数=${parsedData.actualSepFactor}`)
+          }
+          catch (error) {
+            logStore.error(`样本 ${sampleId} 读取结果失败: ${error instanceof Error ? error.message : String(error)}`)
+            results.push({
+              index: sampleId,
+              sampleData: sample,
+              sepPower: null,
+              sepFactor: null,
+              dirName,
+            })
+          }
+
+          window.electron.ipcRenderer.removeListener('exe-closed', handler)
+          resolve()
+        }
+
+        window.electron.ipcRenderer.on('exe-closed', handler)
+      })
+    }
+
+    // 如果exe调用失败，直接返回，不继续执行后续处理
+    if (hasExeFailure) {
+      hideLoading()
+      const processedCount = results.length
+      app.message.error(`仿真优化计算失败：exe程序调用失败（已处理 ${processedCount}/${totalSampleCount} 个样本）`)
+      return
+    }
+
+    // 所有样本处理完成后，找出最优方案
+    let maxSepPower = -Infinity
+    let optimalIndex = -1
+
+    for (const result of results) {
+      if (result.sepPower !== null && result.sepPower > maxSepPower) {
+        maxSepPower = result.sepPower
+        optimalIndex = result.index
+      }
+      else if (result.sepPower !== null && result.sepPower === maxSepPower && result.index < optimalIndex) {
+        // 如果分离功率相同，取序号最小的
+        optimalIndex = result.index
+      }
+    }
+
+    // 构建最终结果数据（包含最优方案标记）
+    const finalResults: Array<{
+      index: number
+      fileName: string
+      [key: string]: any
+      sepPower: number | null
+      sepFactor: number | null
+    }> = []
+
+    // 首先添加最优方案（序号为-1，显示为'*'）
+    if (optimalIndex >= 0) {
+      const optimal = results.find(r => r.index === optimalIndex)
+      if (optimal) {
+        const optimalData: any = {
+          index: -1, // 最优方案标记
+          fileName: optimal.dirName || `scheme_${optimal.index}`,
+          sepPower: optimal.sepPower,
+          sepFactor: optimal.sepFactor,
+        }
+
+        // 添加样本空间中的所有字段
+        for (const [key, value] of Object.entries(optimal.sampleData)) {
+          if (key !== 'id') {
+            optimalData[key] = value
+          }
+        }
+
+        finalResults.push(optimalData)
+      }
+    }
+
+    // 添加其他方案（按序号排序）
+    results
+      .filter(r => r.index !== optimalIndex)
+      .sort((a, b) => a.index - b.index)
+      .forEach((result) => {
+        const data: any = {
+          index: result.index - 1, // 转换为0-based索引
+          fileName: result.dirName || `scheme_${result.index}`,
+          sepPower: result.sepPower,
+          sepFactor: result.sepFactor,
+        }
+
+        // 添加样本空间中的所有字段
+        for (const [key, value] of Object.entries(result.sampleData)) {
+          if (key !== 'id') {
+            data[key] = value
+          }
+        }
+
+        finalResults.push(data)
+      })
+
+    // 保存结果到文件（供MultiScheme读取）
+    // 这里需要将结果保存到文件系统，让MultiScheme可以读取
+    // 由于MultiScheme通过readMultiSchemes读取，我们需要更新该方法的实现
+    // 或者创建一个新的IPC方法来保存结果
 
     hideLoading()
-    app.message.success('仿真优化计算完成')
-    logStore.info(`仿真优化计算完成: 算法=${optimizationAlgorithm.value}, 因子数=${factorCount.value}, 样本点数=${samplePointCount.value}, 采样准则=${samplingCriterion.value}`)
+    app.message.success(`仿真优化计算完成，共处理 ${results.length} 个样本，最优方案序号: ${optimalIndex >= 0 ? optimalIndex : '无'}`)
+    logStore.info(`仿真优化计算完成: 算法=${optimizationAlgorithm.value}, 样本点数=${totalSampleCount}, 处理结果数=${results.length}, 最优方案序号=${optimalIndex}`)
   }
   catch (error) {
     hideLoading()
     const errorMessage = error instanceof Error ? error.message : String(error)
     logStore.error(errorMessage, '仿真优化计算失败')
     app.message.error(`仿真优化计算失败: ${errorMessage}`)
+  }
+  finally {
+    isOptimizing.value = false
   }
 }
 

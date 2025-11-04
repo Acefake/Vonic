@@ -102,8 +102,8 @@ export const fileAPI: FileAPI = {
    * @param filePath dat 文件路径
    * @returns 文件内容（文本）
    */
-  async readDatFile(filePath: string): Promise<string> {
-    return window.electron.ipcRenderer.invoke('file:read-dat', filePath)
+  async readDatFile(filePath: string, customDir?: string): Promise<string> {
+    return window.electron.ipcRenderer.invoke('file:read-dat', filePath, customDir)
   },
 
   /**
@@ -111,10 +111,53 @@ export const fileAPI: FileAPI = {
    * @param filePath dat 文件路径
    * @param content 文件内容（文本）
    */
-  async writeDatFile(arg1: string | Record<string, unknown>, arg2?: Record<string, unknown>): Promise<{ code: number, message: string, filePath: string }> {
-    // 兼容两种调用方式：
+  async writeDatFile(arg1: string | Record<string, unknown>, arg2?: Record<string, unknown>, arg3?: string): Promise<{ code: number, message: string, filePath: string }> {
+    // 兼容三种调用方式：
     // 1) writeDatFile(designData)
     // 2) writeDatFile(filePath, designData)
-    return window.electron.ipcRenderer.invoke('file:write-dat', arg1, arg2)
+    // 3) writeDatFile(filePath, designData, customDir)
+    return window.electron.ipcRenderer.invoke('file:write-dat', arg1, arg2, arg3)
+  },
+
+  /**
+   * 读取多个方案数据
+   * 扫描文件夹中所有包含 Sep_power.dat 的文件，并解析对应的数据
+   * @returns 方案数据数组
+   */
+  async readMultiSchemes(): Promise<Array<{
+    index: number
+    fileName: string
+    angularVelocity: number
+    feedFlowRate: number
+    feedAxialDisturbance: number
+    sepPower: number | null
+    sepFactor: number | null
+  }>> {
+    return window.electron.ipcRenderer.invoke('file:read-multi-schemes')
+  },
+
+  /**
+   * 获取工作目录
+   * @returns 工作目录路径
+   */
+  async getWorkDir(): Promise<string> {
+    return window.electron.ipcRenderer.invoke('file:get-work-dir')
+  },
+
+  /**
+   * 创建唯一的输出目录（out_XXXXXX 格式，6位数字）
+   * @param baseDir 基础目录路径
+   * @returns 创建的目录路径
+   */
+  async createOutputDir(baseDir: string): Promise<string> {
+    return window.electron.ipcRenderer.invoke('file:create-output-dir', baseDir)
+  },
+
+  /**
+   * 删除目录（递归删除）
+   * @param dirPath 目录路径
+   */
+  async deleteDir(dirPath: string): Promise<void> {
+    await window.electron.ipcRenderer.invoke('file:delete-dir', dirPath)
   },
 }
