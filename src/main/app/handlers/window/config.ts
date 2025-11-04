@@ -111,6 +111,16 @@ export const windowConfig: WindowConfig[] = [
     ...subWindowDefaultConfig,
     options: { ...mainWindowOptions },
   },
+  {
+    windowName: WindowName.ADD_DESIGN_FACTOR,
+    title: '添加设计因子',
+    width: 300,
+    height: 600,
+    modal: true,
+    route: '/AddDesignFactor',
+    ...subWindowDefaultConfig,
+    options: { ...mainWindowOptions },
+  },
 ]
 
 /**

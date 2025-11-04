@@ -117,6 +117,15 @@ const routes: RouteRecordRaw[] = [
       hidden: true,
     },
   },
+  {
+    path: '/AddDesignFactor',
+    name: 'AddDesignFactor',
+    component: () => import('../views/SchemeOptimization/components/AddDesignFactor.vue'),
+    meta: {
+      title: '添加设计因子',
+      hidden: true,
+    },
+  },
 ]
 
 const router = createRouter({
