@@ -3,7 +3,7 @@ import type {
   WindowConfig,
   WindowInstance,
 } from './types'
-import { join } from 'node:path'
+import path, { join } from 'node:path'
 import { is } from '@electron-toolkit/utils'
 
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
@@ -72,7 +72,7 @@ export class WindowManager {
         const hasCurrentParent = currentParent !== null && !currentParent.isDestroyed()
         // 如果设置了 setParent，但父窗口关系不匹配，需要重新创建
         const parentMismatch = needsParent && (
-          (needsNewParent && (!hasCurrentParent || currentParent.id !== newParent.id))
+          (needsNewParent && newParent && (!hasCurrentParent || currentParent.id !== newParent.id))
           || (!needsNewParent && hasCurrentParent)
         )
 
@@ -538,7 +538,17 @@ export class WindowManager {
   public init(): void {
     this.initIPCHandlers()
     this.initAppHandlers()
-    this.createWindow(WindowName.MAIN)
+    const mainWindow = this.createWindow(WindowName.MAIN)
+
+    if (mainWindow) {
+      if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
+        mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
+      }
+      else {
+        mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
+      }
+    }
+
     console.warn('[INFO] 窗口管理器初始化成功')
   }
 

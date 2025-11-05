@@ -82,7 +82,7 @@ export class Logger {
    * @param level 日志级别
    * @param message 日志消息
    */
-  public async log(level: 'info' | 'warn' | 'error', message: string): Promise<void> {
+  public async log(level: 'info' | 'warn' | 'error', message: any): Promise<void> {
     // 同时输出到控制台
     const consoleMessage = `[${level.toUpperCase()}] ${message}`
     switch (level) {

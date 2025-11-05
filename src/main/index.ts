@@ -1,18 +1,46 @@
+import type { DoeServiceManager } from './services/runService'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import { getProductConfig } from '../config/product.config'
 import { AppManager } from './app'
 import { Logger } from './app/handlers/LogerManager'
 import { StoreManage } from './app/handlers/storeManage'
 import getWindowManager, { WindowName } from './app/handlers/window'
-import { createJavaProcessManager } from './services/java-process'
+import { createDoeServiceManager } from './services/runService'
+import { runExe } from './utils/exeRunner'
 
 const storeManage = new StoreManage()
 const appManager = new AppManager()
 
 let logger: Logger
-let javaManager: ReturnType<typeof createJavaProcessManager>
+let serviceManager: DoeServiceManager
 let isQuitting = false
+
+// 单实例锁：只允许启动一个应用实例
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  // 如果无法获取锁，说明已有实例在运行，直接退出当前进程
+  app.quit()
+}
+else {
+  // 当用户尝试启动第二个实例时，聚焦现有窗口
+  app.on('second-instance', () => {
+    const windowManager = getWindowManager()
+    const mainWindow = windowManager.getWindowByName(WindowName.MAIN)
+    if (mainWindow) {
+      if (mainWindow.isMinimized())
+        mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  })
+}
+
+ipcMain.handle('call-exe', async (_, exeName, workingDir) => {
+  console.log('主进程接收到调用请求，exe名称：', exeName, '工作目录：', workingDir)
+  const result = await runExe(exeName, workingDir) // 调用exe并等待结果
+  return result
+})
 
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.electron')
@@ -49,7 +77,6 @@ app.whenReady().then(async () => {
 
   const windowManager = getWindowManager()
   windowManager.init()
-  await logger.log('info', '窗口管理器初始化成功')
 
   const mainWindow = windowManager.getWindowByName(WindowName.MAIN)
 
@@ -58,19 +85,21 @@ app.whenReady().then(async () => {
     return
   }
 
-  // 创建 Java 进程管理器
-  javaManager = createJavaProcessManager({
-    port: productConfig.api.port,
-    jvmArgs: productConfig.java?.jvmArgs || ['-Xmx512m', '-Xms256m'],
-    startupTimeout: productConfig.java?.startupTimeout,
+  // 创建服务管理器
+  serviceManager = createDoeServiceManager({
+    port: productConfig.doe?.port || 25504,
+    startupTimeout: productConfig.doe?.startupTimeout || 30000,
+    enabled: productConfig.doe?.enabled !== false, // 默认启用
+    autoCleanupPort: true, // 启用自动端口清理
+    forceKillProcesses: false, // 不强制终止进程
   }, logger)
 
   try {
-    await javaManager.start()
-    await logger.log('info', 'Java 后端服务启动成功')
+    await serviceManager.start()
+    await logger.log('info', 'DOE 服务启动成功')
   }
   catch (error) {
-    await logger.log('error', `Java 后端服务启动失败: ${error}`)
+    await logger.log('error', `DOE 服务启动失败: ${error}`)
   }
 
   // 监听加载完成事件，发送启动日志
@@ -105,12 +134,12 @@ app.on('before-quit', async (event) => {
       })
     }
 
-    await logger.log('info', '应用退出中，停止 Java 后端服务...')
-    await javaManager.stop()
-    await logger.log('info', 'Java 后端服务已停止')
+    await logger.log('info', '应用退出中，停止 DOE 服务...')
+    await serviceManager.stop()
+    await logger.log('info', 'DOE 服务已停止')
   }
   catch (error) {
-    console.error('退出时停止 Java 服务失败:', error)
+    console.error('退出时停止 DOE 服务失败:', error)
   }
 
   app.exit(0)

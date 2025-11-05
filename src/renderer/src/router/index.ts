@@ -30,6 +30,7 @@ const routes: RouteRecordRaw[] = [
       title: 'Demo',
       icon: 'CodeOutlined',
       order: 0,
+      feature: 'demo',
     },
   },
   {
@@ -113,6 +114,15 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/Embedded/index.vue'),
     meta: {
       title: '嵌入窗口',
+      hidden: true,
+    },
+  },
+  {
+    path: '/AddDesignFactor',
+    name: 'AddDesignFactor',
+    component: () => import('../views/SchemeOptimization/components/AddDesignFactor.vue'),
+    meta: {
+      title: '添加设计因子',
       hidden: true,
     },
   },

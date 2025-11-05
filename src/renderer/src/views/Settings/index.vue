@@ -28,11 +28,7 @@ const enableNotification = ref(true)
 async function saveSettings(): Promise<void> {
   $app.message.success('设置已保存')
   increment()
-  await $app.window.settings.close().then(() => {
-    $app.message.success('设置已保存')
-  }).catch(() => {
-    $app.message.error('设置保存失败')
-  })
+  $app.window.settings.close()
 }
 
 /**
@@ -57,7 +53,6 @@ async function openEmbeddedWindow(): Promise<void> {
       data: {
         message: 'Hello, world!',
       },
-      waitForResult: false,
     },
   )
   setTimeout(() => {

@@ -60,7 +60,6 @@ async function testFileSelect(): Promise<void> {
     multiple: true,
     filters: [
       { name: '文本文件', extensions: ['txt', 'md'] },
-      { name: '所有文件', extensions: ['*'] },
     ],
   })
   if (files) {

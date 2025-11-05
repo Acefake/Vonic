@@ -1,15 +1,15 @@
 import type { DesignScheme, FeedingMethod } from '../../shared/design-scheme'
-
 import { Buffer } from 'node:buffer'
-
 import { createReadStream } from 'node:fs'
-import { access, readFile as fsReadFile, unlink, writeFile } from 'node:fs/promises'
-import { extname } from 'node:path'
-import { Parser } from 'binary-parser'
-import { ipcMain } from 'electron'
 import iconv from 'iconv-lite'
-
 import JSON5 from 'json5'
+import * as fs from 'node:fs'
+import { access, readFile as fsReadFile, readdir, rm, unlink, writeFile } from 'node:fs/promises'
+import { dirname, extname, join } from 'node:path'
+import { app, ipcMain } from 'electron'
+import { parseSepPower } from '@/main/utils/parseSepPower'
+import { readFileData } from '@/main/utils/readFileData'
+import { writeDatFile } from '@/main/utils/writeDatFile'
 import { ALLOWED_DELETE_EXTENSIONS, ALLOWED_READ_EXTENSIONS, ALLOWED_WRITE_EXTENSIONS } from '@/shared/files-config'
 
 /**
@@ -24,7 +24,12 @@ export class FileManager {
     ipcMain.handle('file:write', this.writeFile.bind(this))
     ipcMain.handle('file:exists', this.fileExists.bind(this))
     ipcMain.handle('file:delete', this.deleteFile.bind(this))
-    ipcMain.handle('file:parse-task-data', this.parseTaskData.bind(this))
+    ipcMain.handle('file:read-dat', this.readFileDataIpc.bind(this))
+    ipcMain.handle('file:write-dat', this.writeDatFileIpc.bind(this))
+    ipcMain.handle('file:read-multi-schemes', this.readMultiSchemes.bind(this))
+    ipcMain.handle('file:get-work-dir', this.getWorkDir.bind(this))
+    ipcMain.handle('file:create-output-dir', this.createOutputDir.bind(this))
+    ipcMain.handle('file:delete-dir', this.deleteDir.bind(this))
   }
 
   /**
@@ -130,25 +135,14 @@ export class FileManager {
   }
 
   /**
-   * 检测文件是否为二进制格式
-   * @param buffer 文件 Buffer
-   * @returns 是否为二进制文件
+   * 读取文件数据
+   * @param _ IPC 事件对象
+   * @param filePath 文件路径
+   * @returns 文件内容（文本）
    */
-  private isBinaryFile(buffer: Buffer): boolean {
-    // 检查前 512 字节中的可打印字符比例
-    const sampleSize = Math.min(512, buffer.length)
-    let printableCount = 0
-
-    for (let i = 0; i < sampleSize; i++) {
-      const byte = buffer[i]
-      // 可打印 ASCII 字符或常见的 Unicode 控制字符（如换行、回车、制表符）
-      if ((byte >= 0x20 && byte <= 0x7E) || byte === 0x09 || byte === 0x0A || byte === 0x0D) {
-        printableCount++
-      }
-    }
-
-    // 如果可打印字符比例低于 80%，可能是二进制文件
-    return printableCount / sampleSize < 0.8
+  private async readFileDataIpc(_: Electron.IpcMainInvokeEvent, filePath: string, customDir?: string): Promise<string> {
+    const content = await readFileData(filePath, customDir)
+    return content
   }
 
   /**
@@ -193,271 +187,384 @@ export class FileManager {
    * 检测文件编码
    * @param buffer 文件 Buffer
    * @returns 编码格式
+   * 生成 dat 文件内容
+   * @param designData 设计数据
+   * @returns 操作结果
    */
-  private detectEncoding(buffer: Buffer): string {
-    // 检查 BOM
-    if (buffer.length >= 3 && buffer[0] === 0xEF && buffer[1] === 0xBB && buffer[2] === 0xBF) {
-      return 'utf8'
-    }
-    if (buffer.length >= 2 && buffer[0] === 0xFF && buffer[1] === 0xFE) {
-      return 'utf16le'
-    }
-    if (buffer.length >= 2 && buffer[0] === 0xFE && buffer[1] === 0xFF) {
-      return 'utf16be'
-    }
 
-    // 尝试使用 iconv-lite 检测编码
-    // 默认尝试 utf-8，如果失败再尝试 gbk
+  private async writeDatFileIpc(_: Electron.IpcMainInvokeEvent, arg1: any, arg2?: any, arg3?: any): Promise<{ code: number, message: string, filePath: string }> {
+    // 兼容三种调用方式：
+    // 1) invoke('file:write-dat', designData)
+    // 2) invoke('file:write-dat', fileName, designData)
+    // 3) invoke('file:write-dat', fileName, designData, customDir)
+    const designData = (arg2 !== undefined) ? arg2 : arg1
+    const customDir = arg3
+    return await writeDatFile(designData, customDir)
+  }
+
+  /**
+   * 读取多个方案数据
+   * 扫描文件夹中所有包含 Sep_power.dat 的文件，并解析对应的数据
+   * @returns 方案数据数组
+   */
+  private async readMultiSchemes(_: Electron.IpcMainInvokeEvent): Promise<Array<{
+    index: number
+    fileName: string
+    angularVelocity: number
+    feedFlowRate: number
+    feedAxialDisturbance: number
+    sepPower: number | null
+    sepFactor: number | null
+  }>> {
     try {
-      const utf8Text = iconv.decode(buffer, 'utf8')
-      // 简单检查是否包含无效字符
-      if (utf8Text.includes('\uFFFD')) {
-        // 包含替换字符，可能不是 UTF-8
-        return 'gbk'
-      }
-      return 'utf8'
-    }
-    catch {
-      return 'gbk'
-    }
-  }
+      // 判断是否为开发环境
+      const isDev = fs.existsSync(join(process.cwd(), 'testFile'))
+      let targetDir: string
 
-  /**
-   * 清理文件内容（去除 BOM 等）
-   * @param content 文件内容
-   * @returns 清理后的内容
-   */
-  private cleanContent(content: string): string {
-    // 去除 BOM
-    if (content.charCodeAt(0) === 0xFEFF) {
-      return content.slice(1)
-    }
-    return content.trim()
-  }
-
-  /**
-   * 检查内容是否为 JSON/JSON5 格式
-   * @param content 文件内容
-   * @returns 是否为 JSON/JSON5 格式
-   */
-  private isJsonLike(content: string): boolean {
-    const trimmed = content.trim()
-    // JSON 通常以 { 或 [ 开头
-    return trimmed.startsWith('{') || trimmed.startsWith('[')
-  }
-
-  /**
-   * 构建完整的设计方案对象
-   * @param data 部分设计方案数据
-   * @returns 完整的设计方案对象
-   */
-  private buildDesignScheme(data: Partial<DesignScheme>): DesignScheme {
-    return {
-      isMultiScheme: data.isMultiScheme ?? true,
-      topLevelParams: {
-        angularVelocity: data.topLevelParams?.angularVelocity,
-        rotorRadius: data.topLevelParams?.rotorRadius,
-        rotorShoulderLength: data.topLevelParams?.rotorShoulderLength,
-      },
-      operatingParams: {
-        rotorSidewallPressure: data.operatingParams?.rotorSidewallPressure,
-        gasDiffusionCoefficient: data.operatingParams?.gasDiffusionCoefficient,
-        feedFlowRate: data.operatingParams?.feedFlowRate,
-        feedingMethod: data.operatingParams?.feedingMethod ?? '点供料',
-        splitRatio: data.operatingParams?.splitRatio,
-      },
-      drivingParams: {
-        depletedEndCapTemperature: data.drivingParams?.depletedEndCapTemperature,
-        enrichedEndCapTemperature: data.drivingParams?.enrichedEndCapTemperature,
-        feedAxialDisturbance: data.drivingParams?.feedAxialDisturbance,
-        feedAngularDisturbance: data.drivingParams?.feedAngularDisturbance,
-        depletedMechanicalDriveAmount: data.drivingParams?.depletedMechanicalDriveAmount,
-      },
-      separationComponents: {
-        extractionChamberHeight: data.separationComponents?.extractionChamberHeight,
-        enrichedBaffleHoleDiameter: data.separationComponents?.enrichedBaffleHoleDiameter,
-        feedBoxShockDiskHeight: data.separationComponents?.feedBoxShockDiskHeight,
-        depletedExtractionArmRadius: data.separationComponents?.depletedExtractionArmRadius,
-        depletedExtractionPortInnerDiameter: data.separationComponents?.depletedExtractionPortInnerDiameter,
-        depletedBaffleInnerHoleOuterDiameter: data.separationComponents?.depletedBaffleInnerHoleOuterDiameter,
-        enrichedBaffleHoleDistributionCircleDiameter: data.separationComponents?.enrichedBaffleHoleDistributionCircleDiameter,
-        depletedExtractionPortOuterDiameter: data.separationComponents?.depletedExtractionPortOuterDiameter,
-        depletedBaffleOuterHoleInnerDiameter: data.separationComponents?.depletedBaffleOuterHoleInnerDiameter,
-        minAxialDistance: data.separationComponents?.minAxialDistance,
-        depletedBaffleAxialPosition: data.separationComponents?.depletedBaffleAxialPosition,
-        depletedBaffleOuterHoleOuterDiameter: data.separationComponents?.depletedBaffleOuterHoleOuterDiameter,
-      },
-      outputResults: {
-        separationPower: data.outputResults?.separationPower,
-        separationFactor: data.outputResults?.separationFactor,
-      },
-    }
-  }
-
-  /**
-   * 解析文本格式的文件内容（支持 JSON 和 JSON5）
-   * @param content 文件内容（已解码的文本）
-   * @returns 解析后的设计方案对象
-   */
-  private parseTextContent(content: string): DesignScheme {
-    const cleanedContent = this.cleanContent(content)
-
-    // 检查内容是否为空
-    if (!cleanedContent) {
-      throw new Error('文件内容为空')
-    }
-
-    // 检查是否为 JSON/JSON5 格式
-    if (!this.isJsonLike(cleanedContent)) {
-      throw new Error('文件内容不是 JSON/JSON5 格式。DAT/TXT 文件应包含 JSON 或 JSON5 格式的数据。如果是其他格式，请转换为 JSON 格式或使用 .json 扩展名')
-    }
-
-    // 先尝试标准 JSON 解析
-    try {
-      const data = JSON.parse(cleanedContent) as Partial<DesignScheme>
-      return this.buildDesignScheme(data)
-    }
-    catch {
-      // 如果标准 JSON 解析失败，尝试 JSON5
-      try {
-        const data = JSON5.parse(cleanedContent) as Partial<DesignScheme>
-        return this.buildDesignScheme(data)
-      }
-      catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error)
-        throw new Error(`JSON/JSON5 解析失败: ${errorMessage}。请确保文件内容是有效的 JSON 或 JSON5 格式`)
-      }
-    }
-  }
-
-  /**
-   * 创建二进制 DAT 文件解析器
-   * 注意：这里是一个示例结构，需要根据实际的 DAT 文件二进制格式进行调整
-   * @returns Parser 实例
-   */
-  private createDatBinaryParser(): Parser {
-    // 这是一个示例 Parser 结构，需要根据实际的 DAT 文件格式进行调整
-    // 假设格式：所有数值都是 double（8字节），字符串以 null 结尾
-    // 实际使用时需要根据文件格式规范修改
-
-    return new Parser()
-      .uint8('isMultiScheme') // 布尔值：0 或 1
-      .doublebe('angularVelocity') // 大端序 double
-      .doublebe('rotorRadius')
-      .doublebe('rotorShoulderLength')
-      .doublebe('rotorSidewallPressure')
-      .doublebe('gasDiffusionCoefficient')
-      .doublebe('feedFlowRate')
-      .uint8('feedingMethod') // 0=点供料, 1=线供料, 2=面供料
-      .doublebe('splitRatio')
-      .doublebe('depletedEndCapTemperature')
-      .doublebe('enrichedEndCapTemperature')
-      .doublebe('feedAxialDisturbance')
-      .doublebe('feedAngularDisturbance')
-      .doublebe('depletedMechanicalDriveAmount')
-      .doublebe('extractionChamberHeight')
-      .doublebe('enrichedBaffleHoleDiameter')
-      .doublebe('feedBoxShockDiskHeight')
-      .doublebe('depletedExtractionArmRadius')
-      .doublebe('depletedExtractionPortInnerDiameter')
-      .doublebe('depletedBaffleInnerHoleOuterDiameter')
-      .doublebe('enrichedBaffleHoleDistributionCircleDiameter')
-      .doublebe('depletedExtractionPortOuterDiameter')
-      .doublebe('depletedBaffleOuterHoleInnerDiameter')
-      .doublebe('minAxialDistance')
-      .doublebe('depletedBaffleAxialPosition')
-      .doublebe('depletedBaffleOuterHoleOuterDiameter')
-      .doublebe('separationPower')
-      .doublebe('separationFactor')
-  }
-
-  /**
-   * 解析二进制 DAT 文件
-   * @param buffer 文件 Buffer
-   * @returns 解析后的设计方案对象
-   */
-  private parseBinaryDat(buffer: Buffer): DesignScheme {
-    try {
-      const parser = this.createDatBinaryParser()
-      const result = parser.parse(buffer)
-
-      // 将解析结果转换为 DesignScheme
-      const feedingMethodMap: FeedingMethod[] = ['点供料', '线供料', '面供料']
-      const feedingMethod = feedingMethodMap[result.feedingMethod] ?? '点供料'
-
-      return {
-        isMultiScheme: result.isMultiScheme === 1,
-        topLevelParams: {
-          angularVelocity: result.angularVelocity,
-          rotorRadius: result.rotorRadius,
-          rotorShoulderLength: result.rotorShoulderLength,
-        },
-        operatingParams: {
-          rotorSidewallPressure: result.rotorSidewallPressure,
-          gasDiffusionCoefficient: result.gasDiffusionCoefficient,
-          feedFlowRate: result.feedFlowRate,
-          feedingMethod,
-          splitRatio: result.splitRatio,
-        },
-        drivingParams: {
-          depletedEndCapTemperature: result.depletedEndCapTemperature,
-          enrichedEndCapTemperature: result.enrichedEndCapTemperature,
-          feedAxialDisturbance: result.feedAxialDisturbance,
-          feedAngularDisturbance: result.feedAngularDisturbance,
-          depletedMechanicalDriveAmount: result.depletedMechanicalDriveAmount,
-        },
-        separationComponents: {
-          extractionChamberHeight: result.extractionChamberHeight,
-          enrichedBaffleHoleDiameter: result.enrichedBaffleHoleDiameter,
-          feedBoxShockDiskHeight: result.feedBoxShockDiskHeight,
-          depletedExtractionArmRadius: result.depletedExtractionArmRadius,
-          depletedExtractionPortInnerDiameter: result.depletedExtractionPortInnerDiameter,
-          depletedBaffleInnerHoleOuterDiameter: result.depletedBaffleInnerHoleOuterDiameter,
-          enrichedBaffleHoleDistributionCircleDiameter: result.enrichedBaffleHoleDistributionCircleDiameter,
-          depletedExtractionPortOuterDiameter: result.depletedExtractionPortOuterDiameter,
-          depletedBaffleOuterHoleInnerDiameter: result.depletedBaffleOuterHoleInnerDiameter,
-          minAxialDistance: result.minAxialDistance,
-          depletedBaffleAxialPosition: result.depletedBaffleAxialPosition,
-          depletedBaffleOuterHoleOuterDiameter: result.depletedBaffleOuterHoleOuterDiameter,
-        },
-        outputResults: {
-          separationPower: result.separationPower,
-          separationFactor: result.separationFactor,
-        },
-      }
-    }
-    catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new Error(`二进制 DAT 文件解析失败: ${errorMessage}。请检查文件格式是否正确`)
-    }
-  }
-
-  /**
-   * 解析任务数据文件
-   * @param _ IPC 事件对象
-   * @param filePath 文件路径
-   * @returns 解析后的设计方案对象
-   */
-  private async parseTaskData(_: Electron.IpcMainInvokeEvent, filePath: string): Promise<DesignScheme> {
-    try {
-      // 读取文件为 Buffer
-      const buffer = await fsReadFile(filePath)
-
-      // 判断是否为二进制文件
-      if (this.isBinaryFile(buffer)) {
-        // 二进制格式：使用 Parser 解析
-        return this.parseBinaryDat(buffer)
+      if (isDev) {
+        // 开发环境：读取项目根目录下 testFile 文件夹
+        targetDir = join(process.cwd(), 'testFile')
       }
       else {
-        // 文本格式：检测编码并解码
-        const encoding = this.detectEncoding(buffer)
-        const content = iconv.decode(buffer, encoding)
-        return this.parseTextContent(content)
+        // 生产环境：读取应用可执行文件同级目录
+        const exeDir = dirname(app.getPath('exe'))
+        targetDir = exeDir
       }
+
+      // 读取 out 子目录（out/out_XXXXXX 格式）
+      const outDir = join(targetDir, 'out')
+
+      // 收集所有 Sep_power.dat 文件路径
+      const sepPowerFiles: Array<{ filePath: string, dirName: string }> = []
+
+      // 检查 out 目录是否存在
+      if (fs.existsSync(outDir)) {
+        try {
+          // 读取 out 目录中的所有文件和子目录
+          const entries = await readdir(outDir, { withFileTypes: true })
+
+          // 扫描 out 目录下的 out_XXXXXX 子目录
+          for (const entry of entries) {
+            if (entry.isDirectory() && entry.name.startsWith('out_')) {
+              // 扫描 out_XXXXXX 子目录
+              try {
+                const subDir = join(outDir, entry.name)
+                const subFiles = await readdir(subDir)
+                for (const subFile of subFiles) {
+                  const fileName = subFile.toLowerCase()
+                  if (fileName.includes('sep_power') && fileName.endsWith('.dat')) {
+                    sepPowerFiles.push({
+                      filePath: join(subDir, subFile),
+                      dirName: entry.name,
+                    })
+                  }
+                }
+              }
+              catch (error) {
+                console.warn(`读取子目录失败 (${entry.name}):`, error)
+              }
+            }
+          }
+        }
+        catch (error) {
+          console.warn(`读取 out 目录失败:`, error)
+        }
+      }
+
+      // 兼容旧格式：如果 out 目录不存在或为空，尝试扫描直接目录下的 scheme_ 和 out_ 目录（向后兼容）
+      if (sepPowerFiles.length === 0) {
+        try {
+          const entries = await readdir(targetDir, { withFileTypes: true })
+
+          // 先检查直接目录中的文件
+          for (const entry of entries) {
+            if (entry.isFile()) {
+              const fileName = entry.name.toLowerCase()
+              if (fileName.includes('sep_power') && fileName.endsWith('.dat')) {
+                sepPowerFiles.push({
+                  filePath: join(targetDir, entry.name),
+                  dirName: '',
+                })
+              }
+            }
+            else if (entry.isDirectory() && (entry.name.startsWith('scheme_') || entry.name.startsWith('out_'))) {
+              // 扫描子目录（如 scheme_1, scheme_2 或 out_000001 等）
+              try {
+                const subDir = join(targetDir, entry.name)
+                const subFiles = await readdir(subDir)
+                for (const subFile of subFiles) {
+                  const fileName = subFile.toLowerCase()
+                  if (fileName.includes('sep_power') && fileName.endsWith('.dat')) {
+                    sepPowerFiles.push({
+                      filePath: join(subDir, subFile),
+                      dirName: entry.name,
+                    })
+                  }
+                }
+              }
+              catch (error) {
+                console.warn(`读取子目录失败 (${entry.name}):`, error)
+              }
+            }
+          }
+        }
+        catch (error) {
+          console.warn(`读取目标目录失败:`, error)
+        }
+      }
+
+      // 解析每个文件
+      const schemes: Array<{
+        index: number
+        fileName: string
+        angularVelocity: number
+        feedFlowRate: number
+        feedAxialDisturbance: number
+        sepPower: number | null
+        sepFactor: number | null
+      }> = []
+
+      for (let i = 0; i < sepPowerFiles.length; i++) {
+        const { filePath, dirName } = sepPowerFiles[i]
+        const fileName = filePath.split(/[/\\]/).pop() || ''
+
+        try {
+          // 读取 Sep_power.dat 文件
+          const sepPowerContent = await fsReadFile(filePath, 'utf-8')
+          const sepPowerData = parseSepPower(sepPowerContent)
+
+          // 尝试读取对应的 input.dat 文件（如果存在）
+          // 优先读取与 Sep_power.dat 同目录的 input.dat
+          let inputDatPath: string | null = null
+          const sepPowerDir = dirname(filePath)
+          const inputDatFilePath = join(sepPowerDir, 'input.dat')
+
+          if (await this.fileExists(null as any, inputDatFilePath)) {
+            inputDatPath = inputDatFilePath
+          }
+          else {
+            // 如果子目录中没有，尝试直接目录下的 input.dat
+            const directInputPath = join(targetDir, 'input.dat')
+            if (await this.fileExists(null as any, directInputPath)) {
+              inputDatPath = directInputPath
+            }
+          }
+
+          // 解析 input.dat 获取参数
+          let angularVelocity = 0
+          let feedFlowRate = 0
+          let feedAxialDisturbance = 0
+
+          if (inputDatPath) {
+            try {
+              const inputContent = await fsReadFile(inputDatPath, 'utf-8')
+              // 参考 InitialDesign 中的 parseDatContent 逻辑
+              const lines = inputContent.trim().split('\n').map(l => l.trim()).filter(Boolean)
+
+              // 第二行（索引1）：角速度HZ,半径mm,两肩长mm,取料腔高度mm,侧壁压力Pa,扩散系数
+              if (lines.length > 1) {
+                const params = lines[1].replace(/!.*/, '').split(',').map(Number)
+                if (params.length > 0 && !Number.isNaN(params[0])) {
+                  angularVelocity = params[0]
+                }
+              }
+
+              // 第15行（索引14）：供料流量kg/s
+              if (lines.length > 14) {
+                const raw = lines[14].replace(/!.*/, '').trim()
+                const val = Number(raw)
+                if (!Number.isNaN(val)) {
+                  feedFlowRate = val
+                }
+              }
+
+              // 第18行（索引17）：供料轴向扰动
+              if (lines.length > 17) {
+                const raw = lines[17].replace(/!.*/, '').trim()
+                const val = Number(raw)
+                if (!Number.isNaN(val)) {
+                  feedAxialDisturbance = val
+                }
+              }
+            }
+            catch (error) {
+              console.warn(`读取 input.dat 失败 (${inputDatPath}):`, error)
+            }
+          }
+
+          // 从目录名提取序号（如 scheme_1 -> 1 或 out_000001 -> 1）
+          let schemeIndex = i
+          if (dirName) {
+            if (dirName.startsWith('scheme_')) {
+              const match = dirName.match(/scheme_(\d+)/)
+              if (match) {
+                schemeIndex = parseInt(match[1], 10) - 1 // 转换为0-based索引
+              }
+            }
+            else if (dirName.startsWith('out_')) {
+              const match = dirName.match(/^out_(\d+)$/)
+              if (match) {
+                schemeIndex = parseInt(match[1], 10) - 1 // 转换为0-based索引
+              }
+            }
+          }
+
+          schemes.push({
+            index: schemeIndex,
+            fileName: dirName || fileName,
+            angularVelocity,
+            feedFlowRate,
+            feedAxialDisturbance,
+            sepPower: sepPowerData.actualSepPower,
+            sepFactor: sepPowerData.actualSepFactor,
+          })
+        }
+        catch (error) {
+          console.error(`读取文件失败 (${fileName}):`, error)
+        }
+      }
+
+      // 按分离功率降序排序，相同值按序号升序
+      schemes.sort((a, b) => {
+        const powerA = a.sepPower ?? -Infinity
+        const powerB = b.sepPower ?? -Infinity
+        if (powerA !== powerB) {
+          return powerB - powerA // 降序
+        }
+        return a.index - b.index // 升序
+      })
+
+      // 重新分配序号
+      schemes.forEach((scheme, idx) => {
+        scheme.index = idx
+      })
+
+      // 在所有采样空间数据循环结束后，判断各方案中分离功率最大值所在方案，作为最优方案
+      // 获取方案数据插入多方案设计结果表格第一行，序号为 -1（表示最优方案，前端显示为 '*'）
+      if (schemes.length > 0) {
+        const validPowers = schemes.filter(s => s.sepPower !== null && s.sepPower !== undefined)
+        if (validPowers.length > 0) {
+          // 找到最大分离功率的方案（排序后第一条就是最大值）
+          const optimalScheme = schemes[0]
+          // 创建最优方案的副本，序号设为 -1
+          const optimalSchemeCopy = {
+            ...optimalScheme,
+            index: -1, // -1 表示最优方案，前端显示为 '*'
+          }
+          // 插入到第一行
+          schemes.unshift(optimalSchemeCopy)
+          // 重新分配其他方案的序号（从 0 开始）
+          for (let i = 1; i < schemes.length; i++) {
+            schemes[i].index = i - 1
+          }
+        }
+      }
+
+      return schemes
     }
     catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      throw new Error(`解析任务数据文件失败: ${errorMessage}`)
+      console.error('读取多方案数据失败:', error)
+      throw new Error(`读取多方案数据失败: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  /**
+   * 获取工作目录
+   * @returns 工作目录路径
+   */
+  private getWorkDir(): string {
+    const isDev = fs.existsSync(join(process.cwd(), 'testFile'))
+    if (isDev) {
+      return join(process.cwd(), 'testFile')
+    }
+    else {
+      return dirname(app.getPath('exe'))
+    }
+  }
+
+  /**
+   * 创建唯一的输出目录（out/out_XXXXXX 格式，6位数字，最多支持100万个目录）
+   * @param _ IPC 事件对象
+   * @param baseDir 基础目录路径
+   * @returns 创建的目录路径
+   */
+  private async createOutputDir(_: Electron.IpcMainInvokeEvent, baseDir: string): Promise<string> {
+    try {
+      // 确保基础目录存在
+      if (!fs.existsSync(baseDir)) {
+        fs.mkdirSync(baseDir, { recursive: true })
+      }
+
+      // 创建 out 子目录（如果不存在）
+      const outDir = join(baseDir, 'out')
+      if (!fs.existsSync(outDir)) {
+        fs.mkdirSync(outDir, { recursive: true })
+      }
+
+      // 读取 out 目录中的所有条目
+      const entries = await readdir(outDir, { withFileTypes: true })
+
+      // 找出所有 out_ 开头的目录，提取编号
+      const existingNumbers: number[] = []
+      for (const entry of entries) {
+        if (entry.isDirectory() && entry.name.startsWith('out_')) {
+          const match = entry.name.match(/^out_(\d+)$/)
+          if (match) {
+            const num = parseInt(match[1], 10)
+            if (!Number.isNaN(num)) {
+              existingNumbers.push(num)
+            }
+          }
+        }
+      }
+
+      // 找到下一个可用的编号
+      let nextNumber = 1
+      if (existingNumbers.length > 0) {
+        existingNumbers.sort((a, b) => a - b)
+        // 找到第一个空缺或最大值+1
+        for (let i = 0; i < existingNumbers.length; i++) {
+          if (existingNumbers[i] !== i + 1) {
+            nextNumber = i + 1
+            break
+          }
+          nextNumber = existingNumbers[i] + 1
+        }
+      }
+
+      // 生成目录名（6位数字，补零，格式：out_000001）
+      const dirName = `out_${String(nextNumber).padStart(6, '0')}`
+      const dirPath = join(outDir, dirName)
+
+      // 创建目录
+      fs.mkdirSync(dirPath, { recursive: true })
+
+      return dirPath
+    }
+    catch (error) {
+      console.error('创建输出目录失败:', error)
+      throw new Error(`创建输出目录失败: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  /**
+   * 删除目录（递归删除）
+   * @param _ IPC 事件对象
+   * @param dirPath 目录路径
+   */
+  private async deleteDir(_: Electron.IpcMainInvokeEvent, dirPath: string): Promise<void> {
+    try {
+      // 检查目录是否存在
+      if (!fs.existsSync(dirPath)) {
+        return // 目录不存在，直接返回
+      }
+
+      // 使用 rm 递归删除目录及其内容
+      await rm(dirPath, { recursive: true, force: true })
+    }
+    catch (error) {
+      console.error('删除目录失败:', error)
+      throw new Error(`删除目录失败: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 }

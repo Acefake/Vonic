@@ -256,6 +256,5 @@ export const useLogStore = defineStore('log', () => {
   persist: {
     key: 'log-store',
     storage: localStorage,
-    paths: ['logs', 'isPaused', 'filterLevel'],
   },
 })

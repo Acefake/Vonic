@@ -12,6 +12,7 @@ export enum WindowName {
   WINDOW_EXAMPLE = 'windowExample',
   SETTINGS = 'settings',
   EMBEDDED = 'embedded',
+  ADD_DESIGN_FACTOR = 'addDesignFactor',
 }
 
 /**

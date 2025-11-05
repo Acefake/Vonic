@@ -1,5 +1,6 @@
 import type { AppInfo, SystemInfo } from '../types'
 import { cpus, freemem, homedir, hostname, platform, release, totalmem } from 'node:os'
+import { dirname } from 'node:path'
 import { app, ipcMain } from 'electron'
 
 export class SystemManager {

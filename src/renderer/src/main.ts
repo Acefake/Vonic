@@ -3,7 +3,7 @@ import persistedstate from 'pinia-plugin-persistedstate'
 
 import { createApp } from 'vue'
 import { getProductConfig } from '../../config/product.config'
-import appAPI from './app'
+import $app from './app'
 import App from './App.vue'
 import router from './router'
 import { createSyncPlugin } from './store/syncPlugin'
@@ -16,12 +16,14 @@ pinia.use(persistedstate)
 
 const vueApp = createApp(App)
 
-vueApp.config.globalProperties.$app = appAPI
+vueApp.config.globalProperties.$app = $app
 
 const productConfig = getProductConfig()
-appAPI.http.setBaseURL(productConfig.api.baseUrl)
+$app.http.setBaseURL(productConfig.api.baseUrl)
+$app.http.get('http://localhost:25504/api/v1/integ/doe/validate').then((res) => {
+  $app.logger.info(JSON.stringify(res))
+})
 
-// 监听主进程日志，输出到 DevTools 控制台
 interface MainProcessLog {
   level: string
   message: string

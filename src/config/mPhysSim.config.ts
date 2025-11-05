@@ -24,9 +24,14 @@ const mPhysSimConfig: ProductConfig = {
     experimentalData: true,
     dataComparison: true,
   },
-  java: {
-    jvmArgs: ['-Xmx512m', '-Xms256m'],
+  doe: {
+    port: 25504,
     startupTimeout: 30000,
+    enabled: true,
+  },
+  services: {
+    startupMode: 'parallel',
+    errorStrategy: 'stop-all',
   },
 }
 

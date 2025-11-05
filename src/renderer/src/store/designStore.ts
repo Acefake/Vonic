@@ -2,9 +2,17 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 /**
- * 供料方式类型
+ * 供料方式类型 - 使用数值类型
  */
-export type FeedingMethod = '点供料' | '线供料' | '面供料'
+export type FeedingMethod = 0 | 1
+
+/**
+ * 供料方式映射
+ */
+export const FEEDING_METHOD_MAP = [
+  { label: '点供料', value: 0 },
+  { label: '均匀供料', value: 1 },
+]
 
 /**
  * 顶层参数接口
@@ -128,7 +136,7 @@ export const useDesignStore = defineStore('design', () => {
     rotorSidewallPressure: undefined,
     gasDiffusionCoefficient: undefined,
     feedFlowRate: undefined,
-    feedingMethod: '点供料',
+    feedingMethod: 0,
     splitRatio: undefined,
   })
 
@@ -251,7 +259,7 @@ export const useDesignStore = defineStore('design', () => {
       rotorSidewallPressure: undefined,
       gasDiffusionCoefficient: undefined,
       feedFlowRate: undefined,
-      feedingMethod: '点供料',
+      feedingMethod: 0,
       splitRatio: undefined,
     }
     drivingParams.value = {
