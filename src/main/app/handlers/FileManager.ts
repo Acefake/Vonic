@@ -1,6 +1,8 @@
-import type { Buffer } from 'node:buffer'
 import type { DesignScheme, FeedingMethod } from '../../shared/design-scheme'
 
+import { Buffer } from 'node:buffer'
+
+import { createReadStream } from 'node:fs'
 import { access, readFile as fsReadFile, unlink, writeFile } from 'node:fs/promises'
 import { extname } from 'node:path'
 import { Parser } from 'binary-parser'
@@ -52,14 +54,13 @@ export class FileManager {
       }
 
       if (encoding === null) {
-        // 读取二进制文件，返回 Base64 编码
-        const buffer = await fsReadFile(filePath)
-        return buffer.toString('base64')
+        // 使用流式读取二进制文件，提高大文件处理效率
+        return await this.readFileAsStream(filePath)
       }
       else {
         // 读取文本文件
         const content = await fsReadFile(filePath, encoding)
-        return content
+        return content.toString()
       }
     }
     catch (error) {
@@ -148,6 +149,44 @@ export class FileManager {
 
     // 如果可打印字符比例低于 80%，可能是二进制文件
     return printableCount / sampleSize < 0.8
+  }
+
+  /**
+   * 使用流式读取文件并转换为 Base64
+   * @param filePath 文件路径
+   * @returns Base64 编码的文件内容
+   */
+  private async readFileAsStream(filePath: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const chunks: Buffer[] = []
+      // 使用流式读取，64KB 块大小，提高大文件处理效率
+      const stream = createReadStream(filePath, { highWaterMark: 64 * 1024 })
+
+      stream.on('data', (chunk: string | Buffer) => {
+        // 确保是 Buffer 类型
+        if (Buffer.isBuffer(chunk)) {
+          chunks.push(chunk)
+        }
+        else {
+          chunks.push(Buffer.from(chunk, 'binary'))
+        }
+      })
+
+      stream.on('end', () => {
+        try {
+          // 合并所有块并转换为 Base64
+          const buffer = Buffer.concat(chunks)
+          resolve(buffer.toString('base64'))
+        }
+        catch (error) {
+          reject(error)
+        }
+      })
+
+      stream.on('error', (error) => {
+        reject(error)
+      })
+    })
   }
 
   /**

@@ -183,6 +183,20 @@ export function createSyncPlugin() {
           const currentState = serializeState(targetStore.$state)
           const newState = value as Record<string, unknown>
 
+          // 对于 experimentalData store，使用时间戳判断是否接受同步
+          if (storeId === 'experimentalData') {
+            const currentTimestamp = (currentState.lastUpdateTime as number) || 0
+            const newTimestamp = (newState.lastUpdateTime as number) || 0
+
+            // 只接受更新的数据（时间戳更大）
+            if (newTimestamp <= currentTimestamp) {
+              console.log(`[Store Sync] experimentalData 拒绝旧数据 - 当前时间戳: ${currentTimestamp}, 新时间戳: ${newTimestamp}`)
+              return
+            }
+
+            console.log(`[Store Sync] experimentalData 接受新数据 - 时间戳: ${newTimestamp}`)
+          }
+
           let stateChanged = false
 
           // 对于 log store，使用精确比较（忽略时间戳）
@@ -211,6 +225,7 @@ export function createSyncPlugin() {
           try {
             // 更新 store 的状态
             targetStore.$patch(value)
+            console.log(`[Store Sync] 同步成功 - store: ${storeId}`)
           }
           finally {
             // 使用 setTimeout 延迟重置，给 $patch 更多时间完成
@@ -235,8 +250,19 @@ export function createSyncPlugin() {
         .invoke('store:get', storeKey)
         .then((savedState) => {
           if (savedState) {
-            // 检查状态是否真的改变了（避免循环更新）
+            // 检查当前状态是否已有数据（避免覆盖刚设置的数据）
             const currentState = serializeState(store.$state)
+
+            // 对于 experimentalData store，检查是否已有表格数据
+            if (store.$id === 'experimentalData') {
+              const currentTableData = (currentState.tableData as unknown[]) || []
+              if (currentTableData.length > 0) {
+                console.log(`[Store Sync] experimentalData 已有数据，跳过初始化加载 - store: ${store.$id}`)
+                return
+              }
+            }
+
+            // 检查状态是否真的改变了（避免循环更新）
             const newState = savedState as Record<string, unknown>
 
             let stateChanged = false
@@ -258,6 +284,7 @@ export function createSyncPlugin() {
             setSyncing(true)
             try {
               store.$patch(savedState)
+              console.log(`[Store Sync] 从主进程加载状态成功 - store: ${store.$id}`)
             }
             finally {
               // 使用 setTimeout 延迟重置，给 $patch 更多时间完成
@@ -266,6 +293,9 @@ export function createSyncPlugin() {
                 setSyncing(false)
               }, delay)
             }
+          }
+          else {
+            console.log(`[Store Sync] 主进程无保存的状态 - store: ${store.$id}`)
           }
         })
     }, 200)

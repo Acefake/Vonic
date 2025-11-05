@@ -28,12 +28,15 @@
     "ant-design-vue": "~4.2.6",
     "axios": "^1.13.1",
     "binary-parser": "^2.2.1",
+    "echarts": "^6.0.0",
     "electron-updater": "^6.3.9",
     "iconv-lite": "^0.7.0",
     "json5": "^2.2.3",
     "pinia": "^3.0.3",
     "pinia-plugin-persistedstate": "^4.7.1",
-    "vue-router": "^4.6.3"
+    "vue-echarts": "^8.0.1",
+    "vue-router": "^4.6.3",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^6.1.0",

@@ -2,7 +2,7 @@ import { ipcMain, webContents } from 'electron'
 
 /**
  * 状态管理器 - 在主进程中集中管理所有窗口共享的状态
- * 实现多窗口间的状态同步
+ * 实现多窗口间的状态同步（仅在程序运行期间保存，不持久化到磁盘）
  */
 export class StoreManage {
   private state: Map<string, unknown> = new Map()

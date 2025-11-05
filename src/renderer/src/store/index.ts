@@ -46,5 +46,8 @@ export type {
   TopLevelParams,
 } from './designStore'
 
+// 导出实验数据相关的 store
+export { useExperimentalDataStore } from './experimentalDataStore'
+
 // 导出设置相关的 store
 export { useSettingsStore } from './settingsStore'

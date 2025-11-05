@@ -46,6 +46,8 @@ export const ALLOWED_READ_EXTENSIONS = [
   '.xml',
   '.sql',
   '.dat',
+  '.xlsx',
+  '.xls',
   // 可执行文件（用于读取嵌入的配置数据）
   '.exe',
 
@@ -163,7 +165,11 @@ export const FILE_FILTERS_FOR_READ: FileFilter[] = [
   },
   {
     name: '数据文件',
-    extensions: ['csv', 'xml', 'sql', 'log'],
+    extensions: ['csv', 'xml', 'sql', 'log', 'xlsx', 'xls'],
+  },
+  {
+    name: 'Excel 文件',
+    extensions: ['xlsx', 'xls'],
   },
   {
     name: '图片文件',
