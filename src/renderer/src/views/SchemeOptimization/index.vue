@@ -3,7 +3,7 @@ import type { DesignFactor, SampleData, SampleSpaceData } from './type'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { storeToRefs } from 'pinia'
 import { computed, ref } from 'vue'
-import { useApp } from '../../app'
+import { getProductConfig } from '../../../../config/product.config'
 import { useLogStore, useSchemeOptimizationStore } from '../../store'
 import { useDesignStore } from '../../store/designStore'
 import { FIELD_LABELS } from '../../utils/field-labels'
@@ -11,7 +11,6 @@ import { FIELD_LABELS } from '../../utils/field-labels'
 import { ALGORITHM_OPTIONS, RESPONSE_VALUES, SAMPLING_CRITERION_OPTIONS } from './constants'
 import { AlgorithmType, ParameterType } from './type'
 
-const app = useApp()
 const logStore = useLogStore()
 const designStore = useDesignStore()
 const schemeOptimizationStore = useSchemeOptimizationStore()
@@ -743,7 +742,10 @@ async function sampleSpace() {
     const numSamplesLogged = (params.value as any)?.numSamples ?? (params.value as any)?.numFactors
     logStore.info(`开始样本取样：算法=${optimizationAlgorithm.value}，准则=${params.value.criterion}，样本数=${numSamplesLogged}，变量数=${params.value.numVars}，因子数=${params.value.params.length}`)
     logStore.info(`取样参数：${JSON.stringify(params.value)}`)
-    const url = 'http://localhost:25504/api/v1/integ/doe/generate'
+    // 使用配置中的 DOE 端口构建 URL
+    const productConfig = getProductConfig()
+    const doePort = productConfig.doe?.port || 25504
+    const url = `http://localhost:${doePort}/api/v1/integ/doe/generate`
     const res: SampleSpaceData = await app.http.post(url, params.value)
 
     // 更新样本数量

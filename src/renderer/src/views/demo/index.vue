@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { CompassOutlined } from '@ant-design/icons-vue'
 import { storeToRefs } from 'pinia'
-import { useApp } from '../../app'
 import { useStore } from '../../store'
 import { useLogStore } from '../../store/logStore'
 
@@ -9,8 +8,6 @@ const store = useStore()
 
 const { count, message, doubleCount } = storeToRefs(store)
 const { increment } = store
-
-const $app = useApp()
 const logStore = useLogStore()
 
 // 测试日志 API
@@ -20,26 +17,26 @@ function testLogger(): void {
 
 // 测试对话框 API
 async function testDialog(): Promise<void> {
-  const confirmed = await $app.dialog.confirm({
+  const confirmed = await app.dialog.confirm({
     title: '确认操作',
     content: '你确定要执行此操作吗？',
   })
   if (confirmed) {
-    $app.message.success('你点击了确定')
+    app.message.success('你点击了确定')
   }
   else {
-    $app.message.info('你点击了取消')
+    app.message.info('你点击了取消')
   }
 }
 
 // 测试通知 API
 function testNotification(): void {
-  $app.notification.success({
+  app.notification.success({
     message: '操作成功',
     description: '这是一条成功通知消息',
   })
   setTimeout(() => {
-    $app.notification.info({
+    app.notification.info({
       message: '提示信息',
       description: '这是一条信息通知',
     })
@@ -48,14 +45,14 @@ function testNotification(): void {
 
 // 测试剪贴板 API
 async function testClipboard(): Promise<void> {
-  await $app.clipboard.copy('Hello from Tianjin App!', '已复制到剪贴板')
-  const text = await $app.clipboard.readText()
-  $app.logger.info('剪贴板内容:', text)
+  await app.clipboard.copy('Hello from Tianjin App!', '已复制到剪贴板')
+  const text = await app.clipboard.readText()
+  app.logger.info('剪贴板内容:', text)
 }
 
 // 测试文件 API
 async function testFileSelect(): Promise<void> {
-  const files = await $app.file.selectFile({
+  const files = await app.file.selectFile({
     title: '选择文件',
     multiple: true,
     filters: [
@@ -63,17 +60,17 @@ async function testFileSelect(): Promise<void> {
     ],
   })
   if (files) {
-    $app.message.success(`选择了 ${files.length} 个文件`)
-    $app.logger.info('选择的文件:', files)
+    app.message.success(`选择了 ${files.length} 个文件`)
+    app.logger.info('选择的文件:', files)
   }
 }
 
 // 测试系统信息 API
 async function testSystemInfo(): Promise<void> {
-  const appInfo = await $app.system.getAppInfo()
-  const sysInfo = await $app.system.getSystemInfo()
+  const appInfo = await app.system.getAppInfo()
+  const sysInfo = await app.system.getSystemInfo()
 
-  $app.dialog.info({
+  app.dialog.info({
     title: '系统信息',
     content: `应用: ${appInfo.name} v${appInfo.version}
     平台: ${appInfo.platform} (${appInfo.arch})
@@ -86,17 +83,17 @@ async function testSystemInfo(): Promise<void> {
 // 测试事件总线 API
 function testEventBus(): void {
   // 订阅事件
-  const unsubscribe = $app.eventBus.on<string>('test-event', (data) => {
-    $app.message.info(`收到事件: ${data}`)
+  const unsubscribe = app.eventBus.on<string>('test-event', (data) => {
+    app.message.info(`收到事件: ${data}`)
   })
 
   // 发布事件
-  $app.eventBus.emit('test-event', 'Hello EventBus!')
+  app.eventBus.emit('test-event', 'Hello EventBus!')
 
   // 3 秒后取消订阅
   setTimeout(() => {
     unsubscribe()
-    $app.message.success('已取消事件订阅')
+    app.message.success('已取消事件订阅')
   }, 3000)
 }
 
@@ -104,44 +101,44 @@ function testEventBus(): void {
 async function testHttp(): Promise<void> {
   try {
     // 发送请求
-    const response = await $app.http.get<{ message: string }>('/hello')
+    const response = await app.http.get<{ message: string }>('/hello')
     console.log(response, 'response')
-    $app.notification.success({
+    app.notification.success({
       message: 'HTTP 请求成功',
       description: `消息: ${response}`,
     })
-    $app.logger.info('HTTP 响应:', response)
+    app.logger.info('HTTP 响应:', response)
   }
   catch (error) {
-    $app.message.error('HTTP 请求失败')
-    $app.logger.error('HTTP 请求失败:', error)
+    app.message.error('HTTP 请求失败')
+    app.logger.error('HTTP 请求失败:', error)
   }
 }
 
 // 测试性能监控
 async function testPerformance(): Promise<void> {
-  await $app.logger.performance('测试操作', async () => {
+  await app.logger.performance('测试操作', async () => {
     // 模拟耗时操作
     await new Promise(resolve => setTimeout(resolve, 1000))
   })
-  $app.message.success('性能测试完成，查看控制台')
+  app.message.success('性能测试完成，查看控制台')
 }
 
 // ===== Debug 调试功能 =====
 
 // 打开开发者工具
 function openDevTools(): void {
-  $app.debug.openDevTools({ mode: 'right' })
-  $app.message.success('开发者工具已打开')
+  app.debug.openDevTools({ mode: 'right' })
+  app.message.success('开发者工具已打开')
 }
 
 // 显示性能信息
 async function showPerformanceInfo(): Promise<void> {
   try {
-    const perf = await $app.debug.getPerformance()
-    const memory = await $app.debug.getMemoryUsage()
+    const perf = await app.debug.getPerformance()
+    const memory = await app.debug.getMemoryUsage()
 
-    $app.dialog.info({
+    app.dialog.info({
       title: '性能信息',
       content: `
 FPS: ${perf.fps}
@@ -157,81 +154,81 @@ JS 堆限制: ${(memory.jsHeapSizeLimit / 1024 / 1024).toFixed(2)} MB
     })
   }
   catch (error) {
-    $app.logger.error('获取性能信息失败', error)
-    $app.message.error('获取性能信息失败')
+    app.logger.error('获取性能信息失败', error)
+    app.message.error('获取性能信息失败')
   }
 }
 
 // 导出日志
 async function exportLogs(): Promise<void> {
   try {
-    const path = await $app.debug.exportLogs()
+    const path = await app.debug.exportLogs()
     if (path) {
-      $app.notification.success({
+      app.notification.success({
         message: '日志导出成功',
         description: `日志已导出到: ${path}`,
       })
     }
     else {
-      $app.message.info('已取消导出')
+      app.message.info('已取消导出')
     }
   }
   catch (error) {
-    $app.logger.error('导出日志失败', error)
-    $app.message.error('导出日志失败')
+    app.logger.error('导出日志失败', error)
+    app.message.error('导出日志失败')
   }
 }
 
 // 打开日志目录
 async function openLogDirectory(): Promise<void> {
   try {
-    await $app.debug.openLogDirectory()
-    $app.message.success('已在文件管理器中打开日志目录')
+    await app.debug.openLogDirectory()
+    app.message.success('已在文件管理器中打开日志目录')
   }
   catch (error) {
-    $app.logger.error('打开日志目录失败', error)
-    $app.message.error('打开日志目录失败')
+    app.logger.error('打开日志目录失败', error)
+    app.message.error('打开日志目录失败')
   }
 }
 
 // 清除缓存
 async function clearCache(): Promise<void> {
-  const confirmed = await $app.dialog.confirm({
+  const confirmed = await app.dialog.confirm({
     title: '确认清除缓存',
     content: '这将清除所有应用缓存和本地存储，是否继续？',
   })
 
   if (confirmed) {
     try {
-      await $app.debug.clearCache()
-      await $app.debug.clearStorage()
-      $app.notification.success({
+      await app.debug.clearCache()
+      await app.debug.clearStorage()
+      app.notification.success({
         message: '缓存已清除',
         description: '建议重启应用以使更改生效',
       })
     }
     catch (error) {
-      $app.logger.error('清除缓存失败', error)
-      $app.message.error('清除缓存失败')
+      app.logger.error('清除缓存失败', error)
+      app.message.error('清除缓存失败')
     }
   }
 }
 
 // 显示应用信息
 async function showAppInfo(): Promise<void> {
-  await $app.debug.showAppInfo()
-  $app.message.success('应用信息已输出到控制台')
+  await app.debug.showAppInfo()
+  app.message.success('应用信息已输出到控制台')
 }
 
 // 重新加载
 function reloadApp(): void {
-  $app.debug.reload()
+  app.debug.reload()
 }
 
 function openLoadingWindow(): void {
-  $app.window.loading.open()
+  app.window.loading.open()
   setTimeout(() => {
-    $app.window.loading.close()
+    app.window.loading.close()
   }, 2000)
 }
 
@@ -241,19 +238,19 @@ function openLoadingWindow(): void {
 async function openEmbeddedWindow(): Promise<void> {
   try {
     // 使用 await 会自动等待窗口关闭并返回结果（底层已处理）
-    const result = await $app.window.embedded.open({
+    const result = await app.window.embedded.open({
       data: {
         title: '测试数据',
         message: '这2222',
         timestamp: Date.now(),
       },
     })
-    $app.message.success(`嵌入窗口返回结果: ${JSON.stringify(result)}`)
-    $app.logger.info('嵌入窗口返回结果:', result)
+    app.message.success(`嵌入窗口返回结果: ${JSON.stringify(result)}`)
+    app.logger.info('嵌入窗口返回结果:', result)
   }
   catch (error) {
-    $app.message.error('嵌入窗口打开失败')
-    $app.logger.error('嵌入窗口打开失败:', error)
+    app.message.error('嵌入窗口打开失败')
+    app.logger.error('嵌入窗口打开失败:', error)
   }
 }
 
@@ -284,29 +281,29 @@ async function openEmbeddedWindowWithParams(): Promise<void> {
       },
     }
 
-    $app.logger.info('打开嵌入窗口，传递参数:', { data: windowData })
+    app.logger.info('打开嵌入窗口，传递参数:', { data: windowData })
 
     // 使用 await 会自动等待窗口关闭并返回结果（底层已处理）
-    const result = await $app.window.embedded.open({
+    const result = await app.window.embedded.open({
       data: windowData,
     })
 
     // 处理返回结果
     if (result) {
-      $app.notification.success({
+      app.notification.success({
         message: '嵌入窗口操作完成',
         description: `返回结果: ${JSON.stringify(result)}`,
         duration: 5,
       })
-      $app.logger.info('嵌入窗口返回结果:', result)
+      app.logger.info('嵌入窗口返回结果:', result)
     }
     else {
-      $app.message.info('嵌入窗口已关闭，未返回结果')
+      app.message.info('嵌入窗口已关闭，未返回结果')
     }
   }
   catch (error) {
-    $app.message.error('嵌入窗口打开失败')
-    $app.logger.error('嵌入窗口打开失败:', error)
+    app.message.error('嵌入窗口打开失败')
+    app.logger.error('嵌入窗口打开失败:', error)
   }
 }
 
@@ -315,8 +312,8 @@ async function openEmbeddedWindowWithParams(): Promise<void> {
  */
 async function openSettingsWindow(): Promise<void> {
   // 设置窗口通常不需要等待结果
-  await $app.window.settings.open()
-  $app.message.success('已打开设置窗口')
+  await app.window.settings.open()
+  app.message.success('已打开设置窗口')
 }
 </script>
 

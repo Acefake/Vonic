@@ -7,6 +7,7 @@ import process from 'node:process'
 import util from 'node:util'
 import axios from 'axios'
 import { app } from 'electron'
+import { getProductConfig } from '@/config/product.config'
 
 const execAsync = util.promisify(exec)
 
@@ -53,10 +54,15 @@ export class DoeProcessManager {
   private logger?: Logger
 
   constructor(config: DoeProcessConfig, logger?: Logger) {
+    // 从产品配置获取默认 DOE 端口
+    const productConfig = getProductConfig()
+    const defaultPort = productConfig.doe?.port || 25504
+    const defaultHealthCheckUrl = `http://localhost:${defaultPort}/api/v1/integ/doe/validate`
+
     this.config = {
-      port: 25504,
-      startupTimeout: 30000,
-      healthCheckUrl: 'http://localhost:25504/api/v1/integ/doe/validate',
+      port: defaultPort,
+      startupTimeout: productConfig.doe?.startupTimeout || 30000,
+      healthCheckUrl: defaultHealthCheckUrl,
       ...config,
     }
     this.logger = logger
@@ -291,13 +297,17 @@ export class DoeProcessManager {
  */
 export function getDoeServiceConfig(): DoeProcessConfig {
   const { batPath, workingDir } = getDoeServicePath()
+  // 从产品配置获取 DOE 端口
+  const productConfig = getProductConfig()
+  const doePort = productConfig.doe?.port || 25504
+  const healthCheckUrl = `http://localhost:${doePort}/api/v1/integ/doe/validate`
 
   return {
     batPath,
     workingDir,
-    port: 25504,
-    startupTimeout: 30000,
-    healthCheckUrl: 'http://localhost:25504/api/v1/integ/doe/validate',
+    port: doePort,
+    startupTimeout: productConfig.doe?.startupTimeout || 30000,
+    healthCheckUrl,
   }
 }
 

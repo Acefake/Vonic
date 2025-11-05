@@ -1,7 +1,6 @@
 import type { IpcRendererEvent } from 'electron'
 import type { Ref } from 'vue'
 import { onMounted, onUnmounted, ref } from 'vue'
-import { useApp } from '@/renderer/app'
 
 /**
  * 窗口参数 Hook 返回类型
@@ -50,9 +49,7 @@ export function useWindowParams<T = unknown>(options: {
     enableIpcListener = true,
   } = options
 
-  const $app = useApp()
-
-  const currentWindow = $app.window.current
+  const currentWindow = app.window.current
 
   const data = ref<T | null>(null) as Ref<T | null>
   const loading = ref<boolean>(false)

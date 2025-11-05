@@ -13,8 +13,6 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import VChart from 'vue-echarts'
 
-import { useApp } from '../../app'
-
 interface SchemeData {
   index: number
   fileName: string
@@ -45,8 +43,6 @@ const props = withDefaults(defineProps<Props>(), {
   yColumns: () => [],
   title: '方案对比',
 })
-
-const app = useApp()
 
 // 持久化存储键
 const STORAGE_CURVE_COLOR_KEY = 'scheme-chart:curve-color'

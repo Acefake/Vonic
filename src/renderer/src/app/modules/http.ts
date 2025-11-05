@@ -1,15 +1,18 @@
 import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import type { HttpAPI, RequestConfig } from '../types'
 import axios from 'axios'
+import { getProductConfig } from '../../../../config/product.config'
 
 class HttpClient implements HttpAPI {
   public baseURL: string
   public instance: AxiosInstance
 
   constructor() {
-    this.baseURL = 'http://127.0.0.1:8090'
+    const productConfig = getProductConfig()
+    // 使用配置中的端口构建 baseURL
+    this.baseURL = `http://127.0.0.1:${productConfig.api.port}`
     this.instance = axios.create({
-      timeout: 30000,
+      timeout: productConfig.api.timeout || 30000,
       baseURL: this.baseURL,
       headers: {
         'Content-Type': 'application/json',

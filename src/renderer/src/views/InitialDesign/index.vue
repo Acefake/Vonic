@@ -7,14 +7,12 @@ import { message } from 'ant-design-vue'
 
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { useApp } from '../../app'
 import { useSchemeOptimizationStore } from '../../store'
 import { FEEDING_METHOD_MAP, useDesignStore } from '../../store/designStore'
 import { useLogStore } from '../../store/logStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { FIELD_LABELS, getFieldLabel } from '../../utils/field-labels'
 
-const $app = useApp()
 const designStore = useDesignStore()
 const logStore = useLogStore()
 const settingsStore = useSettingsStore()
@@ -111,7 +109,7 @@ function stopProgress() {
 /**  读取 input.dat 文件内容 */
 async function readTakeData() {
   const fileName = 'input.dat'
-  const content = await $app.file.readDatFile(fileName)
+  const content = await app.file.readDatFile(fileName)
   if (content) {
     parseDatContent(content)
   }
@@ -169,7 +167,18 @@ const rules: Record<string, any[]> = {}
 positiveFields.forEach((key) => {
   rules[key] = [
     {
-      validator: (_: any, v: any) => (isPositiveReal(v) ? Promise.resolve() : Promise.reject(msgOf(key))),
+      validator: (_: any, v: any) => {
+        // 不允许空值
+        if (v === null || v === undefined || v === '')
+          return Promise.reject(msgOf(key))
+        // 处理字符串 '0' 的情况
+        const numValue = typeof v === 'string' ? Number(v) : v
+        // 如果输入了0（无论是数字0还是字符串'0'），必须拒绝
+        if (numValue === 0)
+          return Promise.reject(msgOf(key))
+        // 验证是否为正数
+        return isPositiveReal(numValue) ? Promise.resolve() : Promise.reject(msgOf(key))
+      },
       trigger: 'blur',
     },
   ]
@@ -285,17 +294,24 @@ async function onFieldChange(name: string, val: number | null) {
     }
     const partner = PAIR_PARTNER[name]
     if (partner) {
-      try {
-        await formRef.value?.validateFields([partner])
+      // 如果对方字段有值，才进行联动验证
+      const partnerValue = formModel[partner]
+      if (partnerValue !== null && partnerValue !== undefined && partnerValue !== '') {
+        try {
+          await formRef.value?.validateFields([partner])
+        }
+        catch {
+          // 不在此处回退另一字段，保持用户对另一字段的控制；仅更新其错误状态
+        }
       }
-      catch {
-        // 不在此处回退另一字段，保持用户对另一字段的控制；仅更新其错误状态
+      else {
+        // 如果对方字段为空，清除其验证错误
+        formRef.value?.clearValidate([partner])
       }
     }
   }
-  catch (e: any) {
-    const msg = e?.errorFields?.[0]?.errors?.[0] || '参数校验未通过，请重新输入！'
-    message.error(msg)
+  catch {
+    // 去掉轻提示，只保留表单字段的错误提示
     ;(formModel as any)[name] = prev
   }
 }
@@ -341,11 +357,11 @@ async function simulateCalculation(): Promise<void> {
     ...outputResults.value,
   }
 
-  const res = await $app.file.writeDatFile('input.dat', designForm)
+  const res = await app.file.writeDatFile('input.dat', designForm)
 
   logStore.success(res.message)
 
-  const result = await $app.callExe(exeName)
+  const result = await app.callExe(exeName)
 
   console.log(result)
 
@@ -386,7 +402,7 @@ async function submitDesign(): Promise<void> {
     ...outputResults.value,
   }
 
-  const res = await $app.file.writeDatFile('input.dat', designForm)
+  const res = await app.file.writeDatFile('input.dat', designForm)
   if (res?.code === 0) {
     message.success('提交参数校验通过，已生成输入文件')
   }
@@ -557,12 +573,12 @@ async function handleExeClose(_: Electron.IpcRendererEvent, exeName: string, res
   const fileName = 'Sep_power.dat'
 
   if (result.isSuccess === false) {
-    $app.message.error(`${exeName} 程序异常退出，退出码: ${result.exitCode}`)
+    app.message.error(`${exeName} 程序异常退出，退出码: ${result.exitCode}`)
     isLoading.value = false
     completeProgress(false)
   }
   else {
-    const content = await $app.file.readDatFile(fileName)
+    const content = await app.file.readDatFile(fileName)
     if (!content) {
       isLoading.value = false
       completeProgress(false)

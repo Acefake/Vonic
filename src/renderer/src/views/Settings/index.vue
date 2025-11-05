@@ -3,12 +3,10 @@ import type { FieldLabelMode } from '../../utils/field-labels'
 import { SettingOutlined } from '@ant-design/icons-vue'
 import { storeToRefs } from 'pinia'
 import { ref } from 'vue'
-import { useApp } from '../../app'
 import { useStore } from '../../store'
 
 import { useSettingsStore } from '../../store/settingsStore'
 
-const $app = useApp()
 const store = useStore()
 const settingsStore = useSettingsStore()
 
@@ -26,9 +24,9 @@ const enableNotification = ref(true)
  * 保存设置
  */
 async function saveSettings(): Promise<void> {
-  $app.message.success('设置已保存')
+  app.message.success('设置已保存')
   increment()
-  $app.window.settings.close()
+  app.window.settings.close()
 }
 
 /**
@@ -40,7 +38,7 @@ function resetSettings(): void {
   autoStart.value = false
   enableNotification.value = true
   settingsStore.setFieldLabelMode('zh-CN')
-  $app.message.info('设置已重置为默认值')
+  app.message.info('设置已重置为默认值')
 }
 
 /**
@@ -48,7 +46,7 @@ function resetSettings(): void {
  */
 async function openEmbeddedWindow(): Promise<void> {
   // loading 窗口不需要等待结果
-  $app.window.loading.open(
+  app.window.loading.open(
     {
       data: {
         message: 'Hello, world!',
@@ -56,7 +54,7 @@ async function openEmbeddedWindow(): Promise<void> {
     },
   )
   setTimeout(() => {
-    $app.window.loading.close()
+    app.window.loading.close()
   }, 2000)
 }
 /**

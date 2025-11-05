@@ -3,7 +3,7 @@ import persistedstate from 'pinia-plugin-persistedstate'
 
 import { createApp } from 'vue'
 import { getProductConfig } from '../../config/product.config'
-import $app from './app'
+import app from './app'
 import App from './App.vue'
 import router from './router'
 import { createSyncPlugin } from './store/syncPlugin'
@@ -16,12 +16,16 @@ pinia.use(persistedstate)
 
 const vueApp = createApp(App)
 
-vueApp.config.globalProperties.$app = $app
+vueApp.config.globalProperties.$app = app
+// 将 app 设置为全局变量，以便在 Vue 文件中直接使用
+;(globalThis as any).app = app
 
 const productConfig = getProductConfig()
-$app.http.setBaseURL(productConfig.api.baseUrl)
-$app.http.get('http://localhost:25504/api/v1/integ/doe/validate').then((res) => {
-  $app.logger.info(JSON.stringify(res))
+app.http.setBaseURL(productConfig.api.baseUrl)
+// 使用配置中的 DOE 端口构建验证 URL
+const doePort = productConfig.doe?.port || 25504
+app.http.get(`http://localhost:${doePort}/api/v1/integ/doe/validate`).then((res) => {
+  app.logger.info(JSON.stringify(res))
 })
 
 interface MainProcessLog {

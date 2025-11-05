@@ -20,13 +20,6 @@ export interface ProductConfig {
     /** 请求超时时间 */
     timeout?: number
   }
-  /** 窗口配置 */
-  window: {
-    width: number
-    height: number
-    minWidth?: number
-    minHeight?: number
-  }
   /** 功能开关 */
   features: {
     /** 初步设计 */
@@ -40,13 +33,6 @@ export interface ProductConfig {
     /** 数据对比 */
     dataComparison?: boolean
     [key: string]: boolean | undefined
-  }
-  /** Java 配置 */
-  java?: {
-    /** JVM 参数 */
-    jvmArgs?: string[]
-    /** 启动超时时间 */
-    startupTimeout?: number
   }
   /** DOE 服务配置 */
   doe?: {

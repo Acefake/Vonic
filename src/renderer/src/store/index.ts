@@ -34,19 +34,19 @@ export const useStore = defineStore('main', {
   },
 })
 
+export type { DesignScheme, DrivingParams, FeedingMethod, OperatingParams, OutputResults, SeparationComponents, TopLevelParams } from './designStore'
+
 // 导出设计相关的 store 和类型
 export { useDesignStore } from './designStore'
-export type {
-  DesignScheme,
-  DrivingParams,
-  FeedingMethod,
-  OperatingParams,
-  OutputResults,
-  SeparationComponents,
-  TopLevelParams,
-} from './designStore'
 
 export { useLogStore } from './logStore'
+export type {
+  PowerAnalysisDesignScheme,
+  PowerAnalysisFluidParams,
+  PowerAnalysisOutputResults,
+  PowerAnalysisSeparationComponents,
+  PowerAnalysisTopLevelParams,
+} from './powerAnalysisDesignStore'
+export { usePowerAnalysisDesignStore } from './powerAnalysisDesignStore'
 export { useSchemeOptimizationStore } from './schemeOptimizationStore'
-
 export { useSettingsStore } from './settingsStore'

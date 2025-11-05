@@ -6,6 +6,7 @@
 import type { ModalFuncProps } from 'ant-design-vue'
 import type { VueNode } from 'ant-design-vue/es/_util/type'
 import type { AxiosInstance } from 'axios'
+import type { ProductConfig } from '@/config/product'
 import type { WindowName } from '@/shared/constants'
 import type { WindowCreateOptions, WindowInstanceInfo } from '@/shared/types'
 
@@ -283,9 +284,45 @@ export interface FileAPI {
   readMultiSchemes: () => Promise<Array<{
     index: number
     fileName: string
+    // 第1行：网格数
+    radialGridCount: number
+    axialGridCount: number
+    // 第2行：主要参数
     angularVelocity: number
+    rotorRadius: number
+    rotorShoulderLength: number
+    extractionChamberHeight: number
+    rotorSidewallPressure: number
+    gasDiffusionCoefficient: number
+    // 第3-29行：其他参数
+    depletedEndCapTemperature: number
+    enrichedEndCapTemperature: number
+    depletedMechanicalDriveAmount: number
+    depletedExtractionArmRadius: number
+    innerBoundaryMirrorPosition: number
+    gridGenerationMethod: number
+    enrichedBaffleHoleDistributionCircleDiameter: number
+    enrichedBaffleHoleDiameter: number
+    depletedExtractionPortInnerDiameter: number
+    depletedExtractionPortOuterDiameter: number
+    minAxialDistance: number
+    feedBoxShockDiskHeight: number
     feedFlowRate: number
+    splitRatio: number
+    feedAngularDisturbance: number
     feedAxialDisturbance: number
+    depletedBaffleInnerHoleOuterDiameter: number
+    depletedBaffleOuterHoleInnerDiameter: number
+    depletedBaffleOuterHoleOuterDiameter: number
+    depletedBaffleAxialPosition: number
+    bwgRadialProtrusionHeight: number
+    bwgAxialHeight: number
+    bwgAxialPosition: number
+    radialGridRatio: number
+    feedingMethod: number
+    compensationCoefficient: number
+    streamlineData: number
+    // 结果
     sepPower: number | null
     sepFactor: number | null
   }>>
@@ -472,8 +509,6 @@ export interface AppAPI {
   window: WindowAPI
   /** 消息通知 */
   message: MessageAPI
-  /** 主题 */
-  theme: ThemeAPI
   /** 存储 */
   storage: StorageAPI
   /** 日志系统 */
@@ -500,6 +535,8 @@ export interface AppAPI {
   isDev: boolean
   /** 调用exe API */
   callExe: (exeName: string, workingDir?: string) => Promise<callExeRes>
+  /** 产品配置 */
+  productConfig: ProductConfig
 }
 
 export interface callExeRes {

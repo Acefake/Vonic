@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useApp } from '@/renderer/app'
 import { useWindowParams } from '../../hooks/useWindowParams'
 
 interface WindowData {
@@ -20,8 +19,7 @@ interface WindowData {
   }
 }
 
-const $app = useApp()
-const { embedded } = $app.window
+const { embedded } = app.window
 
 // 使用 hook 获取窗口参数
 const { data: receivedData } = useWindowParams<WindowData>()
@@ -59,11 +57,11 @@ function closeWindow(): void {
     }
 
     embedded.close(result)
-    $app.logger.info('窗口已关闭，返回结果:', result)
+    app.logger.info('窗口已关闭，返回结果:', result)
   }
   catch (error) {
-    $app.logger.error('关闭窗口失败:', error)
-    $app.message.error('关闭窗口失败')
+    app.logger.error('关闭窗口失败:', error)
+    app.message.error('关闭窗口失败')
   }
 }
 
@@ -72,7 +70,7 @@ function closeWindow(): void {
  */
 async function closeWindowWithoutResult(): Promise<void> {
   await embedded.close()
-  $app.logger.info('窗口已关闭（无返回结果）')
+  app.logger.info('窗口已关闭（无返回结果）')
 }
 
 // Hook 已自动处理窗口参数的获取和更新逻辑

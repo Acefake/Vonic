@@ -108,8 +108,8 @@ export const fileAPI: FileAPI = {
 
   /**
    * 写入 dat 文件内容
-   * @param filePath dat 文件路径
-   * @param content 文件内容（文本）
+   * @params filePath dat 文件路径
+   * @params content 文件内容（文本）
    */
   async writeDatFile(arg1: string | Record<string, unknown>, arg2?: Record<string, unknown>, arg3?: string): Promise<{ code: number, message: string, filePath: string }> {
     // 兼容三种调用方式：
@@ -127,9 +127,45 @@ export const fileAPI: FileAPI = {
   async readMultiSchemes(): Promise<Array<{
     index: number
     fileName: string
+    // 第1行：网格数
+    radialGridCount: number
+    axialGridCount: number
+    // 第2行：主要参数
     angularVelocity: number
+    rotorRadius: number
+    rotorShoulderLength: number
+    extractionChamberHeight: number
+    rotorSidewallPressure: number
+    gasDiffusionCoefficient: number
+    // 第3-29行：其他参数
+    depletedEndCapTemperature: number
+    enrichedEndCapTemperature: number
+    depletedMechanicalDriveAmount: number
+    depletedExtractionArmRadius: number
+    innerBoundaryMirrorPosition: number
+    gridGenerationMethod: number
+    enrichedBaffleHoleDistributionCircleDiameter: number
+    enrichedBaffleHoleDiameter: number
+    depletedExtractionPortInnerDiameter: number
+    depletedExtractionPortOuterDiameter: number
+    minAxialDistance: number
+    feedBoxShockDiskHeight: number
     feedFlowRate: number
+    splitRatio: number
+    feedAngularDisturbance: number
     feedAxialDisturbance: number
+    depletedBaffleInnerHoleOuterDiameter: number
+    depletedBaffleOuterHoleInnerDiameter: number
+    depletedBaffleOuterHoleOuterDiameter: number
+    depletedBaffleAxialPosition: number
+    bwgRadialProtrusionHeight: number
+    bwgAxialHeight: number
+    bwgAxialPosition: number
+    radialGridRatio: number
+    feedingMethod: number
+    compensationCoefficient: number
+    streamlineData: number
+    // 结果
     sepPower: number | null
     sepFactor: number | null
   }>> {

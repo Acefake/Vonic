@@ -161,6 +161,68 @@ export const FIELD_LABELS: Record<string, FieldLabelMap> = {
     'zh-CN': '是否多方案',
     'en-US': 'IS_MULTI_SCHEME',
   },
+
+  // 功率分析特有字段
+  averageTemperature: {
+    'zh-CN': '平均温度',
+    'en-US': 'AVERAGE_TEMPERATURE',
+  },
+  enrichedBaffleTemperature: {
+    'zh-CN': '精料挡板温度',
+    'en-US': 'ENRICHED_BAFFLE_TEMPERATURE',
+  },
+  depletedExtractionRootOuterDiameter: {
+    'zh-CN': '贫取料根部外径',
+    'en-US': 'DEPLETED_EXTRACTION_ROOT_OUTER_DIAMETER',
+  },
+  extractorAngleOfAttack: {
+    'zh-CN': '取料器攻角',
+    'en-US': 'EXTRACTOR_ANGLE_OF_ATTACK',
+  },
+  depletedExtractionCenterDistance: {
+    'zh-CN': '贫取料中心距',
+    'en-US': 'DEPLETED_EXTRACTION_CENTER_DISTANCE',
+  },
+  enrichedExtractionCenterDistance: {
+    'zh-CN': '精取料中心距',
+    'en-US': 'ENRICHED_EXTRACTION_CENTER_DISTANCE',
+  },
+  constantSectionStraightPipeLength: {
+    'zh-CN': '等截面直管段长度',
+    'en-US': 'CONSTANT_SECTION_STRAIGHT_PIPE_LENGTH',
+  },
+  extractorCuttingAngle: {
+    'zh-CN': '取料器切角',
+    'en-US': 'EXTRACTOR_CUTTING_ANGLE',
+  },
+  variableSectionStraightPipeLength: {
+    'zh-CN': '变截面直管段长度',
+    'en-US': 'VARIABLE_SECTION_STRAIGHT_PIPE_LENGTH',
+  },
+  bendRadiusOfCurvature: {
+    'zh-CN': '弯管弧度半径',
+    'en-US': 'BEND_RADIUS_OF_CURVATURE',
+  },
+  extractorSurfaceRoughness: {
+    'zh-CN': '取料器表面粗糙度',
+    'en-US': 'EXTRACTOR_SURFACE_ROUGHNESS',
+  },
+  extractorTaperAngle: {
+    'zh-CN': '取料器锥角',
+    'en-US': 'EXTRACTOR_TAPER_ANGLE',
+  },
+  depletedExtractorPowerConsumption: {
+    'zh-CN': '贫取料器功耗',
+    'en-US': 'DEPLETED_EXTRACTOR_POWER_CONSUMPTION',
+  },
+  totalExtractorPowerConsumption: {
+    'zh-CN': '取料器总功耗',
+    'en-US': 'TOTAL_EXTRACTOR_POWER_CONSUMPTION',
+  },
+  fluidParams: {
+    'zh-CN': '流体参数',
+    'en-US': 'FLUID_PARAMS',
+  },
 }
 
 /**

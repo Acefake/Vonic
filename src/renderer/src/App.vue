@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useApp } from './app/useApp'
 import Layout from './components/Layout/index.vue'
 import { getThemeConfig } from './theme'
 
 const themeConfig = getThemeConfig()
 const router = useRouter()
-const app = useApp()
 
 const windowConfig = ref<{ noLayout: boolean } | null>(null)
 const isReady = ref(false)

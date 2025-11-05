@@ -4,26 +4,22 @@ import {
   MinusOutlined,
 } from '@ant-design/icons-vue'
 import { ref } from 'vue'
-import { useApp } from '@/renderer/app'
-
-// 使用全局 app 对象，无需导入 app 本身
-const $app = useApp()
 
 const isMaximized = ref(false)
-const productConfig = $app.theme.getConfig()
+const productConfig = app.productConfig
 
 /**
  * 最小化窗口
  */
 function minimizeWindow() {
-  $app.window.current.minimize()
+  app.window.current.minimize()
 }
 
 /**
  * 最大化/还原窗口
  */
 function toggleMaximize() {
-  $app.window.current.toggleMaximize()
+  app.window.current.toggleMaximize()
   isMaximized.value = !isMaximized.value
 }
 
@@ -31,7 +27,7 @@ function toggleMaximize() {
  * 关闭窗口
  */
 function closeWindow() {
-  $app.window.current.close()
+  app.window.current.close()
 }
 </script>
 
