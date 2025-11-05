@@ -1,149 +1,27 @@
 <script setup lang="ts">
+import type { DesignFactor, SampleData, SampleSpaceData } from './type'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue'
-import { computed, onMounted, ref, watch } from 'vue'
-
+import { storeToRefs } from 'pinia'
+import { computed, ref } from 'vue'
 import { useApp } from '../../app'
+import { useLogStore, useSchemeOptimizationStore } from '../../store'
 import { useDesignStore } from '../../store/designStore'
-import { useLogStore } from '../../store/logStore'
 import { FIELD_LABELS } from '../../utils/field-labels'
 
-/**
- * 优化算法类型
- */
-type OptimizationAlgorithm = 'NSGA-II' | 'MOPSO'
-
-/**
- * 采样准则类型
- */
-type SamplingCriterion = 'center' | 'random' | 'lhs' | 'sobol'
-
-/**
- * 因子类型
- */
-type FactorType = '实数' | '整数' | '离散'
-
-/**
- * 设计因子接口
- */
-interface DesignFactor {
-  /** 序号 */
-  id: number
-  /** 名称 */
-  name: string
-  /** 类型 */
-  type: FactorType
-  /** 下限 */
-  lowerLimit?: number
-  /** 上限 */
-  upperLimit?: number
-  /** 水平数 */
-  levelCount?: number
-  /** 取值 */
-  values?: string
-}
-
-/**
- * 响应值接口
- */
-interface ResponseValue {
-  /** 序号 */
-  id: number
-  /** 名称 */
-  name: string
-}
-
-/**
- * 样本数据接口
- */
-interface SampleData {
-  /** 序号 */
-  id: number
-  /** 各因子值 */
-  [key: string]: number | string
-}
+import { ALGORITHM_OPTIONS, RESPONSE_VALUES, SAMPLING_CRITERION_OPTIONS } from './constants'
+import { AlgorithmType, ParameterType } from './type'
 
 const app = useApp()
 const logStore = useLogStore()
 const designStore = useDesignStore()
+const schemeOptimizationStore = useSchemeOptimizationStore()
+const { designFactors, sampleSpaceData, optimizationAlgorithm, samplePointCount, samplingCriterion, factorCount } = storeToRefs(schemeOptimizationStore)
 
-// 优化算法
-const optimizationAlgorithm = ref<OptimizationAlgorithm>('NSGA-II')
-
-// 算法参数
-const factorCount = ref<number>(3)
-const samplePointCount = ref<number>(50)
-const samplingCriterion = ref<SamplingCriterion>('center')
-// 本页持久化存储键
-const STORAGE_ALGO_KEY = 'schemeOptimization.algorithm'
-const STORAGE_MOPSO_FACTORS_KEY = 'schemeOptimization.mopso.designFactors'
-
-// 设计因子列表
-const designFactors = ref<DesignFactor[]>([
-  {
-    id: 1,
-    name: '角速度',
-    type: '实数',
-    lowerLimit: 0,
-    upperLimit: 10,
-  },
-  {
-    id: 2,
-    name: '供料流量',
-    type: '实数',
-    lowerLimit: 0,
-    upperLimit: 10,
-  },
-  {
-    id: 3,
-    name: '供料轴向扰动',
-    type: '实数',
-    lowerLimit: 0,
-    upperLimit: 10,
-  },
-])
-
-// 响应值列表
-const responseValues = ref<ResponseValue[]>([
-  {
-    id: 1,
-    name: '分离功率',
-  },
-  {
-    id: 2,
-    name: '分离系数',
-  },
-])
-
-// 样本空间数据
-const sampleSpaceData = ref<SampleData[]>([
-  { id: 1, 角速度: 0.1, 供料流量: 1, 供料轴向扰动: 11 },
-  { id: 2, 角速度: 0.2, 供料流量: 2, 供料轴向扰动: 21 },
-  { id: 3, 角速度: 0.3, 供料流量: 3, 供料轴向扰动: 31 },
-])
+// 采样进行中状态
+const isSampling = ref(false)
 
 // 选中的设计因子行
 const selectedDesignFactorIds = ref<number[]>([])
-// 选中的响应值行
-const selectedResponseValueIds = ref<number[]>([])
-
-/**
- * 优化算法选项
- */
-const algorithmOptions = [
-  { label: 'NSGA-II', value: 'NSGA-II' },
-  { label: 'MOPSO', value: 'MOPSO' },
-] as const
-
-/**
- * 采样准则选项
- */
-const samplingCriterionOptions = [
-  { label: 'center', value: 'center' },
-  { label: 'maxmin', value: 'maxmin' },
-  { label: 'centermaxmin', value: 'centermaxmin' },
-  { label: 'correlation', value: 'correlation' },
-  { label: 'lhsmu', value: 'lhsmu' },
-] as const
 
 /**
  * 样本空间表格列
@@ -207,25 +85,29 @@ async function addDesignFactor(): Promise<void> {
           name: s.label, // 中文显示
           type: prev?.type ?? '实数',
           lowerLimit: prev?.lowerLimit ?? (optimizationAlgorithm.value === 'MOPSO' ? undefined : 0),
-          upperLimit: prev?.upperLimit ?? (optimizationAlgorithm.value === 'MOPSO' ? undefined : 10),
+          upperLimit: prev?.upperLimit ?? (optimizationAlgorithm.value === 'MOPSO' ? undefined : 1),
           levelCount: prev?.levelCount,
           values: prev?.values,
         }
       })
 
       designFactors.value = newFactors
-      factorCount.value = designFactors.value.length
 
-      // 同步样本空间数据：保留与新因子同名的列，其它移除
-      sampleSpaceData.value = sampleSpaceData.value.map((sample) => {
-        const newSample: SampleData = { id: sample.id }
-        designFactors.value.forEach((factor) => {
-          if (sample[factor.name] !== undefined) {
-            newSample[factor.name] = sample[factor.name]
-          }
+      // 若因子列表被清空，则同时清空样本空间；否则保留与新因子同名的列
+      if (designFactors.value.length === 0) {
+        sampleSpaceData.value = []
+      }
+      else {
+        sampleSpaceData.value = sampleSpaceData.value.map((sample) => {
+          const newSample: SampleData = { id: sample.id }
+          designFactors.value.forEach((factor) => {
+            if (sample[factor.name] !== undefined) {
+              newSample[factor.name] = sample[factor.name]
+            }
+          })
+          return newSample
         })
-        return newSample
-      })
+      }
     },
   )
 }
@@ -244,21 +126,25 @@ function deleteSelectedDesignFactors(): void {
     factor => !idsToDelete.includes(factor.id),
   )
 
-  // 更新因子数量
-  factorCount.value = designFactors.value.length
+  // 因子数量由 store 的 factorCount 自动推导
 
   // 清空选中状态
   selectedDesignFactorIds.value = []
 
-  // 更新样本空间数据（移除对应的列）
-  sampleSpaceData.value = sampleSpaceData.value.map((sample) => {
-    const newSample: SampleData = { id: sample.id }
-    designFactors.value.forEach((factor) => {
-      if (sample[factor.name] !== undefined)
-        newSample[factor.name] = sample[factor.name]
+  // 如果设计因子已被清空，则同时清空样本空间数据；否则根据剩余因子保留相应列
+  if (designFactors.value.length === 0) {
+    sampleSpaceData.value = []
+  }
+  else {
+    sampleSpaceData.value = sampleSpaceData.value.map((sample) => {
+      const newSample: SampleData = { id: sample.id }
+      designFactors.value.forEach((factor) => {
+        if (sample[factor.name] !== undefined)
+          newSample[factor.name] = sample[factor.name]
+      })
+      return newSample
     })
-    return newSample
-  })
+  }
 }
 
 /**
@@ -324,23 +210,35 @@ function parseSepPower(content: string): { actualSepPower: number | null, actual
   const lineArr = content
     .replace(/\r\n/g, '\n')
     .split('\n')
-    .filter(line => line.trim() !== '')
+    .map(line => line.trim())
+    .filter(line => line !== '')
 
-  const regex = /^([^=]+)=(\d+)$/
+  // 兼容 "KEY =   123" 的格式（= 后允许空格），并兼容大小写
+  const regex = /^([^=]+)=\s*([+-]?\d+(?:\.\d+)?)$/
   const result: Record<string, number> = {}
+
+  console.log(content)
 
   lineArr.forEach((line) => {
     const match = line.match(regex)
     if (match) {
-      const key = match[1].trim()
+      const rawKey = match[1].trim()
+      const key = rawKey.toUpperCase()
       const value = Number(match[2])
-      result[key] = value
+      if (!Number.isNaN(value)) {
+        result[key] = value
+      }
     }
   })
 
   return {
-    actualSepPower: result['ACTURAL SEPERATIVE POWER'] ?? result['ACTUAL SEPERATIVE POWER'] ?? null,
-    actualSepFactor: result['ACTURAL SEPERATIVE FACTOR'] ?? result['ACTUAL SEPERATIVE FACTOR'] ?? null,
+    // 兼容 ACTURAL/ACTUAL 拼写，以及大小写
+    actualSepPower: result['ACTURAL SEPERATIVE POWER']
+      ?? result['ACTUAL SEPERATIVE POWER']
+      ?? null,
+    actualSepFactor: result['ACTURAL SEPERATIVE FACTOR']
+      ?? result['ACTUAL SEPERATIVE FACTOR']
+      ?? null,
   }
 }
 
@@ -352,19 +250,15 @@ async function getWorkBaseDir(): Promise<string> {
   return await app.file.getWorkDir()
 }
 
-/**
- * 仿真优化计算
- */
+/** 仿真优化计算 */
 const isOptimizing = ref(false)
+
+/** 样本数量 */
+const samplePointCountforRes = ref(0)
 
 async function performOptimization(): Promise<void> {
   if (designFactors.value.length === 0) {
     app.message.warning('请先添加设计因子')
-    return
-  }
-
-  if (responseValues.value.length === 0) {
-    app.message.warning('请先添加响应值')
     return
   }
 
@@ -374,12 +268,12 @@ async function performOptimization(): Promise<void> {
   }
 
   isOptimizing.value = true
+
   const hideLoading = app.message.loading('正在进行仿真优化计算...', 0)
 
   try {
     logStore.info('开始仿真优化计算')
-    const totalSampleCount = samplePointCount.value
-    logStore.info(`算法=${optimizationAlgorithm.value}, 样本点数=${totalSampleCount}, 样本空间数据=${sampleSpaceData.value.length}`)
+    logStore.info(`算法=${optimizationAlgorithm.value}, 样本点数=${samplePointCountforRes.value}, 样本空间数据=${sampleSpaceData.value.length}`)
 
     const baseDir = await getWorkBaseDir()
     const exeName = 'ns-linear.exe'
@@ -390,15 +284,16 @@ async function performOptimization(): Promise<void> {
       sepFactor: number | null
       dirName: string // 保存目录名
     }> = []
+
     let hasExeFailure = false // 标记是否有exe调用失败
 
     // 循环处理每个样本（使用算法参数设置的样本点数）
-    for (let i = 0; i < totalSampleCount; i++) {
+    for (let i = 0; i < samplePointCountforRes.value; i++) {
       // 从样本空间数据中获取样本（如果索引超出范围，使用取模循环使用）
       const sampleIndex = i % sampleSpaceData.value.length
       const sample = sampleSpaceData.value[sampleIndex]
       const sampleId = i + 1 // 使用循环序号作为样本ID
-      logStore.info(`处理样本 ${i + 1}/${totalSampleCount}: 样本数据索引=${sampleIndex}, 数据ID=${sample.id}`)
+      logStore.info(`处理样本 ${i + 1}/${samplePointCountforRes.value}: 样本数据索引=${sampleIndex}, 数据ID=${sample.id}`)
 
       // 为每个样本创建唯一的工作目录（out/out_XXXXXX 格式，自动避免重复）
       const workDir = await app.file.createOutputDir(baseDir)
@@ -449,8 +344,8 @@ async function performOptimization(): Promise<void> {
           dirName,
         })
         // 调用失败时，停止整个优化流程，不继续处理后续样本
-        const remainingCount = totalSampleCount - i
-        logStore.error(`优化流程因exe调用失败而终止：已处理 ${i}/${totalSampleCount} 个样本，剩余 ${remainingCount} 个样本未处理`)
+        const remainingCount = samplePointCountforRes.value - i
+        logStore.error(`优化流程因exe调用失败而终止：已处理 ${i}/${samplePointCountforRes.value} 个样本，剩余 ${remainingCount} 个样本未处理`)
         hasExeFailure = true
         break
       }
@@ -511,7 +406,7 @@ async function performOptimization(): Promise<void> {
     if (hasExeFailure) {
       hideLoading()
       const processedCount = results.length
-      app.message.error(`仿真优化计算失败：exe程序调用失败（已处理 ${processedCount}/${totalSampleCount} 个样本）`)
+      app.message.error(`仿真优化计算失败：exe程序调用失败（已处理 ${processedCount}/${samplePointCountforRes.value} 个样本）`)
       return
     }
 
@@ -590,7 +485,7 @@ async function performOptimization(): Promise<void> {
 
     hideLoading()
     app.message.success(`仿真优化计算完成，共处理 ${results.length} 个样本，最优方案序号: ${optimalIndex >= 0 ? optimalIndex : '无'}`)
-    logStore.info(`仿真优化计算完成: 算法=${optimizationAlgorithm.value}, 样本点数=${totalSampleCount}, 处理结果数=${results.length}, 最优方案序号=${optimalIndex}`)
+    logStore.info(`仿真优化计算完成: 算法=${optimizationAlgorithm.value}, 样本点数=${samplePointCountforRes.value}, 处理结果数=${results.length}, 最优方案序号=${optimalIndex >= 0 ? optimalIndex : '无'}`)
   }
   catch (error) {
     hideLoading()
@@ -617,49 +512,77 @@ function hasBoundsOrLevels(factor: DesignFactor): boolean {
   return hasLower || hasUpper || hasLevel
 }
 
-// 持久化：页面加载时恢复；编辑时保存
-onMounted(async () => {
-  try {
-    const savedAlgo = await app.storage.get<string>(STORAGE_ALGO_KEY)
-    if (savedAlgo === 'NSGA-II' || savedAlgo === 'MOPSO') {
-      optimizationAlgorithm.value = savedAlgo as OptimizationAlgorithm
-    }
+/**
+ * 解析离散取值输入文本，支持严格JSON和简化格式 [a,2,3]
+ */
+function tryParseDiscreteValuesText(text: string): { arr: Array<string | number>, isJson: boolean } | null {
+  const trimmed = text.trim()
+  // 必须是数组格式
+  if (!trimmed.startsWith('[') || !trimmed.endsWith(']'))
+    return null
 
-    const savedFactors = await app.storage.get<DesignFactor[]>(STORAGE_MOPSO_FACTORS_KEY)
-    if (savedFactors && Array.isArray(savedFactors)) {
-      designFactors.value = savedFactors
-    }
-    else if (optimizationAlgorithm.value === 'MOPSO') {
-      // 首次进入 MOPSO，无持久化数据时，清空默认边界/水平数/取值
-      designFactors.value = designFactors.value.map(f => ({
-        ...f,
-        lowerLimit: undefined,
-        upperLimit: undefined,
-        levelCount: undefined,
-        values: undefined,
-      }))
-    }
-  }
-  catch (e) {
-    console.error('初始化持久化数据失败', e)
-  }
-})
-
-watch(optimizationAlgorithm, async (algo) => {
+  // 优先尝试严格的 JSON
   try {
-    await app.storage.set(STORAGE_ALGO_KEY, algo)
+    const arr = JSON.parse(trimmed)
+    const valid = Array.isArray(arr) && arr.length > 0 && arr.every(v => typeof v === 'string' || typeof v === 'number')
+    if (valid)
+      return { arr, isJson: true }
   }
   catch { }
-})
 
-watch(designFactors, async (factors) => {
-  try {
-    if (optimizationAlgorithm.value === 'MOPSO') {
-      await app.storage.set(STORAGE_MOPSO_FACTORS_KEY, factors)
+  // 退化为简化解析：用逗号分割，去除两端引号，数字字符串转为数字
+  const inner = trimmed.slice(1, -1).trim()
+  const tokens = inner.length === 0 ? [] : inner.split(',').map(t => t.trim()).filter(t => t.length > 0)
+  const arr = tokens.map((t) => {
+    const unquoted = t.replace(/^['"]|['"]$/g, '')
+    const num = Number(unquoted)
+    return Number.isFinite(num) && unquoted === String(num) ? num : unquoted
+  })
+  const valid = Array.isArray(arr) && arr.length > 0 && arr.every(v => typeof v === 'string' || typeof v === 'number')
+  if (!valid)
+    return null
+  return { arr, isJson: false }
+}
+
+/**
+ * values 列的更新处理，抽离到脚本中避免模板内含复杂正则导致编译报错
+ */
+function onValuesUpdate(recordId: number, val: any): void {
+  const factor = designFactors.value.find(f => f.id === recordId)
+  if (!factor)
+    return
+  const prev = factor.values
+  const text = (val ?? '').toString().trim()
+  if (text.length === 0) {
+    factor.values = undefined
+    return
+  }
+
+  const parsed = tryParseDiscreteValuesText(text)
+  if (!parsed) {
+    app.message.error(`【 ${factor.name} 】取值格式错误，应为数组，如：[10,12,33] 或 [a,2,3]`)
+    factor.values = prev
+    return
+  }
+
+  const { arr, isJson } = parsed
+  factor.values = isJson ? text : JSON.stringify(arr)
+
+  // NSGA-II 下，如果填写了“取值”，则把“水平数”统一为取值数量
+  if (optimizationAlgorithm.value === 'NSGA-II') {
+    const n = arr.length
+    if (factor.levelCount !== n) {
+      factor.levelCount = n
+      app.message.info(`【 ${factor.name} 】水平数已自动统一为取值数量：${n}`)
     }
   }
-  catch { }
-}, { deep: true })
+
+  if (optimizationAlgorithm.value === 'MOPSO') {
+    factor.lowerLimit = undefined
+    factor.upperLimit = undefined
+    factor.levelCount = undefined
+  }
+}
 
 /**
  * 当因子数量变化时，同步设计因子数量
@@ -692,6 +615,214 @@ function onFactorCountChange(value: number | null): void {
     designFactors.value = designFactors.value.slice(0, value)
   }
 }
+
+/**
+ * 组装NSGA-II参数
+ */
+function assembleNSGAIIParams() {
+  const tableParams: Array<{ name: string, type: string, values: number[], level?: number }> = []
+  const errors: string[] = []
+  for (const factor of designFactors.value) {
+    const lower = factor.lowerLimit
+    const upper = factor.upperLimit
+    if (lower === undefined || upper === undefined) {
+      errors.push(`【${factor.name}】缺少下限或上限`)
+      continue
+    }
+    if (!Number.isFinite(lower) || !Number.isFinite(upper)) {
+      errors.push(`【${factor.name}】下限/上限必须为有效数值`)
+      continue
+    }
+    if (upper <= lower) {
+      errors.push(`【${factor.name}】上限应大于下限`)
+      continue
+    }
+    tableParams.push({ name: factor.name, type: ParameterType.CONTINUOUS_FACTOR, values: [lower, upper], level: 3 })
+  }
+
+  const params = {
+    algorithmType: AlgorithmType.LATIN_HYPERCUBE,
+    // 样本数量
+    numSamples: samplePointCount.value,
+    // 因子数量
+    numVars: factorCount.value,
+    // 采样准则
+    criterion: samplingCriterion.value,
+    //
+    params: tableParams,
+  }
+
+  return params
+}
+
+/**
+ * 组装MOPSO参数
+ */
+function assembleMOPSOParams() {
+  const errors: string[] = []
+  const paramsPayload: Array<{ name: string, type: 'continuousFactor' | 'discreteFactor', values: any[], level?: number }> = []
+
+  for (const factor of designFactors.value) {
+    const name = factor.name?.trim()
+    if (!name) {
+      errors.push('存在未命名的设计因子')
+      continue
+    }
+
+    const valuesText = (factor.values ?? '').toString().trim()
+    if (valuesText.length > 0) {
+      // 有“取值” -> 离散
+      const parsed = tryParseDiscreteValuesText(valuesText)
+      if (!parsed) {
+        errors.push(`【${name}】取值格式错误，应为非空数组，元素为字符串或数字，如：[a,2,3] 或 [10,12,33]`)
+        continue
+      }
+      const arr = parsed.arr
+      const levelCount = arr.length
+      if (factor.levelCount !== levelCount) {
+        factor.levelCount = levelCount
+      }
+      paramsPayload.push({ name, type: ParameterType.DISCRETE_FACTOR, values: arr, level: levelCount })
+      continue
+    }
+
+    // 无“取值”，看是否设置了范围/水平数 -> 连续
+    const lower = factor.lowerLimit
+    const upper = factor.upperLimit
+    if (lower === undefined || upper === undefined) {
+      errors.push(`【${name}】缺少下限或上限`)
+      continue
+    }
+    if (!Number.isFinite(lower) || !Number.isFinite(upper)) {
+      errors.push(`【${name}】下限/上限必须为有效数值`)
+      continue
+    }
+    if (upper <= lower) {
+      errors.push(`【${name}】上限应大于下限`)
+      continue
+    }
+    const levelCount = factor.levelCount ?? 3
+    paramsPayload.push({ name, type: ParameterType.CONTINUOUS_FACTOR, values: [lower, upper], level: levelCount })
+  }
+
+  const params = {
+    algorithmType: AlgorithmType.FULL_FACTORIAL_MIXED,
+    // 样本数量
+    numSamples: 50,
+    // 因子数量
+    numVars: factorCount.value,
+    // 采样准则
+    criterion: '',
+    //
+    params: paramsPayload,
+  }
+  return params
+}
+
+/**
+ * 生成样本空间
+ */
+async function sampleSpace() {
+  if (designFactors.value.length === 0) {
+    app.message.error('请先添加设计因子')
+    return
+  }
+
+  isSampling.value = true
+  const hideLoading = app.message.loading('正在生成样本...', 0)
+
+  const params = ref<any>()
+  if (optimizationAlgorithm.value === 'NSGA-II') {
+    params.value = assembleNSGAIIParams()
+  }
+  else if (optimizationAlgorithm.value === 'MOPSO') {
+    params.value = assembleMOPSOParams()
+  }
+
+  try {
+    const numSamplesLogged = (params.value as any)?.numSamples ?? (params.value as any)?.numFactors
+    logStore.info(`开始样本取样：算法=${optimizationAlgorithm.value}，准则=${params.value.criterion}，样本数=${numSamplesLogged}，变量数=${params.value.numVars}，因子数=${params.value.params.length}`)
+    logStore.info(`取样参数：${JSON.stringify(params.value)}`)
+    const url = 'http://localhost:25504/api/v1/integ/doe/generate'
+    const res: SampleSpaceData = await app.http.post(url, params.value)
+
+    // 更新样本数量
+    samplePointCountforRes.value = res.experimentCount
+
+    // 兼容多种返回结构：优先使用 { factorNames, sampleMatrix }
+    const uiFactorNames = designFactors.value.map(f => f.name)
+    let mapped: SampleData[] | null = null
+
+    if (Array.isArray((res as any)?.factorNames) && Array.isArray((res as any)?.sampleMatrix)) {
+      const factorNames: string[] = (res as any).factorNames
+      const matrix: any[][] = (res as any).sampleMatrix
+      mapped = matrix.map((row, idx) => {
+        const sample: SampleData = { id: idx + 1 }
+        factorNames.forEach((name, colIdx) => {
+          sample[name] = row?.[colIdx]
+        })
+        return sample
+      })
+    }
+    else {
+      // 尝试从 res 或 res.data.samples 或 res.samples 提取数组
+      let samples: any[] = []
+      const anyRes: any = res as any
+      if (Array.isArray(anyRes))
+        samples = anyRes
+      else if (Array.isArray(anyRes?.data))
+        samples = anyRes.data
+      else if (Array.isArray(anyRes?.data?.samples))
+        samples = anyRes.data.samples
+      else if (Array.isArray(anyRes?.samples))
+        samples = anyRes.samples
+
+      if (Array.isArray(samples) && samples.length > 0) {
+        mapped = samples.map((item, idx) => {
+          const row: SampleData = { id: idx + 1 }
+          if (Array.isArray(item)) {
+            uiFactorNames.forEach((name, i) => {
+              row[name] = item[i]
+            })
+          }
+          else if (typeof item === 'object' && item != null) {
+            uiFactorNames.forEach((name) => {
+              row[name] = (item[name] ?? item[name.trim()])
+            })
+          }
+          else {
+            row[uiFactorNames[0]] = item
+          }
+          return row
+        })
+      }
+    }
+
+    if (!mapped || mapped.length === 0) {
+      app.message.error('接口错误：未返回任何样本数据')
+      return
+    }
+
+    sampleSpaceData.value = mapped
+    app.message.success(`样本生成成功，共 ${mapped.length} 条`)
+    logStore.info(`样本生成成功：${mapped.length} 条`)
+  }
+  catch (error: any) {
+    const msg = error?.response?.data?.message || error?.message || '未知错误'
+    if (error?.request && !error?.response) {
+      app.message.error('网络连接异常，请检查后重试')
+      logStore.error('网络连接异常，请检查后重试', '样本生成失败')
+    }
+    else {
+      app.message.error(`接口错误：${msg}`)
+      logStore.error(`接口错误：${msg}`, '样本生成失败')
+    }
+  }
+  finally {
+    hideLoading()
+    isSampling.value = false
+  }
+}
 </script>
 
 <template>
@@ -705,9 +836,11 @@ function onFactorCountChange(value: number | null): void {
           <a-card title="优化算法" class="algorithm-card">
             <a-form layout="vertical" :model="{}">
               <a-form-item label="优化算法">
-                <a-select :value="optimizationAlgorithm" style="width: 100%"
-                  @update:value="(val) => optimizationAlgorithm = val as OptimizationAlgorithm">
-                  <a-select-option v-for="option in algorithmOptions" :key="option.value" :value="option.value">
+                <a-select
+                  :value="optimizationAlgorithm" style="width: 100%"
+                  @update:value="(val) => schemeOptimizationStore.setAlgorithm(val as 'NSGA-II' | 'MOPSO')"
+                >
+                  <a-select-option v-for="option in ALGORITHM_OPTIONS" :key="option.value" :value="option.value">
                     {{ option.label }}
                   </a-select-option>
                 </a-select>
@@ -719,20 +852,28 @@ function onFactorCountChange(value: number | null): void {
               <a-form layout="vertical" :model="{}">
                 <div class="form-row">
                   <a-form-item label="因子数量" class="form-col">
-                    <a-input-number :value="factorCount" disabled :min="1" style="width: 100%"
-                      @update:value="(val) => { factorCount = val ?? 3; onFactorCountChange(val) }" />
+                    <a-input-number
+                      :value="factorCount" disabled :min="1" style="width: 100%"
+                      @update:value="(val) => { factorCount = val ?? 3; onFactorCountChange(val) }"
+                    />
                   </a-form-item>
 
                   <a-form-item label="样本点数" class="form-col">
-                    <a-input-number :value="samplePointCount" :min="1" style="width: 100%"
-                      @update:value="(val) => samplePointCount = val ?? 50" />
+                    <a-input-number
+                      :value="samplePointCount" :min="1" style="width: 100%"
+                      @update:value="(val) => samplePointCount = val ?? 50"
+                    />
                   </a-form-item>
 
                   <a-form-item label="采样准则" class="form-col">
-                    <a-select :value="samplingCriterion" style="width: 100%"
-                      @update:value="(val) => samplingCriterion = val as SamplingCriterion">
-                      <a-select-option v-for="option in samplingCriterionOptions" :key="option.value"
-                        :value="option.value">
+                    <a-select
+                      :value="samplingCriterion" style="width: 100%"
+                      @update:value="(val) => samplingCriterion = val"
+                    >
+                      <a-select-option
+                        v-for="option in SAMPLING_CRITERION_OPTIONS" :key="option.value"
+                        :value="option.value"
+                      >
                         {{ option.label }}
                       </a-select-option>
                     </a-select>
@@ -757,8 +898,10 @@ function onFactorCountChange(value: number | null): void {
                   </template>
                   添加参数
                 </a-button>
-                <a-button danger size="small" :disabled="selectedDesignFactorIds.length === 0"
-                  @click="deleteSelectedDesignFactors">
+                <a-button
+                  danger size="small" :disabled="selectedDesignFactorIds.length === 0"
+                  @click="deleteSelectedDesignFactors"
+                >
                   <template #icon>
                     <DeleteOutlined />
                   </template>
@@ -766,18 +909,20 @@ function onFactorCountChange(value: number | null): void {
                 </a-button>
               </a-space>
             </div>
-            <a-table size="small" :columns="[
-              { title: '序号', dataIndex: 'id', key: 'id', width: 80 },
-              { title: '名称', dataIndex: 'name', key: 'name', width: 200 },
-              { title: '类型', dataIndex: 'type', key: 'type', width: 120 },
-              { title: '下限', dataIndex: 'lowerLimit', key: 'lowerLimit', width: 150 },
-              { title: '上限', dataIndex: 'upperLimit', key: 'upperLimit', width: 150 },
-              { title: '水平数', dataIndex: 'levelCount', key: 'levelCount', width: 120 },
-              { title: '取值', dataIndex: 'values', key: 'values', width: 200 },
-            ]" :data-source="designFactors" :pagination="false" :row-selection="{
+            <a-table
+              size="small" :columns="[
+                { title: '序号', dataIndex: 'id', key: 'id', width: 80 },
+                { title: '名称', dataIndex: 'name', key: 'name', width: 200 },
+                { title: '类型', dataIndex: 'type', key: 'type', width: 120 },
+                { title: '下限', dataIndex: 'lowerLimit', key: 'lowerLimit', width: 150 },
+                { title: '上限', dataIndex: 'upperLimit', key: 'upperLimit', width: 150 },
+                { title: '水平数', dataIndex: 'levelCount', key: 'levelCount', width: 120 },
+                { title: '取值', dataIndex: 'values', key: 'values', width: 200 },
+              ]" :data-source="designFactors" :pagination="false" :row-selection="{
                 selectedRowKeys: selectedDesignFactorIds,
                 onChange: (keys) => selectedDesignFactorIds = keys as number[],
-              }" row-key="id">
+              }" row-key="id"
+            >
               <template #bodyCell="{ column, record, index }">
                 <template v-if="column.key === 'id'">
                   {{ index + 1 }}
@@ -789,7 +934,8 @@ function onFactorCountChange(value: number | null): void {
                   <span>{{ record.type }}</span>
                 </template>
                 <template v-else-if="column.key === 'lowerLimit'">
-                  <a-input-number :value="record.lowerLimit" style="width: 100%" :min="0"
+                  <a-input-number
+                    :value="record.lowerLimit" style="width: 100%" :min="0"
                     :disabled="optimizationAlgorithm === 'MOPSO' && hasValues(record)" @update:value="(val) => {
                       const factor = designFactors.find(f => f.id === record.id)
                       if (!factor) return
@@ -800,10 +946,12 @@ function onFactorCountChange(value: number | null): void {
                       if (factor.upperLimit !== undefined && newVal >= factor.upperLimit) { app.message.error(`【 ${factor.name} 】下限应小于上限`); factor.lowerLimit = prev; return }
                       factor.lowerLimit = newVal
                       if (optimizationAlgorithm === 'MOPSO') { factor.values = undefined }
-                    }" />
+                    }"
+                  />
                 </template>
                 <template v-else-if="column.key === 'upperLimit'">
-                  <a-input-number :value="record.upperLimit" style="width: 100%" :min="0"
+                  <a-input-number
+                    :value="record.upperLimit" style="width: 100%" :min="0"
                     :disabled="optimizationAlgorithm === 'MOPSO' && hasValues(record)" @update:value="(val) => {
                       const factor = designFactors.find(f => f.id === record.id)
                       if (!factor) return
@@ -814,11 +962,13 @@ function onFactorCountChange(value: number | null): void {
                       if (factor.lowerLimit !== undefined && newVal <= factor.lowerLimit) { app.message.error(`【 ${factor.name} 】上限应大于下限`); factor.upperLimit = prev; return }
                       factor.upperLimit = newVal
                       if (optimizationAlgorithm === 'MOPSO') { factor.values = undefined }
-                    }" />
+                    }"
+                  />
                 </template>
                 <template v-else-if="column.key === 'levelCount'">
-                  <a-input-number :value="record.levelCount" :min="3" style="width: 100%"
-                    :disabled="optimizationAlgorithm === 'NSGA-II' || (optimizationAlgorithm === 'MOPSO' && hasValues(record))"
+                  <a-input-number
+                    :value="record.levelCount" :min="3" style="width: 100%"
+                    :disabled="(optimizationAlgorithm === 'NSGA-II' && record.type !== '离散') || (optimizationAlgorithm === 'MOPSO' && hasValues(record))"
                     @update:value="(val) => {
                       const factor = designFactors.find(f => f.id === record.id)
                       if (!factor) return
@@ -828,36 +978,15 @@ function onFactorCountChange(value: number | null): void {
                       if (!Number.isInteger(newVal) || newVal <= 2) { app.message.error(`【 ${factor.name} 】水平数应为大于2的正整数`); factor.levelCount = prev; return }
                       factor.levelCount = newVal
                       if (optimizationAlgorithm === 'MOPSO') { factor.values = undefined }
-                    }" />
+                    }"
+                  />
                 </template>
                 <template v-else-if="column.key === 'values'">
-                  <a-input :value="record.values" placeholder="示例：[10,12,33]"
-                    :disabled="optimizationAlgorithm === 'NSGA-II' || (optimizationAlgorithm === 'MOPSO' && hasBoundsOrLevels(record))"
-                    @update:value="(val) => {
-                      const factor = designFactors.find(f => f.id === record.id)
-                      if (!factor) return
-                      const prev = factor.values
-                      const text = (val ?? '').toString().trim()
-                      if (text.length === 0) { factor.values = undefined; return }
-                      // 基本格式校验：[n1,n2,...]
-                      const isBracketed = text.startsWith('[') && text.endsWith(']')
-                      if (!isBracketed) { app.message.error(`【 ${factor.name} 】取值格式错误，应为：[数值1,数值2,...]`); factor.values = prev; return }
-                      try {
-                        const arr = JSON.parse(text)
-                        const validArray = Array.isArray(arr) && arr.length > 0 && arr.every(v => typeof v === 'number' && Number.isFinite(v))
-                        if (!validArray) { app.message.error(`【 ${factor.name} 】取值格式错误，应为实数数组，如：[10,12,33]`); factor.values = prev; return }
-                        factor.values = text
-                        if (optimizationAlgorithm === 'MOPSO') {
-                          factor.lowerLimit = undefined
-                          factor.upperLimit = undefined
-                          factor.levelCount = undefined
-                        }
-                      }
-                      catch (e) {
-                        app.message.error(`【 ${factor.name} 】取值格式错误，应为实数数组，如：[10,12,33]`)
-                        factor.values = prev
-                      }
-                    }" />
+                  <a-input
+                    :value="record.values" placeholder="示例：[10,12,33] 或 [a,2,3]"
+                    :disabled="(optimizationAlgorithm === 'NSGA-II' && record.type !== '离散') || (optimizationAlgorithm === 'MOPSO' && hasBoundsOrLevels(record))"
+                    @update:value="(val) => onValuesUpdate(record.id, val)"
+                  />
                 </template>
               </template>
             </a-table>
@@ -867,10 +996,20 @@ function onFactorCountChange(value: number | null): void {
 
           <!-- 响应值 -->
           <a-card title="响应值">
-            <a-table :columns="[
-              { title: '序号', dataIndex: 'id', key: 'id', width: 80 },
-              { title: '名称', dataIndex: 'name', key: 'name' },
-            ]" :data-source="responseValues" :pagination="false" size="small" row-key="id">
+            <template #extra>
+              <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
+                <a-button type="primary" @click="sampleSpace">
+                  样本取样
+                </a-button>
+              </div>
+            </template>
+
+            <a-table
+              :columns="[
+                { title: '序号', dataIndex: 'id', key: 'id', width: 80 },
+                { title: '名称', dataIndex: 'name', key: 'name' },
+              ]" :data-source="RESPONSE_VALUES" :pagination="false" size="small" row-key="id"
+            >
               <template #bodyCell="{ column, record, index }">
                 <template v-if="column.key === 'id'">
                   {{ index + 1 }}
@@ -880,15 +1019,6 @@ function onFactorCountChange(value: number | null): void {
                 </template>
               </template>
             </a-table>
-
-            <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
-              <a-button>
-                <template #icon>
-                  <PlusOutlined />
-                </template>
-                添加响应值
-              </a-button>
-            </div>
           </a-card>
         </div>
       </div>
@@ -897,8 +1027,10 @@ function onFactorCountChange(value: number | null): void {
 
       <!-- 样本空间 -->
       <a-card title="样本空间">
-        <a-table :columns="sampleSpaceColumns" :data-source="sampleSpaceData" :pagination="{ pageSize: 10 }"
-          size="small" row-key="id">
+        <a-table
+          :columns="sampleSpaceColumns" :data-source="sampleSpaceData" :pagination="{ pageSize: 10 }"
+          size="small" row-key="id"
+        >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'id'">
               {{ record.id }}

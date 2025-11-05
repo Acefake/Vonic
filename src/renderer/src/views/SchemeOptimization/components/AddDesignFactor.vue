@@ -93,7 +93,6 @@ function updateCheckedState(data: WindowData | null): void {
   })
 }
 
-// 监听窗口数据变化，自动更新选中状态（包括懒加载窗口重新打开的场景）
 watch(windowData, (newData) => {
   updateCheckedState(newData)
 }, { immediate: true })

@@ -188,7 +188,7 @@ export class FileManager {
 
       // 读取 out 子目录（out/out_XXXXXX 格式）
       const outDir = join(targetDir, 'out')
-      
+
       // 收集所有 Sep_power.dat 文件路径
       const sepPowerFiles: Array<{ filePath: string, dirName: string }> = []
 
@@ -225,48 +225,6 @@ export class FileManager {
           console.warn(`读取 out 目录失败:`, error)
         }
       }
-      
-      // 兼容旧格式：如果 out 目录不存在或为空，尝试扫描直接目录下的 scheme_ 和 out_ 目录（向后兼容）
-      if (sepPowerFiles.length === 0) {
-        try {
-          const entries = await readdir(targetDir, { withFileTypes: true })
-          
-          // 先检查直接目录中的文件
-          for (const entry of entries) {
-            if (entry.isFile()) {
-              const fileName = entry.name.toLowerCase()
-              if (fileName.includes('sep_power') && fileName.endsWith('.dat')) {
-                sepPowerFiles.push({
-                  filePath: join(targetDir, entry.name),
-                  dirName: '',
-                })
-              }
-            }
-            else if (entry.isDirectory() && (entry.name.startsWith('scheme_') || entry.name.startsWith('out_'))) {
-              // 扫描子目录（如 scheme_1, scheme_2 或 out_000001 等）
-              try {
-                const subDir = join(targetDir, entry.name)
-                const subFiles = await readdir(subDir)
-                for (const subFile of subFiles) {
-                  const fileName = subFile.toLowerCase()
-                  if (fileName.includes('sep_power') && fileName.endsWith('.dat')) {
-                    sepPowerFiles.push({
-                      filePath: join(subDir, subFile),
-                      dirName: entry.name,
-                    })
-                  }
-                }
-              }
-              catch (error) {
-                console.warn(`读取子目录失败 (${entry.name}):`, error)
-              }
-            }
-          }
-        }
-        catch (error) {
-          console.warn(`读取目标目录失败:`, error)
-        }
-      }
 
       // 解析每个文件
       const schemes: Array<{
@@ -288,64 +246,7 @@ export class FileManager {
           const sepPowerContent = await fsReadFile(filePath, 'utf-8')
           const sepPowerData = parseSepPower(sepPowerContent)
 
-          // 尝试读取对应的 input.dat 文件（如果存在）
-          // 优先读取与 Sep_power.dat 同目录的 input.dat
-          let inputDatPath: string | null = null
           const sepPowerDir = dirname(filePath)
-          const inputDatFilePath = join(sepPowerDir, 'input.dat')
-
-          if (await this.fileExists(null as any, inputDatFilePath)) {
-            inputDatPath = inputDatFilePath
-          }
-          else {
-            // 如果子目录中没有，尝试直接目录下的 input.dat
-            const directInputPath = join(targetDir, 'input.dat')
-            if (await this.fileExists(null as any, directInputPath)) {
-              inputDatPath = directInputPath
-            }
-          }
-
-          // 解析 input.dat 获取参数
-          let angularVelocity = 0
-          let feedFlowRate = 0
-          let feedAxialDisturbance = 0
-
-          if (inputDatPath) {
-            try {
-              const inputContent = await fsReadFile(inputDatPath, 'utf-8')
-              // 参考 InitialDesign 中的 parseDatContent 逻辑
-              const lines = inputContent.trim().split('\n').map(l => l.trim()).filter(Boolean)
-
-              // 第二行（索引1）：角速度HZ,半径mm,两肩长mm,取料腔高度mm,侧壁压力Pa,扩散系数
-              if (lines.length > 1) {
-                const params = lines[1].replace(/!.*/, '').split(',').map(Number)
-                if (params.length > 0 && !Number.isNaN(params[0])) {
-                  angularVelocity = params[0]
-                }
-              }
-
-              // 第15行（索引14）：供料流量kg/s
-              if (lines.length > 14) {
-                const raw = lines[14].replace(/!.*/, '').trim()
-                const val = Number(raw)
-                if (!Number.isNaN(val)) {
-                  feedFlowRate = val
-                }
-              }
-
-              // 第18行（索引17）：供料轴向扰动
-              if (lines.length > 17) {
-                const raw = lines[17].replace(/!.*/, '').trim()
-                const val = Number(raw)
-                if (!Number.isNaN(val)) {
-                  feedAxialDisturbance = val
-                }
-              }
-            }
-            catch (error) {
-              console.warn(`读取 input.dat 失败 (${inputDatPath}):`, error)
-            }
-          }
 
           // 从目录名提取序号（如 scheme_1 -> 1 或 out_000001 -> 1）
           let schemeIndex = i
@@ -353,13 +254,13 @@ export class FileManager {
             if (dirName.startsWith('scheme_')) {
               const match = dirName.match(/scheme_(\d+)/)
               if (match) {
-                schemeIndex = parseInt(match[1], 10) - 1 // 转换为0-based索引
+                schemeIndex = Number.parseInt(match[1], 10) - 1 // 转换为0-based索引
               }
             }
             else if (dirName.startsWith('out_')) {
               const match = dirName.match(/^out_(\d+)$/)
               if (match) {
-                schemeIndex = parseInt(match[1], 10) - 1 // 转换为0-based索引
+                schemeIndex = Number.parseInt(match[1], 10) - 1 // 转换为0-based索引
               }
             }
           }
@@ -458,14 +359,14 @@ export class FileManager {
 
       // 读取 out 目录中的所有条目
       const entries = await readdir(outDir, { withFileTypes: true })
-      
+
       // 找出所有 out_ 开头的目录，提取编号
       const existingNumbers: number[] = []
       for (const entry of entries) {
         if (entry.isDirectory() && entry.name.startsWith('out_')) {
           const match = entry.name.match(/^out_(\d+)$/)
           if (match) {
-            const num = parseInt(match[1], 10)
+            const num = Number.parseInt(match[1], 10)
             if (!Number.isNaN(num)) {
               existingNumbers.push(num)
             }

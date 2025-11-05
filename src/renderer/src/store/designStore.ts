@@ -122,7 +122,7 @@ export interface DesignScheme {
  */
 export const useDesignStore = defineStore('design', () => {
   /** 是否多方案 */
-  const isMultiScheme = ref<boolean>(true)
+  const isMultiScheme = ref<boolean>(false)
 
   /** 顶层参数 */
   const topLevelParams = ref<TopLevelParams>({
@@ -312,4 +312,9 @@ export const useDesignStore = defineStore('design', () => {
     setDesignScheme,
     reset,
   }
+}, {
+  persist: {
+    key: 'design-store',
+    storage: localStorage,
+  },
 })

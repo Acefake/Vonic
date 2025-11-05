@@ -46,5 +46,7 @@ export type {
   TopLevelParams,
 } from './designStore'
 
-// 导出设置相关的 store
+export { useLogStore } from './logStore'
+export { useSchemeOptimizationStore } from './schemeOptimizationStore'
+
 export { useSettingsStore } from './settingsStore'

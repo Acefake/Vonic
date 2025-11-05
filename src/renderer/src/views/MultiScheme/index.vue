@@ -126,6 +126,9 @@ async function loadSchemes() {
   loading.value = true
   try {
     const data = await app.file.readMultiSchemes()
+
+    console.log(data, 'data')
+
     schemes.value = data
     if (data.length === 0) {
       message.warning('未找到任何方案数据文件')
