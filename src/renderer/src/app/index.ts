@@ -11,7 +11,6 @@ import { messageAPI } from './modules/message'
 import { notificationAPI } from './modules/notification'
 import { storageAPI } from './modules/storage'
 import { systemAPI } from './modules/system'
-import { themeAPI } from './modules/theme'
 import { windowAPI } from './modules/window'
 
 const productConfig = getProductConfig()

@@ -82,7 +82,9 @@ async function readTakeData() {
   const fileName = 'input.dat'
   const content = await app.file.readDatFile(fileName)
   if (content) {
-    parseDatContent(content)
+    // TODO: 实现 parseDatContent 函数来解析 input.dat 内容
+    // parseDatContent(content)
+    message.info('文件读取成功，解析功能待实现')
   }
   else {
     message.error('未找到input.dat文件')
@@ -352,7 +354,7 @@ function replacePowerParams(content: string): void {
 
   // eslint-disable-next-line regexp/no-super-linear-backtracking
   const regex = /^\s*([^=]+?)\s*=\s*(\d+)\s*$/
-  const result = {}
+  const result: Record<string, number> = {}
   lineArr.forEach((line) => {
     const match = line.match(regex) // 执行匹配
     if (match) {
@@ -363,8 +365,10 @@ function replacePowerParams(content: string): void {
   })
 
   designStore.updateOutputResults({
-    depletedExtractorPowerConsumption: result.DEPLETED_EXTRACTOR_POWER_CONSUMPTION,
-    totalExtractorPowerConsumption: result.TOTAL_EXTRACTOR_POWER_CONSUMPTION,
+    // eslint-disable-next-line dot-notation
+    depletedExtractorPowerConsumption: result['DEPLETED_EXTRACTOR_POWER_CONSUMPTION'],
+    // eslint-disable-next-line dot-notation
+    totalExtractorPowerConsumption: result['TOTAL_EXTRACTOR_POWER_CONSUMPTION'],
   })
 
   logStore.info('仿真计算完成')

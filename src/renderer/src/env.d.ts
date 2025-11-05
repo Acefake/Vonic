@@ -2,6 +2,12 @@
 
 declare const app: import('./app/types').AppAPI
 
+declare global {
+  interface Window {
+    app: import('./app/types').AppAPI
+  }
+}
+
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'
 
