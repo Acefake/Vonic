@@ -1,6 +1,6 @@
 import type { ChildProcess } from 'node:child_process'
 import { execFile } from 'node:child_process'
-import { copyFileSync, existsSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { app, BrowserWindow } from 'electron'
 import { Logger } from '@/main/app/handlers/LogerManager'
@@ -105,18 +105,26 @@ export async function runExe(exeName: string, workingDir?: string) {
       })
     }
     return new Promise((resolve) => {
+      let isResolved = false // 防止多次 resolve
+
       const child = execFile(exePath, { cwd: workingDirectory }, (error) => {
-        if (error) {
+        // execFile 回调：仅在进程启动失败时使用（此时 spawn 事件不会触发）
+        // 如果进程已启动，则通过 spawn 和 close 事件处理，这里不做任何操作
+        if (error && !isResolved) {
+          // 只有在进程启动失败时才 resolve（此时 spawn 事件不会触发）
+          isResolved = true
           resolve({
-            status: 'failed',
-            reason: `执行出错：${error.message}`,
+            status: 'failed_to_start',
+            reason: `启动失败：${error.message}`,
             code: error.code,
             pid: null,
           })
+          // 从运行进程列表中移除
+          if (workingDirectory) {
+            runningProcesses.delete(workingDirectory)
+          }
         }
-        else {
-          resolve({ status: 'exited', reason: '正常退出', pid: child.pid })
-        }
+        // 如果 error 为 null，说明进程正常退出，但此时应该已经通过 close 事件处理了
       })
 
       logger.log('info', `正在启动 ${exePath} 程序...`)
@@ -171,41 +179,99 @@ export async function runExe(exeName: string, workingDir?: string) {
         if (workingDirectory) {
           runningProcesses.delete(workingDirectory)
         }
-        resolve(closeResult)
+        // 注意：这里不再 resolve，因为已经在 spawn 事件中 resolve 过了
       })
 
       child.on('spawn', () => {
-        resolve({
-          status: 'started',
-          reason: '程序成功启动',
-          pid: child.pid,
-          startTime: new Date().toISOString(),
-          endTime: null,
-          runTime: null,
-          isSuccess: null,
-        })
+        // 进程成功启动，立即 resolve 返回 started 状态
+        if (!isResolved) {
+          isResolved = true
+          resolve({
+            status: 'started',
+            reason: '程序成功启动',
+            pid: child.pid,
+            startTime: new Date().toISOString(),
+            endTime: null,
+            runTime: null,
+            isSuccess: null,
+          })
+        }
       })
 
-      child.on('error', (err) => {
-        resolve({
-          status: 'failed_to_start',
-          reason: `启动失败：${err.message}`,
-          details: err.stack === 'ENOENT' ? '文件不存在/路径错误' : err.stack === 'EACCES' ? '权限不足' : '未知错误',
-          pid: null,
-          startTime: null,
-          endTime: null,
-          runTime: null,
-          isSuccess: null,
-        })
-        // 从运行进程列表中移除
-        if (workingDirectory) {
-          runningProcesses.delete(workingDirectory)
+      child.on('error', (err: NodeJS.ErrnoException) => {
+        // 进程启动错误（如文件不存在、权限不足等）
+        if (!isResolved) {
+          isResolved = true
+          resolve({
+            status: 'failed_to_start',
+            reason: `启动失败：${err.message}`,
+            details: err.code === 'ENOENT' ? '文件不存在/路径错误' : err.code === 'EACCES' ? '权限不足' : '未知错误',
+            pid: null,
+            startTime: null,
+            endTime: null,
+            runTime: null,
+            isSuccess: null,
+          })
+          // 从运行进程列表中移除
+          if (workingDirectory) {
+            runningProcesses.delete(workingDirectory)
+          }
         }
       })
     })
   }
 
   else {
+    // 确定工作目录和exe路径
+    let workingDirectory: string | undefined
+    let exePath: string
+
+    if (workingDir) {
+      // 如果指定了工作目录，必须使用工作目录中的 exe（因为已经复制过去了）
+      // 这样每个样本的 exe 会在自己的工作目录中生成输出文件，互不干扰
+      workingDirectory = workingDir
+      exePath = path.join(workingDir, exeName)
+      // 如果工作目录中没有 exe，直接报错，不回退到其他位置
+      // 因为优化计算中，exe 应该已经被复制到工作目录中了
+      if (!existsSync(exePath)) {
+        const logger: Logger = new Logger()
+        logger.log('error', `工作目录 ${workingDir} 中不存在 ${exeName}，请确保 exe 已复制到工作目录`)
+        return Promise.resolve({
+          status: 'failed_to_start',
+          reason: `工作目录中不存在 ${exeName}，请确保 exe 已复制到工作目录`,
+          details: exePath,
+          pid: null,
+        })
+      }
+    }
+    else {
+      // 如果没有指定工作目录，定位 exe 所在目录（常见位置：exe 同级、resources、resources/unpacked）
+      const exeDir = path.dirname(app.getPath('exe'))
+      const candidatePaths = [
+        path.join(exeDir, exeName),
+        path.join(exeDir, 'resources', exeName),
+        path.join(exeDir, 'resources', 'unpacked', exeName),
+      ]
+      const foundExePath = candidatePaths.find(p => existsSync(p))
+      if (!foundExePath) {
+        return Promise.resolve({
+          status: 'failed_to_start',
+          reason: '文件不存在或路径错误',
+          details: candidatePaths.join(' | '),
+          pid: null,
+        })
+      }
+      exePath = foundExePath
+      // 如果没有指定工作目录，在 exe 所在目录的 out 文件夹中执行
+      const exeDirectory = path.dirname(exePath)
+      const exeOutDir = path.join(exeDirectory, 'out')
+      // 确保 out 目录存在
+      if (!existsSync(exeOutDir)) {
+        mkdirSync(exeOutDir, { recursive: true })
+      }
+      workingDirectory = exeOutDir
+    }
+
     // 如果指定了工作目录，检查该目录是否已有进程在运行
     if (workingDir && runningProcesses.has(workingDir)) {
       const existingProcess = runningProcesses.get(workingDir)
@@ -219,51 +285,46 @@ export async function runExe(exeName: string, workingDir?: string) {
       // 如果进程已结束但未清理，移除它
       runningProcesses.delete(workingDir)
     }
+
+    // 启动前进行存在性检查
+    if (!existsSync(exePath)) {
+      return Promise.resolve({
+        status: 'failed_to_start',
+        reason: '文件不存在或路径错误',
+        details: exePath,
+        pid: null,
+      })
+    }
+
     return new Promise((resolve) => {
-      // 生产环境：定位 exe 所在目录（常见位置：exe 同级、resources、resources/unpacked）
-      const exeDir = path.dirname(app.getPath('exe'))
-      const candidatePaths = [
-        path.join(exeDir, exeName),
-        path.join(exeDir, 'resources', exeName),
-        path.join(exeDir, 'resources', 'unpacked', exeName),
-      ]
-      const exePath = candidatePaths.find(p => existsSync(p))
-
-      // 生产环境：启动前检查文件存在
-      if (!exePath) {
-        resolve({
-          status: 'failed_to_start',
-          reason: '文件不存在或路径错误',
-          details: candidatePaths.join(' | '),
-          pid: null,
-        })
-        return
-      }
-
-      // 生产环境：如果提供了工作目录，使用该目录作为执行目录
-      // 这样程序输出的文件（如 Sep_power.dat）会输出到工作目录中
-      const execOptions: { cwd?: string } = {}
-      if (workingDir) {
-        execOptions.cwd = workingDir
+      const execOptions: { cwd: string } = {
+        cwd: workingDirectory!,
       }
 
       const logger: Logger = new Logger()
-      if (workingDir) {
-        logger.log('info', `将在工作目录中执行: ${workingDir}`)
-      }
       logger.log('info', `正在启动外部程序: ${exePath}`)
+      logger.log('info', `工作目录: ${workingDirectory}`)
+
+      let isResolved = false // 防止多次 resolve
+
       const child = execFile(exePath, execOptions, (error) => {
-        if (error) {
+        // execFile 回调：仅在进程启动失败时使用（此时 spawn 事件不会触发）
+        // 如果进程已启动，则通过 spawn 和 close 事件处理，这里不做任何操作
+        if (error && !isResolved) {
+          // 只有在进程启动失败时才 resolve（此时 spawn 事件不会触发）
+          isResolved = true
           resolve({
-            status: 'failed',
-            reason: `执行出错：${error.message}`,
+            status: 'failed_to_start',
+            reason: `启动失败：${error.message}`,
             code: error.code,
             pid: null,
           })
+          // 从运行进程列表中移除
+          if (workingDir) {
+            runningProcesses.delete(workingDir)
+          }
         }
-        else {
-          resolve({ status: 'exited', reason: '正常退出', pid: child.pid })
-        }
+        // 如果 error 为 null，说明进程正常退出，但此时应该已经通过 close 事件处理了
       })
 
       // 如果指定了工作目录，记录进程
@@ -272,73 +333,47 @@ export async function runExe(exeName: string, workingDir?: string) {
       }
 
       child.on('spawn', () => {
-        resolve({
-          status: 'started',
-          reason: '程序成功启动',
-          pid: child.pid,
-          startTime: new Date().toISOString(),
-        })
+        // 进程成功启动，立即 resolve 返回 started 状态
+        if (!isResolved) {
+          isResolved = true
+          resolve({
+            status: 'started',
+            reason: '程序成功启动',
+            pid: child.pid,
+            startTime: new Date().toISOString(),
+            endTime: null,
+            runTime: null,
+            isSuccess: null,
+          })
+        }
       })
 
-      child.on('error', (err) => {
-        resolve({
-          status: 'failed_to_start',
-          reason: `启动失败：${err.message}`,
-          details: err.stack === 'ENOENT' ? '文件不存在/路径错误' : err.stack === 'EACCES' ? '权限不足' : '未知错误',
-          pid: null,
-        })
-        // 从运行进程列表中移除
-        if (workingDir) {
-          runningProcesses.delete(workingDir)
+      child.on('error', (err: NodeJS.ErrnoException) => {
+        // 进程启动错误（如文件不存在、权限不足等）
+        if (!isResolved) {
+          isResolved = true
+          resolve({
+            status: 'failed_to_start',
+            reason: `启动失败：${err.message}`,
+            details: err.code === 'ENOENT' ? '文件不存在/路径错误' : err.code === 'EACCES' ? '权限不足' : '未知错误',
+            pid: null,
+            startTime: null,
+            endTime: null,
+            runTime: null,
+            isSuccess: null,
+          })
+          // 从运行进程列表中移除
+          if (workingDir) {
+            runningProcesses.delete(workingDir)
+          }
         }
       })
 
       child.on('close', async (code, signal) => {
         console.log(code, signal)
 
-        // 生产环境：如果提供了工作目录，程序执行完成后，将输出文件从 exe 所在目录的 out 文件夹复制到目标目录
-        if (workingDir) {
-          try {
-            // 获取 exe 所在目录
-            const exeDirectory = path.dirname(exePath)
-            const exeOutDir = path.join(exeDirectory, 'out')
-
-            // 检查 exe 所在目录的 out 文件夹是否存在
-            if (existsSync(exeOutDir)) {
-              logger.log('info', `检查输出目录: ${exeOutDir}`)
-
-              // 读取 out 目录中的所有文件
-              const files = readdirSync(exeOutDir)
-              const copiedFiles: string[] = []
-
-              for (const file of files) {
-                const sourcePath = path.join(exeOutDir, file)
-                const targetPath = path.join(workingDir, file)
-
-                // 只复制文件，跳过目录
-                const stats = statSync(sourcePath)
-                if (stats.isFile()) {
-                  copyFileSync(sourcePath, targetPath)
-                  copiedFiles.push(file)
-                  logger.log('info', `已复制输出文件: ${file} -> ${targetPath}`)
-                }
-              }
-
-              if (copiedFiles.length > 0) {
-                logger.log('info', `成功复制 ${copiedFiles.length} 个输出文件到工作目录: ${workingDir}`)
-              }
-              else {
-                logger.log('info', `输出目录 ${exeOutDir} 中未找到输出文件`)
-              }
-            }
-            else {
-              logger.log('info', `输出目录不存在: ${exeOutDir}`)
-            }
-          }
-          catch (error) {
-            logger.log('error', `复制输出文件时出错: ${error instanceof Error ? error.message : String(error)}`)
-          }
-        }
+        // 如果提供了工作目录，exe 已经在工作目录中执行，输出文件会直接生成在工作目录中，无需复制
+        // 如果没有提供工作目录，输出文件会生成在 exe 所在目录的 out 文件夹中
 
         const closeResult = {
           status: 'close',
@@ -385,7 +420,7 @@ export async function runExe(exeName: string, workingDir?: string) {
         if (workingDir) {
           runningProcesses.delete(workingDir)
         }
-        resolve(closeResult)
+        // 注意：这里不再 resolve，因为已经在 spawn 事件中 resolve 过了
       })
     })
   }
