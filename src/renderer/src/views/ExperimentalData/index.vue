@@ -5,13 +5,10 @@ import { UploadOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { computed, nextTick, onMounted, ref } from 'vue'
 
-import { useApp } from '../../app'
 import { useExperimentalDataStore } from '../../store'
 import DataChart from './DataChart.vue'
 import DataStatistics from './DataStatistics.vue'
 import { getColumnValues, parseExcelFile } from './utils'
-
-const $app = useApp()
 
 // 使用 store（直接使用 store 属性，确保响应式）
 const experimentalDataStore = useExperimentalDataStore()
@@ -131,7 +128,7 @@ function handleFileUpload(event: Event): void {
   if (!file)
     return
 
-  const hideLoading = $app.message.loading('正在读取文件...', 0)
+  const hideLoading = app.message.loading('正在读取文件...', 0)
 
   const reader = new FileReader()
 

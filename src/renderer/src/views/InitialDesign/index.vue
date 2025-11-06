@@ -6,26 +6,45 @@ import { FileTextOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 
 import { storeToRefs } from 'pinia'
-import { onMounted, onUnmounted, reactive, ref } from 'vue'
-import { useApp } from '../../app'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { useSchemeOptimizationStore } from '../../store'
 import { FEEDING_METHOD_MAP, useDesignStore } from '../../store/designStore'
 import { useLogStore } from '../../store/logStore'
 import { useSettingsStore } from '../../store/settingsStore'
-import { getFieldLabel } from '../../utils/field-labels'
+import { FIELD_LABELS, getFieldLabel } from '../../utils/field-labels'
 
-const $app = useApp()
 const designStore = useDesignStore()
 const logStore = useLogStore()
 const settingsStore = useSettingsStore()
+const schemeOptStore = useSchemeOptimizationStore()
 
-const {
-  isMultiScheme,
-  topLevelParams,
-  operatingParams,
-  drivingParams,
-  separationComponents,
-  outputResults,
-} = storeToRefs(designStore)
+const { isMultiScheme, topLevelParams, operatingParams, drivingParams, separationComponents, outputResults } = storeToRefs(designStore)
+
+// 从方案优化仓库读取已添加的设计因子，用于禁用设计表单对应字段
+const { designFactors: optDesignFactors } = storeToRefs(schemeOptStore)
+
+function getFieldKeyByLabel(label: string): string | null {
+  for (const [key, map] of Object.entries(FIELD_LABELS)) {
+    if (map['zh-CN'] === label)
+      return key
+  }
+  return null
+}
+
+// 需要禁用的字段集合：由“方案优化”里已添加的设计因子名称反查得到
+const disabledKeys = computed(() => {
+  const set = new Set<string>()
+  optDesignFactors.value.forEach((f) => {
+    const key = getFieldKeyByLabel(f.name)
+    if (key)
+      set.add(key)
+  })
+  return set
+})
+
+function isFactorDisabledByKey(key: string): boolean {
+  return disabledKeys.value.has(key)
+}
 
 const { fieldLabelMode } = storeToRefs(settingsStore)
 
@@ -90,7 +109,7 @@ function stopProgress() {
 /**  读取 input.dat 文件内容 */
 async function readTakeData() {
   const fileName = 'input.dat'
-  const content = await $app.file.readDatFile(fileName)
+  const content = await app.file.readDatFile(fileName)
   if (content) {
     parseDatContent(content)
   }
@@ -99,9 +118,6 @@ async function readTakeData() {
   }
 }
 
-/**
- * Ant Design Vue Form 提交校验模型与规则
- */
 const formRef = ref<FormInstance>()
 const formModel = reactive({
   ...topLevelParams.value,
@@ -151,7 +167,18 @@ const rules: Record<string, any[]> = {}
 positiveFields.forEach((key) => {
   rules[key] = [
     {
-      validator: (_: any, v: any) => (isPositiveReal(v) ? Promise.resolve() : Promise.reject(msgOf(key))),
+      validator: (_: any, v: any) => {
+        // 不允许空值
+        if (v === null || v === undefined || v === '')
+          return Promise.reject(msgOf(key))
+        // 处理字符串 '0' 的情况
+        const numValue = typeof v === 'string' ? Number(v) : v
+        // 如果输入了0（无论是数字0还是字符串'0'），必须拒绝
+        if (numValue === 0)
+          return Promise.reject(msgOf(key))
+        // 验证是否为正数
+        return isPositiveReal(numValue) ? Promise.resolve() : Promise.reject(msgOf(key))
+      },
       trigger: 'blur',
     },
   ]
@@ -165,9 +192,7 @@ rules.depletedExtractionPortInnerDiameter = [
       const outer = formModel.depletedExtractionPortOuterDiameter
       if (!isPositiveReal(v) || !isPositiveReal(outer))
         return Promise.resolve()
-      return v < outer
-        ? Promise.resolve()
-        : Promise.reject(new Error('贫取料口部内径应小于贫取料口部外径，请重新输入！'))
+      return v < outer ? Promise.resolve() : Promise.reject(new Error('贫取料口部内径应小于贫取料口部外径，请重新输入！'))
     },
     trigger: 'change',
   },
@@ -180,9 +205,7 @@ rules.depletedExtractionPortOuterDiameter = [
       const inner = formModel.depletedExtractionPortInnerDiameter
       if (!isPositiveReal(v) || !isPositiveReal(inner))
         return Promise.resolve()
-      return v > inner
-        ? Promise.resolve()
-        : Promise.reject(new Error('贫取料口部外径应大于贫取料口部内径，请重新输入！'))
+      return v > inner ? Promise.resolve() : Promise.reject(new Error('贫取料口部外径应大于贫取料口部内径，请重新输入！'))
     },
     trigger: 'change',
   },
@@ -196,9 +219,7 @@ rules.depletedBaffleOuterHoleInnerDiameter = [
       const outer = formModel.depletedBaffleOuterHoleOuterDiameter
       if (!isPositiveReal(v) || !isPositiveReal(outer))
         return Promise.resolve()
-      return v < outer
-        ? Promise.resolve()
-        : Promise.reject(new Error('贫料挡板外孔内径应小于贫料挡板外孔外径，请重新输入！'))
+      return v < outer ? Promise.resolve() : Promise.reject(new Error('贫料挡板外孔内径应小于贫料挡板外孔外径，请重新输入！'))
     },
     trigger: 'change',
   },
@@ -211,9 +232,7 @@ rules.depletedBaffleOuterHoleOuterDiameter = [
       const inner = formModel.depletedBaffleOuterHoleInnerDiameter
       if (!isPositiveReal(v) || !isPositiveReal(inner))
         return Promise.resolve()
-      return v > inner
-        ? Promise.resolve()
-        : Promise.reject(new Error('贫料挡板外孔外径应大于贫料挡板外孔内径，请重新输入！'))
+      return v > inner ? Promise.resolve() : Promise.reject(new Error('贫料挡板外孔外径应大于贫料挡板外孔内径，请重新输入！'))
     },
     trigger: 'change',
   },
@@ -224,8 +243,27 @@ function updateStoreByField(name: string, val: number | null) {
     return
   const topKeys = ['angularVelocity', 'rotorRadius', 'rotorShoulderLength']
   const opKeys = ['rotorSidewallPressure', 'gasDiffusionCoefficient', 'feedFlowRate', 'splitRatio']
-  const drvKeys = ['depletedEndCapTemperature', 'enrichedEndCapTemperature', 'feedAxialDisturbance', 'feedAngularDisturbance', 'depletedMechanicalDriveAmount']
-  const sepKeys = ['extractionChamberHeight', 'enrichedBaffleHoleDiameter', 'feedBoxShockDiskHeight', 'depletedExtractionArmRadius', 'depletedExtractionPortInnerDiameter', 'depletedBaffleInnerHoleOuterDiameter', 'enrichedBaffleHoleDistributionCircleDiameter', 'depletedExtractionPortOuterDiameter', 'depletedBaffleOuterHoleInnerDiameter', 'minAxialDistance', 'depletedBaffleAxialPosition', 'depletedBaffleOuterHoleOuterDiameter']
+  const drvKeys = [
+    'depletedEndCapTemperature',
+    'enrichedEndCapTemperature',
+    'feedAxialDisturbance',
+    'feedAngularDisturbance',
+    'depletedMechanicalDriveAmount',
+  ]
+  const sepKeys = [
+    'extractionChamberHeight',
+    'enrichedBaffleHoleDiameter',
+    'feedBoxShockDiskHeight',
+    'depletedExtractionArmRadius',
+    'depletedExtractionPortInnerDiameter',
+    'depletedBaffleInnerHoleOuterDiameter',
+    'enrichedBaffleHoleDistributionCircleDiameter',
+    'depletedExtractionPortOuterDiameter',
+    'depletedBaffleOuterHoleInnerDiameter',
+    'minAxialDistance',
+    'depletedBaffleAxialPosition',
+    'depletedBaffleOuterHoleOuterDiameter',
+  ]
   if (topKeys.includes(name)) {
     designStore.updateTopLevelParams({ [name]: val } as any)
   }
@@ -256,17 +294,24 @@ async function onFieldChange(name: string, val: number | null) {
     }
     const partner = PAIR_PARTNER[name]
     if (partner) {
-      try {
-        await formRef.value?.validateFields([partner])
+      // 如果对方字段有值，才进行联动验证
+      const partnerValue = formModel[partner]
+      if (partnerValue !== null && partnerValue !== undefined && partnerValue !== '') {
+        try {
+          await formRef.value?.validateFields([partner])
+        }
+        catch {
+          // 不在此处回退另一字段，保持用户对另一字段的控制；仅更新其错误状态
+        }
       }
-      catch {
-        // 不在此处回退另一字段，保持用户对另一字段的控制；仅更新其错误状态
+      else {
+        // 如果对方字段为空，清除其验证错误
+        formRef.value?.clearValidate([partner])
       }
     }
   }
-  catch (e: any) {
-    const msg = e?.errorFields?.[0]?.errors?.[0] || '参数校验未通过，请重新输入！'
-    message.error(msg)
+  catch {
+    // 去掉轻提示，只保留表单字段的错误提示
     ;(formModel as any)[name] = prev
   }
 }
@@ -304,9 +349,6 @@ async function simulateCalculation(): Promise<void> {
 
   const exeName = 'ns-linear.exe'
 
-  // 校验通过，确保 store 与 formModel 一致（在即时校验中已更新过，这里再统一提交一次）
-  // commitFormToStore()
-
   const designForm = {
     ...topLevelParams.value,
     ...operatingParams.value,
@@ -315,11 +357,11 @@ async function simulateCalculation(): Promise<void> {
     ...outputResults.value,
   }
 
-  const res = await $app.file.writeDatFile('input.dat', designForm)
+  const res = await app.file.writeDatFile('input.dat', designForm)
 
   logStore.success(res.message)
 
-  const result = await $app.callExe(exeName)
+  const result = await app.callExe(exeName)
 
   console.log(result)
 
@@ -335,7 +377,6 @@ async function simulateCalculation(): Promise<void> {
     completeProgress(false)
     stopProgress()
     isLoading.value = false
-    // 调用失败时立即停止，不继续执行
   }
 }
 
@@ -343,7 +384,6 @@ async function simulateCalculation(): Promise<void> {
  * 提交设计
  */
 async function submitDesign(): Promise<void> {
-  // 提交前，将当前 store 值同步到 formModel，以规则进行整体校验
   syncFormFromStore()
   try {
     await formRef.value?.validate()
@@ -354,9 +394,6 @@ async function submitDesign(): Promise<void> {
     return
   }
 
-  // 校验通过，确保 store 与 formModel 一致（在即时校验中已更新过，这里再统一提交一次）
-  // commitFormToStore()
-
   const designForm = {
     ...topLevelParams.value,
     ...operatingParams.value,
@@ -365,7 +402,7 @@ async function submitDesign(): Promise<void> {
     ...outputResults.value,
   }
 
-  const res = await $app.file.writeDatFile('input.dat', designForm)
+  const res = await app.file.writeDatFile('input.dat', designForm)
   if (res?.code === 0) {
     message.success('提交参数校验通过，已生成输入文件')
   }
@@ -443,9 +480,15 @@ function replaceSepPowerParams(content: string): void {
  */
 
 async function parseDatContent(content: string): Promise<void> {
-  const lines = content.trim().split('\n').map(l => l.trim()).filter(Boolean)
-  const [angularVelocity, rotorRadius, rotorShoulderLength, rotorSidewallPressure, gasDiffusionCoefficient]
-    = lines[1].replace(/!.*/, '').split(',').map(Number)
+  const lines = content
+    .trim()
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean)
+  const [angularVelocity, rotorRadius, rotorShoulderLength, rotorSidewallPressure, gasDiffusionCoefficient] = lines[1]
+    .replace(/!.*/, '')
+    .split(',')
+    .map(Number)
   designStore.updateTopLevelParams({ angularVelocity, rotorRadius, rotorShoulderLength })
   designStore.updateOperatingParams({ rotorSidewallPressure, gasDiffusionCoefficient })
 
@@ -530,13 +573,12 @@ async function handleExeClose(_: Electron.IpcRendererEvent, exeName: string, res
   const fileName = 'Sep_power.dat'
 
   if (result.isSuccess === false) {
-    $app.message.error(`${exeName} 程序异常退出，退出码: ${result.exitCode}`)
+    app.message.error(`${exeName} 程序异常退出，退出码: ${result.exitCode}`)
     isLoading.value = false
     completeProgress(false)
   }
-
   else {
-    const content = await $app.file.readDatFile(fileName)
+    const content = await app.file.readDatFile(fileName)
     if (!content) {
       isLoading.value = false
       completeProgress(false)
@@ -577,14 +619,12 @@ onUnmounted(() => {
 
       <!-- 设计类型 -->
       <a-card :title="getFieldLabel('designType', fieldLabelMode)">
-        <a-card-body>
-          <a-checkbox :checked="isMultiScheme" @update:checked="designStore.setIsMultiScheme">
-            {{ getFieldLabel('isMultiScheme', fieldLabelMode) }}
-          </a-checkbox>
-        </a-card-body>
+        <a-checkbox :checked="isMultiScheme" @update:checked="designStore.setIsMultiScheme">
+          {{ getFieldLabel('isMultiScheme', fieldLabelMode) }}
+        </a-checkbox>
       </a-card>
 
-      <div style="height: 10px;" />
+      <div style="height: 10px" />
 
       <a-card :title="getFieldLabel('operatingParams', fieldLabelMode)">
         <a-form ref="formRef" layout="vertical" :model="formModel" :rules="rules">
@@ -598,8 +638,10 @@ onUnmounted(() => {
               <a-form-item name="angularVelocity" :label="getFieldLabel('angularVelocity', fieldLabelMode)" class="form-col">
                 <a-input-number
                   :value="topLevelParams.angularVelocity"
-                  :placeholder="`请输入${getFieldLabel('angularVelocity', fieldLabelMode)}`" style="width: 100%"
+                  :placeholder="`请输入${getFieldLabel('angularVelocity', fieldLabelMode)}`"
+                  style="width: 100%"
                   addon-after="Hz"
+                  :disabled="isFactorDisabledByKey('angularVelocity')"
                   @update:value="(val) => onFieldChange('angularVelocity', val as number | null)"
                 />
               </a-form-item>
@@ -607,16 +649,21 @@ onUnmounted(() => {
               <a-form-item name="rotorRadius" :label="getFieldLabel('rotorRadius', fieldLabelMode)" class="form-col">
                 <a-input-number
                   :value="topLevelParams.rotorRadius"
-                  :placeholder="`请输入${getFieldLabel('rotorRadius', fieldLabelMode)}`" style="width: 100%"
-                  addon-after="mm" @update:value="(val) => onFieldChange('rotorRadius', val as number | null)"
+                  :placeholder="`请输入${getFieldLabel('rotorRadius', fieldLabelMode)}`"
+                  style="width: 100%"
+                  addon-after="mm"
+                  :disabled="isFactorDisabledByKey('rotorRadius')"
+                  @update:value="(val) => onFieldChange('rotorRadius', val as number | null)"
                 />
               </a-form-item>
 
               <a-form-item name="rotorShoulderLength" :label="getFieldLabel('rotorShoulderLength', fieldLabelMode)" class="form-col">
                 <a-input-number
                   :value="topLevelParams.rotorShoulderLength"
-                  :placeholder="`请输入${getFieldLabel('rotorShoulderLength', fieldLabelMode)}`" style="width: 100%"
+                  :placeholder="`请输入${getFieldLabel('rotorShoulderLength', fieldLabelMode)}`"
+                  style="width: 100%"
                   addon-after="mm"
+                  :disabled="isFactorDisabledByKey('rotorShoulderLength')"
                   @update:value="(val) => onFieldChange('rotorShoulderLength', val as number | null)"
                 />
               </a-form-item>
@@ -633,8 +680,10 @@ onUnmounted(() => {
               <a-form-item name="rotorSidewallPressure" :label="getFieldLabel('rotorSidewallPressure', fieldLabelMode)" class="form-col">
                 <a-input-number
                   :value="operatingParams.rotorSidewallPressure"
-                  :placeholder="`请输入${getFieldLabel('rotorSidewallPressure', fieldLabelMode)}`" style="width: 100%"
+                  :placeholder="`请输入${getFieldLabel('rotorSidewallPressure', fieldLabelMode)}`"
+                  style="width: 100%"
                   addon-after="Pa"
+                  :disabled="isFactorDisabledByKey('rotorSidewallPressure')"
                   @update:value="(val) => onFieldChange('rotorSidewallPressure', val as number | null)"
                 />
               </a-form-item>
@@ -642,7 +691,9 @@ onUnmounted(() => {
               <a-form-item name="gasDiffusionCoefficient" :label="getFieldLabel('gasDiffusionCoefficient', fieldLabelMode)" class="form-col">
                 <a-input-number
                   :value="operatingParams.gasDiffusionCoefficient"
-                  :placeholder="`请输入${getFieldLabel('gasDiffusionCoefficient', fieldLabelMode)}`" style="width: 100%"
+                  :placeholder="`请输入${getFieldLabel('gasDiffusionCoefficient', fieldLabelMode)}`"
+                  style="width: 100%"
+                  :disabled="isFactorDisabledByKey('gasDiffusionCoefficient')"
                   @update:value="(val) => onFieldChange('gasDiffusionCoefficient', val as number | null)"
                 />
               </a-form-item>
@@ -650,8 +701,10 @@ onUnmounted(() => {
               <a-form-item name="feedFlowRate" :label="getFieldLabel('feedFlowRate', fieldLabelMode)" class="form-col">
                 <a-input-number
                   :value="operatingParams.feedFlowRate"
-                  :placeholder="`请输入${getFieldLabel('feedFlowRate', fieldLabelMode)}`" style="width: 100%"
+                  :placeholder="`请输入${getFieldLabel('feedFlowRate', fieldLabelMode)}`"
+                  style="width: 100%"
                   addon-after="Kg/s"
+                  :disabled="isFactorDisabledByKey('feedFlowRate')"
                   @update:value="(val) => onFieldChange('feedFlowRate', val as number | null)"
                 />
               </a-form-item>
@@ -659,7 +712,9 @@ onUnmounted(() => {
               <a-form-item :label="getFieldLabel('feedingMethod', fieldLabelMode)" class="form-col">
                 <a-select
                   :value="operatingParams.feedingMethod"
-                  :placeholder="`请选择${getFieldLabel('feedingMethod', fieldLabelMode)}`" style="width: 100%"
+                  :placeholder="`请选择${getFieldLabel('feedingMethod', fieldLabelMode)}`"
+                  style="width: 100%"
+                  :disabled="isFactorDisabledByKey('feedingMethod')"
                   @update:value="(val) => designStore.updateOperatingParams({ feedingMethod: val as FeedingMethod })"
                 >
                   <a-select-option v-for="option in FEEDING_METHOD_MAP" :key="option.value" :value="option.value">
@@ -671,7 +726,9 @@ onUnmounted(() => {
               <a-form-item name="splitRatio" :label="getFieldLabel('splitRatio', fieldLabelMode)" class="form-col">
                 <a-input-number
                   :value="operatingParams.splitRatio"
-                  :placeholder="`请输入${getFieldLabel('splitRatio', fieldLabelMode)}`" style="width: 100%"
+                  :placeholder="`请输入${getFieldLabel('splitRatio', fieldLabelMode)}`"
+                  style="width: 100%"
+                  :disabled="isFactorDisabledByKey('splitRatio')"
                   @update:value="(val) => onFieldChange('splitRatio', val as number | null)"
                 />
               </a-form-item>
@@ -688,8 +745,10 @@ onUnmounted(() => {
               <a-form-item name="depletedEndCapTemperature" :label="getFieldLabel('depletedEndCapTemperature', fieldLabelMode)" class="form-col">
                 <a-input-number
                   :value="drivingParams.depletedEndCapTemperature"
-                  :placeholder="`请输入${getFieldLabel('depletedEndCapTemperature', fieldLabelMode)}`" style="width: 100%"
+                  :placeholder="`请输入${getFieldLabel('depletedEndCapTemperature', fieldLabelMode)}`"
+                  style="width: 100%"
                   addon-after="K"
+                  :disabled="isFactorDisabledByKey('depletedEndCapTemperature')"
                   @update:value="(val) => onFieldChange('depletedEndCapTemperature', val as number | null)"
                 />
               </a-form-item>
@@ -697,8 +756,10 @@ onUnmounted(() => {
               <a-form-item name="enrichedEndCapTemperature" :label="getFieldLabel('enrichedEndCapTemperature', fieldLabelMode)" class="form-col">
                 <a-input-number
                   :value="drivingParams.enrichedEndCapTemperature"
-                  :placeholder="`请输入${getFieldLabel('enrichedEndCapTemperature', fieldLabelMode)}`" style="width: 100%"
+                  :placeholder="`请输入${getFieldLabel('enrichedEndCapTemperature', fieldLabelMode)}`"
+                  style="width: 100%"
                   addon-after="K"
+                  :disabled="isFactorDisabledByKey('enrichedEndCapTemperature')"
                   @update:value="(val) => onFieldChange('enrichedEndCapTemperature', val as number | null)"
                 />
               </a-form-item>
@@ -706,8 +767,10 @@ onUnmounted(() => {
               <a-form-item name="feedAxialDisturbance" :label="getFieldLabel('feedAxialDisturbance', fieldLabelMode)" class="form-col">
                 <a-input-number
                   :value="drivingParams.feedAxialDisturbance"
-                  :placeholder="`请输入${getFieldLabel('feedAxialDisturbance', fieldLabelMode)}`" style="width: 100%"
+                  :placeholder="`请输入${getFieldLabel('feedAxialDisturbance', fieldLabelMode)}`"
+                  style="width: 100%"
                   addon-after="mm"
+                  :disabled="isFactorDisabledByKey('feedAxialDisturbance')"
                   @update:value="(val) => onFieldChange('feedAxialDisturbance', val as number | null)"
                 />
               </a-form-item>
@@ -715,17 +778,25 @@ onUnmounted(() => {
               <a-form-item name="feedAngularDisturbance" :label="getFieldLabel('feedAngularDisturbance', fieldLabelMode)" class="form-col">
                 <a-input-number
                   :value="drivingParams.feedAngularDisturbance"
-                  :placeholder="`请输入${getFieldLabel('feedAngularDisturbance', fieldLabelMode)}`" style="width: 100%"
+                  :placeholder="`请输入${getFieldLabel('feedAngularDisturbance', fieldLabelMode)}`"
+                  style="width: 100%"
                   addon-after="mm"
+                  :disabled="isFactorDisabledByKey('feedAngularDisturbance')"
                   @update:value="(val) => onFieldChange('feedAngularDisturbance', val as number | null)"
                 />
               </a-form-item>
 
-              <a-form-item name="depletedMechanicalDriveAmount" :label="getFieldLabel('depletedMechanicalDriveAmount', fieldLabelMode)" class="form-col">
+              <a-form-item
+                name="depletedMechanicalDriveAmount"
+                :label="getFieldLabel('depletedMechanicalDriveAmount', fieldLabelMode)"
+                class="form-col"
+              >
                 <a-input-number
                   :value="drivingParams.depletedMechanicalDriveAmount"
                   :placeholder="`请输入${getFieldLabel('depletedMechanicalDriveAmount', fieldLabelMode)}`"
-                  style="width: 100%" addon-after="mm"
+                  style="width: 100%"
+                  addon-after="mm"
+                  :disabled="isFactorDisabledByKey('depletedMechanicalDriveAmount')"
                   @update:value="(val) => onFieldChange('depletedMechanicalDriveAmount', val as number | null)"
                 />
               </a-form-item>
@@ -742,8 +813,10 @@ onUnmounted(() => {
               <a-form-item name="extractionChamberHeight" :label="getFieldLabel('extractionChamberHeight', fieldLabelMode)" class="form-col">
                 <a-input-number
                   :value="separationComponents.extractionChamberHeight"
-                  :placeholder="`请输入${getFieldLabel('extractionChamberHeight', fieldLabelMode)}`" style="width: 100%"
+                  :placeholder="`请输入${getFieldLabel('extractionChamberHeight', fieldLabelMode)}`"
+                  style="width: 100%"
                   addon-after="mm"
+                  :disabled="isFactorDisabledByKey('extractionChamberHeight')"
                   @update:value="(val) => onFieldChange('extractionChamberHeight', val as number | null)"
                 />
               </a-form-item>
@@ -751,8 +824,10 @@ onUnmounted(() => {
               <a-form-item name="enrichedBaffleHoleDiameter" :label="getFieldLabel('enrichedBaffleHoleDiameter', fieldLabelMode)" class="form-col">
                 <a-input-number
                   :value="separationComponents.enrichedBaffleHoleDiameter"
-                  :placeholder="`请输入${getFieldLabel('enrichedBaffleHoleDiameter', fieldLabelMode)}`" style="width: 100%"
+                  :placeholder="`请输入${getFieldLabel('enrichedBaffleHoleDiameter', fieldLabelMode)}`"
+                  style="width: 100%"
                   addon-after="mm"
+                  :disabled="isFactorDisabledByKey('enrichedBaffleHoleDiameter')"
                   @update:value="(val) => onFieldChange('enrichedBaffleHoleDiameter', val as number | null)"
                 />
               </a-form-item>
@@ -760,8 +835,10 @@ onUnmounted(() => {
               <a-form-item name="feedBoxShockDiskHeight" :label="getFieldLabel('feedBoxShockDiskHeight', fieldLabelMode)" class="form-col">
                 <a-input-number
                   :value="separationComponents.feedBoxShockDiskHeight"
-                  :placeholder="`请输入${getFieldLabel('feedBoxShockDiskHeight', fieldLabelMode)}`" style="width: 100%"
+                  :placeholder="`请输入${getFieldLabel('feedBoxShockDiskHeight', fieldLabelMode)}`"
+                  style="width: 100%"
                   addon-after="mm"
+                  :disabled="isFactorDisabledByKey('feedBoxShockDiskHeight')"
                   @update:value="(val) => onFieldChange('feedBoxShockDiskHeight', val as number | null)"
                 />
               </a-form-item>
@@ -770,7 +847,9 @@ onUnmounted(() => {
                 <a-input-number
                   :value="separationComponents.depletedExtractionArmRadius"
                   :placeholder="`请输入${getFieldLabel('depletedExtractionArmRadius', fieldLabelMode)}`"
-                  style="width: 100%" addon-after="mm"
+                  style="width: 100%"
+                  addon-after="mm"
+                  :disabled="isFactorDisabledByKey('depletedExtractionArmRadius')"
                   @update:value="(val) => onFieldChange('depletedExtractionArmRadius', val as number | null)"
                 />
               </a-form-item>
@@ -783,7 +862,9 @@ onUnmounted(() => {
                 <a-input-number
                   :value="separationComponents.depletedExtractionPortInnerDiameter"
                   :placeholder="`请输入${getFieldLabel('depletedExtractionPortInnerDiameter', fieldLabelMode)}`"
-                  style="width: 100%" addon-after="mm"
+                  style="width: 100%"
+                  addon-after="mm"
+                  :disabled="isFactorDisabledByKey('depletedExtractionPortInnerDiameter')"
                   @update:value="(val) => onFieldChange('depletedExtractionPortInnerDiameter', val as number | null)"
                 />
               </a-form-item>
@@ -796,7 +877,9 @@ onUnmounted(() => {
                 <a-input-number
                   :value="separationComponents.depletedBaffleInnerHoleOuterDiameter"
                   :placeholder="`请输入${getFieldLabel('depletedBaffleInnerHoleOuterDiameter', fieldLabelMode)}`"
-                  style="width: 100%" addon-after="mm"
+                  style="width: 100%"
+                  addon-after="mm"
+                  :disabled="isFactorDisabledByKey('depletedBaffleInnerHoleOuterDiameter')"
                   @update:value="(val) => onFieldChange('depletedBaffleInnerHoleOuterDiameter', val as number | null)"
                 />
               </a-form-item>
@@ -809,7 +892,9 @@ onUnmounted(() => {
                 <a-input-number
                   :value="separationComponents.enrichedBaffleHoleDistributionCircleDiameter"
                   :placeholder="`请输入${getFieldLabel('enrichedBaffleHoleDistributionCircleDiameter', fieldLabelMode)}`"
-                  style="width: 100%" addon-after="mm"
+                  style="width: 100%"
+                  addon-after="mm"
+                  :disabled="isFactorDisabledByKey('enrichedBaffleHoleDistributionCircleDiameter')"
                   @update:value="(val) => onFieldChange('enrichedBaffleHoleDistributionCircleDiameter', val as number | null)"
                 />
               </a-form-item>
@@ -822,7 +907,9 @@ onUnmounted(() => {
                 <a-input-number
                   :value="separationComponents.depletedExtractionPortOuterDiameter"
                   :placeholder="`请输入${getFieldLabel('depletedExtractionPortOuterDiameter', fieldLabelMode)}`"
-                  style="width: 100%" addon-after="mm"
+                  style="width: 100%"
+                  addon-after="mm"
+                  :disabled="isFactorDisabledByKey('depletedExtractionPortOuterDiameter')"
                   @update:value="(val) => onFieldChange('depletedExtractionPortOuterDiameter', val as number | null)"
                 />
               </a-form-item>
@@ -835,7 +922,9 @@ onUnmounted(() => {
                 <a-input-number
                   :value="separationComponents.depletedBaffleOuterHoleInnerDiameter"
                   :placeholder="`请输入${getFieldLabel('depletedBaffleOuterHoleInnerDiameter', fieldLabelMode)}`"
-                  style="width: 100%" addon-after="mm"
+                  style="width: 100%"
+                  addon-after="mm"
+                  :disabled="isFactorDisabledByKey('depletedBaffleOuterHoleInnerDiameter')"
                   @update:value="(val) => onFieldChange('depletedBaffleOuterHoleInnerDiameter', val as number | null)"
                 />
               </a-form-item>
@@ -843,8 +932,10 @@ onUnmounted(() => {
               <a-form-item name="minAxialDistance" :label="getFieldLabel('minAxialDistance', fieldLabelMode)" class="form-col">
                 <a-input-number
                   :value="separationComponents.minAxialDistance"
-                  :placeholder="`请输入${getFieldLabel('minAxialDistance', fieldLabelMode)}`" style="width: 100%"
+                  :placeholder="`请输入${getFieldLabel('minAxialDistance', fieldLabelMode)}`"
+                  style="width: 100%"
                   addon-after="mm"
+                  :disabled="isFactorDisabledByKey('minAxialDistance')"
                   @update:value="(val) => onFieldChange('minAxialDistance', val as number | null)"
                 />
               </a-form-item>
@@ -853,7 +944,9 @@ onUnmounted(() => {
                 <a-input-number
                   :value="separationComponents.depletedBaffleAxialPosition"
                   :placeholder="`请输入${getFieldLabel('depletedBaffleAxialPosition', fieldLabelMode)}`"
-                  style="width: 100%" addon-after="mm"
+                  style="width: 100%"
+                  addon-after="mm"
+                  :disabled="isFactorDisabledByKey('depletedBaffleAxialPosition')"
                   @update:value="(val) => onFieldChange('depletedBaffleAxialPosition', val as number | null)"
                 />
               </a-form-item>
@@ -866,7 +959,9 @@ onUnmounted(() => {
                 <a-input-number
                   :value="separationComponents.depletedBaffleOuterHoleOuterDiameter"
                   :placeholder="`请输入${getFieldLabel('depletedBaffleOuterHoleOuterDiameter', fieldLabelMode)}`"
-                  style="width: 100%" addon-after="mm"
+                  style="width: 100%"
+                  addon-after="mm"
+                  :disabled="isFactorDisabledByKey('depletedBaffleOuterHoleOuterDiameter')"
                   @update:value="(val) => onFieldChange('depletedBaffleOuterHoleOuterDiameter', val as number | null)"
                 />
               </a-form-item>
@@ -884,15 +979,20 @@ onUnmounted(() => {
         <div class="result-item">
           <span class="result-label">{{ getFieldLabel('separationPower', fieldLabelMode) }}:</span>
           <span class="result-value">
-            {{ outputResults.separationPower !== null && outputResults.separationPower !== undefined
-              ? outputResults.separationPower.toFixed(2) : '-' }} W
+            {{
+              outputResults.separationPower !== null && outputResults.separationPower !== undefined ? outputResults.separationPower.toFixed(2) : '-'
+            }}
+            W
           </span>
         </div>
         <div class="result-item">
           <span class="result-label">{{ getFieldLabel('separationFactor', fieldLabelMode) }}:</span>
           <span class="result-value">
-            {{ outputResults.separationFactor !== null && outputResults.separationFactor !== undefined
-              ? outputResults.separationFactor.toFixed(4) : '-' }}
+            {{
+              outputResults.separationFactor !== null && outputResults.separationFactor !== undefined
+                ? outputResults.separationFactor.toFixed(4)
+                : '-'
+            }}
           </span>
         </div>
       </a-space>
@@ -918,6 +1018,7 @@ onUnmounted(() => {
 <style scoped>
 .initial-design-container {
   padding: 10px;
+  margin-bottom: 60px;
 }
 
 .top-actions {

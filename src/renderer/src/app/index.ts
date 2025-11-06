@@ -11,7 +11,6 @@ import { messageAPI } from './modules/message'
 import { notificationAPI } from './modules/notification'
 import { storageAPI } from './modules/storage'
 import { systemAPI } from './modules/system'
-import { themeAPI } from './modules/theme'
 import { windowAPI } from './modules/window'
 
 const productConfig = getProductConfig()
@@ -22,9 +21,6 @@ export const app: AppAPI = {
 
   /** 消息通知 API */
   message: messageAPI,
-
-  /** 主题 API */
-  theme: themeAPI,
 
   /** 存储 API */
   storage: storageAPI,
@@ -67,6 +63,9 @@ export const app: AppAPI = {
     const result = await window.electron.ipcRenderer.invoke('call-exe', exeName, workingDir)
     return result
   },
+
+  /** 产品配置 */
+  productConfig,
 }
 
 if (import.meta.env.DEV && typeof window !== 'undefined') {
@@ -76,5 +75,3 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
 export default app
 
 export type * from './types'
-
-export { useApp } from './useApp'

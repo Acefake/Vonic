@@ -45,6 +45,17 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
+    path: '/power-analysis-design',
+    name: 'PowerAnalysisDesign',
+    component: () => import('../views/PowerAnalysisDesign/index.vue'),
+    meta: {
+      title: '功率分析设计',
+      icon: 'CompassOutlined',
+      order: 1,
+      feature: 'powerAnalysis',
+    },
+  },
+  {
     path: '/scheme-optimization',
     name: 'SchemeOptimization',
     component: () => import('../views/SchemeOptimization/index.vue'),

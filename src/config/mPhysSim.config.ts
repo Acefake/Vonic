@@ -7,15 +7,9 @@ const mPhysSimConfig: ProductConfig = {
   version: '1.0.0',
   themeColor: '#085ab1',
   api: {
-    baseUrl: 'http://localhost:8090',
-    port: 8090,
+    baseUrl: 'http://localhost:53301',
+    port: 53301,
     timeout: 30000,
-  },
-  window: {
-    width: 1600,
-    height: 900,
-    minWidth: 1024,
-    minHeight: 768,
   },
   features: {
     initialDesign: true,

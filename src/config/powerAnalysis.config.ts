@@ -4,21 +4,18 @@ const powerAnalysisConfig: ProductConfig = {
   id: 'powerAnalysis',
   name: '功率分析',
   version: '1.0.0',
-  themeColor: '#007ACC',
+  themeColor: '#009a3a',
   api: {
-    baseUrl: 'http://localhost:8090',
-    port: 8090,
+    baseUrl: 'http://localhost:53302',
+    port: 53302,
     timeout: 30000,
   },
-  window: {
-    width: 1600,
-    height: 900,
-    minWidth: 1024,
-    minHeight: 768,
-  },
   features: {
-    initialDesign: true,
+    powerAnalysis: true,
     schemeOptimization: true,
+    multiScheme: true,
+    experimentalData: true,
+    dataComparison: true,
   },
   doe: {
     port: 25504,

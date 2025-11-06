@@ -80,6 +80,56 @@ export async function runExe(exeName: string, workingDir?: string) {
       child.on('close', (code, signal) => {
         console.log(code, signal)
 
+        // 开发环境：如果提供了工作目录，程序执行完成后，尝试将输出文件从 exe 所在目录（及其 out 子目录）复制到目标工作目录
+        try {
+          if (workingDirectory) {
+            const exeDirectory = path.dirname(exePath)
+            const exeOutDir = path.join(exeDirectory, 'out')
+
+            const copiedFiles: string[] = []
+
+            // 优先复制 out 子目录中的文件
+            if (existsSync(exeOutDir)) {
+              logger.log('info', `开发环境复制输出：检查目录 ${exeOutDir}`)
+              const files = readdirSync(exeOutDir)
+              for (const file of files) {
+                const sourcePath = path.join(exeOutDir, file)
+                const stats = statSync(sourcePath)
+                if (stats.isFile()) {
+                  const targetPath = path.join(workingDirectory, file)
+                  copyFileSync(sourcePath, targetPath)
+                  copiedFiles.push(file)
+                  logger.log('info', `开发环境已复制：${file} -> ${targetPath}`)
+                }
+              }
+            }
+
+            // 如果 out 子目录不存在或未复制到任何文件，则尝试直接复制 exe 根目录中的常见输出文件
+            if (copiedFiles.length === 0) {
+              const commonOutputs = ['Sep_power.dat', 'sep_power.dat', 'trace.dat']
+              for (const file of commonOutputs) {
+                const sourcePath = path.join(exeDirectory, file)
+                if (existsSync(sourcePath)) {
+                  const targetPath = path.join(workingDirectory, file)
+                  copyFileSync(sourcePath, targetPath)
+                  copiedFiles.push(file)
+                  logger.log('info', `开发环境已复制常见输出：${file} -> ${targetPath}`)
+                }
+              }
+            }
+
+            if (copiedFiles.length > 0) {
+              logger.log('info', `开发环境成功复制 ${copiedFiles.length} 个输出文件到工作目录: ${workingDirectory}`)
+            }
+            else {
+              logger.log('info', '开发环境未发现可复制的输出文件（既无 out 目录，也未找到常见输出文件）')
+            }
+          }
+        }
+        catch (copyErr) {
+          logger.log('error', `开发环境复制输出文件时出错: ${copyErr instanceof Error ? copyErr.message : String(copyErr)}`)
+        }
+
         const closeResult = {
           exitCode: code,
           signal,

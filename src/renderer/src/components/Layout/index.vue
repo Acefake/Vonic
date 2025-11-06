@@ -8,12 +8,17 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { productConfig } from '../../../../config/product.config'
 import { useDesignStore } from '../../store/designStore'
+import { usePowerAnalysisDesignStore } from '../../store/powerAnalysisDesignStore'
 import CustomHeader from './CustomHeader.vue'
 import LogLayout from './LogLayout.vue'
 
 const route = useRoute()
 const router = useRouter()
-const designStore = useDesignStore()
+
+// 根据产品配置选择对应的 store
+const designStore = productConfig.id === 'powerAnalysis'
+  ? usePowerAnalysisDesignStore()
+  : useDesignStore()
 
 const { isMultiScheme } = storeToRefs(designStore)
 

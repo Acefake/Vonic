@@ -72,7 +72,12 @@ export const windowConfig: WindowConfig[] = [
     moveCenter: true,
     singleton: true,
     maxInstances: 1,
-    options: { ...mainWindowOptions, frame: false },
+    options: {
+      ...mainWindowOptions,
+      frame: false,
+      minWidth: 1600,
+      minHeight: 900,
+    },
   },
   {
     windowName: WindowName.LOADING,

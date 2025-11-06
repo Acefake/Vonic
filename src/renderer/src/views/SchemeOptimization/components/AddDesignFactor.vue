@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 
-import { useApp } from '../../../app'
+import { getProductConfig } from '../../../../../config/product.config'
 import { useWindowParams } from '../../../hooks/useWindowParams'
 import { getFieldLabel } from '../../../utils/field-labels'
 
@@ -21,59 +21,172 @@ interface WindowData {
   selected?: Array<{ key: string, label?: string }>
 }
 
-const app = useApp()
-
 // 使用 hook 获取窗口参数，自动处理数据获取和 IPC 监听
 const { data: windowData } = useWindowParams<WindowData>()
 
-// 将设计表单中的字段分组，并显示中文名
-const fieldGroups = ref<FieldGroup[]>([
-  {
-    title: getFieldLabel('topLevelParams'),
-    items: [
-      { key: 'angularVelocity', label: getFieldLabel('angularVelocity'), checked: false },
-      { key: 'rotorRadius', label: getFieldLabel('rotorRadius'), checked: false },
-      { key: 'rotorShoulderLength', label: getFieldLabel('rotorShoulderLength'), checked: false },
-    ],
-  },
-  {
-    title: getFieldLabel('operatingParams'),
-    items: [
-      { key: 'rotorSidewallPressure', label: getFieldLabel('rotorSidewallPressure'), checked: false },
-      { key: 'gasDiffusionCoefficient', label: getFieldLabel('gasDiffusionCoefficient'), checked: false },
-      { key: 'feedFlowRate', label: getFieldLabel('feedFlowRate'), checked: false },
-      { key: 'feedingMethod', label: getFieldLabel('feedingMethod'), checked: false },
-      { key: 'splitRatio', label: getFieldLabel('splitRatio'), checked: false },
-    ],
-  },
-  {
-    title: getFieldLabel('drivingParams'),
-    items: [
-      { key: 'depletedEndCapTemperature', label: getFieldLabel('depletedEndCapTemperature'), checked: false },
-      { key: 'enrichedEndCapTemperature', label: getFieldLabel('enrichedEndCapTemperature'), checked: false },
-      { key: 'feedAxialDisturbance', label: getFieldLabel('feedAxialDisturbance'), checked: false },
-      { key: 'feedAngularDisturbance', label: getFieldLabel('feedAngularDisturbance'), checked: false },
-      { key: 'depletedMechanicalDriveAmount', label: getFieldLabel('depletedMechanicalDriveAmount'), checked: false },
-    ],
-  },
-  {
-    title: getFieldLabel('separationComponents'),
-    items: [
-      { key: 'extractionChamberHeight', label: getFieldLabel('extractionChamberHeight'), checked: false },
-      { key: 'enrichedBaffleHoleDiameter', label: getFieldLabel('enrichedBaffleHoleDiameter'), checked: false },
-      { key: 'feedBoxShockDiskHeight', label: getFieldLabel('feedBoxShockDiskHeight'), checked: false },
-      { key: 'depletedExtractionArmRadius', label: getFieldLabel('depletedExtractionArmRadius'), checked: false },
-      { key: 'depletedExtractionPortInnerDiameter', label: getFieldLabel('depletedExtractionPortInnerDiameter'), checked: false },
-      { key: 'depletedBaffleInnerHoleOuterDiameter', label: getFieldLabel('depletedBaffleInnerHoleOuterDiameter'), checked: false },
-      { key: 'enrichedBaffleHoleDistributionCircleDiameter', label: getFieldLabel('enrichedBaffleHoleDistributionCircleDiameter'), checked: false },
-      { key: 'depletedExtractionPortOuterDiameter', label: getFieldLabel('depletedExtractionPortOuterDiameter'), checked: false },
-      { key: 'depletedBaffleOuterHoleInnerDiameter', label: getFieldLabel('depletedBaffleOuterHoleInnerDiameter'), checked: false },
-      { key: 'minAxialDistance', label: getFieldLabel('minAxialDistance'), checked: false },
-      { key: 'depletedBaffleAxialPosition', label: getFieldLabel('depletedBaffleAxialPosition'), checked: false },
-      { key: 'depletedBaffleOuterHoleOuterDiameter', label: getFieldLabel('depletedBaffleOuterHoleOuterDiameter'), checked: false },
-    ],
-  },
-])
+/**
+ * 创建字段项
+ */
+function createFieldItem(key: string): FieldItem {
+  return {
+    key,
+    label: getFieldLabel(key),
+    checked: false,
+  }
+}
+
+/**
+ * 根据产品配置生成参数组
+ */
+function createFieldGroups(): FieldGroup[] {
+  const productConfig = getProductConfig()
+  const productId = productConfig.id
+
+  // mPhysSim 产品的参数组配置
+  if (productId === 'mPhysSim') {
+    return [
+      {
+        title: getFieldLabel('topLevelParams'),
+        items: [
+          createFieldItem('angularVelocity'),
+          createFieldItem('rotorRadius'),
+          createFieldItem('rotorShoulderLength'),
+        ],
+      },
+      {
+        title: getFieldLabel('operatingParams'),
+        items: [
+          createFieldItem('rotorSidewallPressure'),
+          createFieldItem('gasDiffusionCoefficient'),
+          createFieldItem('feedFlowRate'),
+          createFieldItem('feedingMethod'),
+          createFieldItem('splitRatio'),
+        ],
+      },
+      {
+        title: getFieldLabel('drivingParams'),
+        items: [
+          createFieldItem('depletedEndCapTemperature'),
+          createFieldItem('enrichedEndCapTemperature'),
+          createFieldItem('feedAxialDisturbance'),
+          createFieldItem('feedAngularDisturbance'),
+          createFieldItem('depletedMechanicalDriveAmount'),
+        ],
+      },
+      {
+        title: getFieldLabel('separationComponents'),
+        items: [
+          createFieldItem('extractionChamberHeight'),
+          createFieldItem('enrichedBaffleHoleDiameter'),
+          createFieldItem('feedBoxShockDiskHeight'),
+          createFieldItem('depletedExtractionArmRadius'),
+          createFieldItem('depletedExtractionPortInnerDiameter'),
+          createFieldItem('depletedBaffleInnerHoleOuterDiameter'),
+          createFieldItem('enrichedBaffleHoleDistributionCircleDiameter'),
+          createFieldItem('depletedExtractionPortOuterDiameter'),
+          createFieldItem('depletedBaffleOuterHoleInnerDiameter'),
+          createFieldItem('minAxialDistance'),
+          createFieldItem('depletedBaffleAxialPosition'),
+          createFieldItem('depletedBaffleOuterHoleOuterDiameter'),
+        ],
+      },
+    ]
+  }
+
+  // powerAnalysis 产品的参数组配置
+  if (productId === 'powerAnalysis') {
+    return [
+      {
+        title: getFieldLabel('topLevelParams'),
+        items: [
+          createFieldItem('angularVelocity'),
+          createFieldItem('rotorRadius'),
+        ],
+      },
+      {
+        title: getFieldLabel('fluidParams'),
+        items: [
+          createFieldItem('averageTemperature'),
+          createFieldItem('enrichedBaffleTemperature'),
+          createFieldItem('feedFlowRate'),
+          createFieldItem('rotorSidewallPressure'),
+        ],
+      },
+      {
+        title: getFieldLabel('separationComponents'),
+        items: [
+          createFieldItem('depletedExtractionPortInnerDiameter'),
+          createFieldItem('depletedExtractionPortOuterDiameter'),
+          createFieldItem('depletedExtractionRootOuterDiameter'),
+          createFieldItem('extractorAngleOfAttack'),
+          createFieldItem('extractionChamberHeight'),
+          createFieldItem('depletedExtractionCenterDistance'),
+          createFieldItem('enrichedExtractionCenterDistance'),
+          createFieldItem('constantSectionStraightPipeLength'),
+          createFieldItem('extractorCuttingAngle'),
+          createFieldItem('enrichedBaffleHoleDiameter'),
+          createFieldItem('variableSectionStraightPipeLength'),
+          createFieldItem('bendRadiusOfCurvature'),
+          createFieldItem('extractorSurfaceRoughness'),
+          createFieldItem('extractorTaperAngle'),
+          createFieldItem('enrichedBaffleHoleDistributionCircleDiameter'),
+        ],
+      },
+    ]
+  }
+
+  // 默认返回 mPhysSim 配置
+  return [
+    {
+      title: getFieldLabel('topLevelParams'),
+      items: [
+        createFieldItem('angularVelocity'),
+        createFieldItem('rotorRadius'),
+        createFieldItem('rotorShoulderLength'),
+      ],
+    },
+    {
+      title: getFieldLabel('operatingParams'),
+      items: [
+        createFieldItem('rotorSidewallPressure'),
+        createFieldItem('gasDiffusionCoefficient'),
+        createFieldItem('feedFlowRate'),
+        createFieldItem('feedingMethod'),
+        createFieldItem('splitRatio'),
+      ],
+    },
+    {
+      title: getFieldLabel('drivingParams'),
+      items: [
+        createFieldItem('depletedEndCapTemperature'),
+        createFieldItem('enrichedEndCapTemperature'),
+        createFieldItem('feedAxialDisturbance'),
+        createFieldItem('feedAngularDisturbance'),
+        createFieldItem('depletedMechanicalDriveAmount'),
+      ],
+    },
+    {
+      title: getFieldLabel('separationComponents'),
+      items: [
+        createFieldItem('extractionChamberHeight'),
+        createFieldItem('enrichedBaffleHoleDiameter'),
+        createFieldItem('feedBoxShockDiskHeight'),
+        createFieldItem('depletedExtractionArmRadius'),
+        createFieldItem('depletedExtractionPortInnerDiameter'),
+        createFieldItem('depletedBaffleInnerHoleOuterDiameter'),
+        createFieldItem('enrichedBaffleHoleDistributionCircleDiameter'),
+        createFieldItem('depletedExtractionPortOuterDiameter'),
+        createFieldItem('depletedBaffleOuterHoleInnerDiameter'),
+        createFieldItem('minAxialDistance'),
+        createFieldItem('depletedBaffleAxialPosition'),
+        createFieldItem('depletedBaffleOuterHoleOuterDiameter'),
+      ],
+    },
+  ]
+}
+
+// 将设计表单中的字段分组，并根据产品配置动态生成
+const fieldGroups = ref<FieldGroup[]>(createFieldGroups())
 
 /**
  * 更新选中状态
@@ -93,7 +206,6 @@ function updateCheckedState(data: WindowData | null): void {
   })
 }
 
-// 监听窗口数据变化，自动更新选中状态（包括懒加载窗口重新打开的场景）
 watch(windowData, (newData) => {
   updateCheckedState(newData)
 }, { immediate: true })

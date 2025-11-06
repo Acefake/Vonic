@@ -57,7 +57,8 @@ code {
 
 /* 底部操作栏 */
 .bottom-actions {
-  position: sticky;
+  width: calc(100% - 280px - 220px);
+  position: fixed;
   bottom: 0;
   z-index: 1000;
   background: #fff;

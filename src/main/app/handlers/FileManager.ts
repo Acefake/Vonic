@@ -207,9 +207,45 @@ export class FileManager {
   private async readMultiSchemes(_: Electron.IpcMainInvokeEvent): Promise<Array<{
     index: number
     fileName: string
+    // 第1行：网格数
+    radialGridCount: number
+    axialGridCount: number
+    // 第2行：主要参数
     angularVelocity: number
+    rotorRadius: number
+    rotorShoulderLength: number
+    extractionChamberHeight: number
+    rotorSidewallPressure: number
+    gasDiffusionCoefficient: number
+    // 第3-29行：其他参数
+    depletedEndCapTemperature: number
+    enrichedEndCapTemperature: number
+    depletedMechanicalDriveAmount: number
+    depletedExtractionArmRadius: number
+    innerBoundaryMirrorPosition: number
+    gridGenerationMethod: number
+    enrichedBaffleHoleDistributionCircleDiameter: number
+    enrichedBaffleHoleDiameter: number
+    depletedExtractionPortInnerDiameter: number
+    depletedExtractionPortOuterDiameter: number
+    minAxialDistance: number
+    feedBoxShockDiskHeight: number
     feedFlowRate: number
+    splitRatio: number
+    feedAngularDisturbance: number
     feedAxialDisturbance: number
+    depletedBaffleInnerHoleOuterDiameter: number
+    depletedBaffleOuterHoleInnerDiameter: number
+    depletedBaffleOuterHoleOuterDiameter: number
+    depletedBaffleAxialPosition: number
+    bwgRadialProtrusionHeight: number
+    bwgAxialHeight: number
+    bwgAxialPosition: number
+    radialGridRatio: number
+    feedingMethod: number
+    compensationCoefficient: number
+    streamlineData: number
+    // 结果
     sepPower: number | null
     sepFactor: number | null
   }>> {
@@ -268,55 +304,49 @@ export class FileManager {
         }
       }
 
-      // 兼容旧格式：如果 out 目录不存在或为空，尝试扫描直接目录下的 scheme_ 和 out_ 目录（向后兼容）
-      if (sepPowerFiles.length === 0) {
-        try {
-          const entries = await readdir(targetDir, { withFileTypes: true })
-
-          // 先检查直接目录中的文件
-          for (const entry of entries) {
-            if (entry.isFile()) {
-              const fileName = entry.name.toLowerCase()
-              if (fileName.includes('sep_power') && fileName.endsWith('.dat')) {
-                sepPowerFiles.push({
-                  filePath: join(targetDir, entry.name),
-                  dirName: '',
-                })
-              }
-            }
-            else if (entry.isDirectory() && (entry.name.startsWith('scheme_') || entry.name.startsWith('out_'))) {
-              // 扫描子目录（如 scheme_1, scheme_2 或 out_000001 等）
-              try {
-                const subDir = join(targetDir, entry.name)
-                const subFiles = await readdir(subDir)
-                for (const subFile of subFiles) {
-                  const fileName = subFile.toLowerCase()
-                  if (fileName.includes('sep_power') && fileName.endsWith('.dat')) {
-                    sepPowerFiles.push({
-                      filePath: join(subDir, subFile),
-                      dirName: entry.name,
-                    })
-                  }
-                }
-              }
-              catch (error) {
-                console.warn(`读取子目录失败 (${entry.name}):`, error)
-              }
-            }
-          }
-        }
-        catch (error) {
-          console.warn(`读取目标目录失败:`, error)
-        }
-      }
-
       // 解析每个文件
       const schemes: Array<{
         index: number
         fileName: string
+        // 第1行：网格数
+        radialGridCount: number
+        axialGridCount: number
+        // 第2行：主要参数
         angularVelocity: number
+        rotorRadius: number
+        rotorShoulderLength: number
+        extractionChamberHeight: number
+        rotorSidewallPressure: number
+        gasDiffusionCoefficient: number
+        // 第3-29行：其他参数
+        depletedEndCapTemperature: number
+        enrichedEndCapTemperature: number
+        depletedMechanicalDriveAmount: number
+        depletedExtractionArmRadius: number
+        innerBoundaryMirrorPosition: number
+        gridGenerationMethod: number
+        enrichedBaffleHoleDistributionCircleDiameter: number
+        enrichedBaffleHoleDiameter: number
+        depletedExtractionPortInnerDiameter: number
+        depletedExtractionPortOuterDiameter: number
+        minAxialDistance: number
+        feedBoxShockDiskHeight: number
         feedFlowRate: number
+        splitRatio: number
+        feedAngularDisturbance: number
         feedAxialDisturbance: number
+        depletedBaffleInnerHoleOuterDiameter: number
+        depletedBaffleOuterHoleInnerDiameter: number
+        depletedBaffleOuterHoleOuterDiameter: number
+        depletedBaffleAxialPosition: number
+        bwgRadialProtrusionHeight: number
+        bwgAxialHeight: number
+        bwgAxialPosition: number
+        radialGridRatio: number
+        feedingMethod: number
+        compensationCoefficient: number
+        streamlineData: number
+        // 结果
         sepPower: number | null
         sepFactor: number | null
       }> = []
@@ -330,63 +360,132 @@ export class FileManager {
           const sepPowerContent = await fsReadFile(filePath, 'utf-8')
           const sepPowerData = parseSepPower(sepPowerContent)
 
-          // 尝试读取对应的 input.dat 文件（如果存在）
-          // 优先读取与 Sep_power.dat 同目录的 input.dat
-          let inputDatPath: string | null = null
           const sepPowerDir = dirname(filePath)
-          const inputDatFilePath = join(sepPowerDir, 'input.dat')
+          const inputDatPath = join(sepPowerDir, 'input.dat')
 
-          if (await this.fileExists(null as any, inputDatFilePath)) {
-            inputDatPath = inputDatFilePath
+          // 从 input.dat 读取所有参数，默认值为 0
+          const inputParams: Record<string, number> = {
+            radialGridCount: 0,
+            axialGridCount: 0,
+            angularVelocity: 0,
+            rotorRadius: 0,
+            rotorShoulderLength: 0,
+            extractionChamberHeight: 0,
+            rotorSidewallPressure: 0,
+            gasDiffusionCoefficient: 0,
+            depletedEndCapTemperature: 0,
+            enrichedEndCapTemperature: 0,
+            depletedMechanicalDriveAmount: 0,
+            depletedExtractionArmRadius: 0,
+            innerBoundaryMirrorPosition: 0,
+            gridGenerationMethod: 0,
+            enrichedBaffleHoleDistributionCircleDiameter: 0,
+            enrichedBaffleHoleDiameter: 0,
+            depletedExtractionPortInnerDiameter: 0,
+            depletedExtractionPortOuterDiameter: 0,
+            minAxialDistance: 0,
+            feedBoxShockDiskHeight: 0,
+            feedFlowRate: 0,
+            splitRatio: 0,
+            feedAngularDisturbance: 0,
+            feedAxialDisturbance: 0,
+            depletedBaffleInnerHoleOuterDiameter: 0,
+            depletedBaffleOuterHoleInnerDiameter: 0,
+            depletedBaffleOuterHoleOuterDiameter: 0,
+            depletedBaffleAxialPosition: 0,
+            bwgRadialProtrusionHeight: 0,
+            bwgAxialHeight: 0,
+            bwgAxialPosition: 0,
+            radialGridRatio: 0,
+            feedingMethod: 0,
+            compensationCoefficient: 0,
+            streamlineData: 0,
           }
-          else {
-            // 如果子目录中没有，尝试直接目录下的 input.dat
-            const directInputPath = join(targetDir, 'input.dat')
-            if (await this.fileExists(null as any, directInputPath)) {
-              inputDatPath = directInputPath
-            }
-          }
 
-          // 解析 input.dat 获取参数
-          let angularVelocity = 0
-          let feedFlowRate = 0
-          let feedAxialDisturbance = 0
-
-          if (inputDatPath) {
-            try {
+          try {
+            if (fs.existsSync(inputDatPath)) {
               const inputContent = await fsReadFile(inputDatPath, 'utf-8')
-              // 参考 InitialDesign 中的 parseDatContent 逻辑
-              const lines = inputContent.trim().split('\n').map(l => l.trim()).filter(Boolean)
+              const inputLines = inputContent
+                .trim()
+                .split('\n')
+                .map(l => l.trim())
+                .filter(Boolean)
 
-              // 第二行（索引1）：角速度HZ,半径mm,两肩长mm,取料腔高度mm,侧壁压力Pa,扩散系数
-              if (lines.length > 1) {
-                const params = lines[1].replace(/!.*/, '').split(',').map(Number)
-                if (params.length > 0 && !Number.isNaN(params[0])) {
-                  angularVelocity = params[0]
+              // 第 1 行（索引 0）：径向与轴向网格数
+              if (inputLines[0]) {
+                const line1Values = inputLines[0]
+                  .replace(/!.*/, '')
+                  .split(',')
+                  .map(v => Number.parseFloat(v.trim()))
+                  .filter(v => !Number.isNaN(v))
+                if (line1Values.length >= 2) {
+                  inputParams.radialGridCount = line1Values[0]
+                  inputParams.axialGridCount = line1Values[1]
                 }
               }
 
-              // 第15行（索引14）：供料流量kg/s
-              if (lines.length > 14) {
-                const raw = lines[14].replace(/!.*/, '').trim()
-                const val = Number(raw)
-                if (!Number.isNaN(val)) {
-                  feedFlowRate = val
+              // 第 2 行（索引 1）：角速度、半径、两肩长、取料腔高度、侧壁压力、扩散系数
+              if (inputLines[1]) {
+                const line2Values = inputLines[1]
+                  .replace(/!.*/, '')
+                  .split(',')
+                  .map(v => Number.parseFloat(v.trim()))
+                  .filter(v => !Number.isNaN(v))
+                if (line2Values.length >= 6) {
+                  inputParams.angularVelocity = line2Values[0]
+                  inputParams.rotorRadius = line2Values[1]
+                  inputParams.rotorShoulderLength = line2Values[2]
+                  inputParams.extractionChamberHeight = line2Values[3]
+                  inputParams.rotorSidewallPressure = line2Values[4]
+                  inputParams.gasDiffusionCoefficient = line2Values[5]
                 }
               }
 
-              // 第18行（索引17）：供料轴向扰动
-              if (lines.length > 17) {
-                const raw = lines[17].replace(/!.*/, '').trim()
-                const val = Number(raw)
-                if (!Number.isNaN(val)) {
-                  feedAxialDisturbance = val
+              // 第 3-29 行（索引 2-28）：其他参数
+              const paramKeys = [
+                'depletedEndCapTemperature',
+                'enrichedEndCapTemperature',
+                'depletedMechanicalDriveAmount',
+                'depletedExtractionArmRadius',
+                'innerBoundaryMirrorPosition',
+                'gridGenerationMethod',
+                'enrichedBaffleHoleDistributionCircleDiameter',
+                'enrichedBaffleHoleDiameter',
+                'depletedExtractionPortInnerDiameter',
+                'depletedExtractionPortOuterDiameter',
+                'minAxialDistance',
+                'feedBoxShockDiskHeight',
+                'feedFlowRate',
+                'splitRatio',
+                'feedAngularDisturbance',
+                'feedAxialDisturbance',
+                'depletedBaffleInnerHoleOuterDiameter',
+                'depletedBaffleOuterHoleInnerDiameter',
+                'depletedBaffleOuterHoleOuterDiameter',
+                'depletedBaffleAxialPosition',
+                'bwgRadialProtrusionHeight',
+                'bwgAxialHeight',
+                'bwgAxialPosition',
+                'radialGridRatio',
+                'feedingMethod',
+                'compensationCoefficient',
+                'streamlineData',
+              ]
+
+              for (let i = 0; i < paramKeys.length; i++) {
+                const lineIndex = i + 2 // 从第3行开始（索引2）
+                if (inputLines[lineIndex]) {
+                  const raw = inputLines[lineIndex].replace(/!.*/, '').trim()
+                  const val = Number.parseFloat(raw)
+                  if (!Number.isNaN(val)) {
+                    inputParams[paramKeys[i]] = val
+                  }
                 }
               }
             }
-            catch (error) {
-              console.warn(`读取 input.dat 失败 (${inputDatPath}):`, error)
-            }
+          }
+          catch (error) {
+            console.warn(`读取 input.dat 失败 (${inputDatPath}):`, error)
           }
 
           // 从目录名提取序号（如 scheme_1 -> 1 或 out_000001 -> 1）
@@ -409,9 +508,41 @@ export class FileManager {
           schemes.push({
             index: schemeIndex,
             fileName: dirName || fileName,
-            angularVelocity,
-            feedFlowRate,
-            feedAxialDisturbance,
+            radialGridCount: inputParams.radialGridCount,
+            axialGridCount: inputParams.axialGridCount,
+            angularVelocity: inputParams.angularVelocity,
+            rotorRadius: inputParams.rotorRadius,
+            rotorShoulderLength: inputParams.rotorShoulderLength,
+            extractionChamberHeight: inputParams.extractionChamberHeight,
+            rotorSidewallPressure: inputParams.rotorSidewallPressure,
+            gasDiffusionCoefficient: inputParams.gasDiffusionCoefficient,
+            depletedEndCapTemperature: inputParams.depletedEndCapTemperature,
+            enrichedEndCapTemperature: inputParams.enrichedEndCapTemperature,
+            depletedMechanicalDriveAmount: inputParams.depletedMechanicalDriveAmount,
+            depletedExtractionArmRadius: inputParams.depletedExtractionArmRadius,
+            innerBoundaryMirrorPosition: inputParams.innerBoundaryMirrorPosition,
+            gridGenerationMethod: inputParams.gridGenerationMethod,
+            enrichedBaffleHoleDistributionCircleDiameter: inputParams.enrichedBaffleHoleDistributionCircleDiameter,
+            enrichedBaffleHoleDiameter: inputParams.enrichedBaffleHoleDiameter,
+            depletedExtractionPortInnerDiameter: inputParams.depletedExtractionPortInnerDiameter,
+            depletedExtractionPortOuterDiameter: inputParams.depletedExtractionPortOuterDiameter,
+            minAxialDistance: inputParams.minAxialDistance,
+            feedBoxShockDiskHeight: inputParams.feedBoxShockDiskHeight,
+            feedFlowRate: inputParams.feedFlowRate,
+            splitRatio: inputParams.splitRatio,
+            feedAngularDisturbance: inputParams.feedAngularDisturbance,
+            feedAxialDisturbance: inputParams.feedAxialDisturbance,
+            depletedBaffleInnerHoleOuterDiameter: inputParams.depletedBaffleInnerHoleOuterDiameter,
+            depletedBaffleOuterHoleInnerDiameter: inputParams.depletedBaffleOuterHoleInnerDiameter,
+            depletedBaffleOuterHoleOuterDiameter: inputParams.depletedBaffleOuterHoleOuterDiameter,
+            depletedBaffleAxialPosition: inputParams.depletedBaffleAxialPosition,
+            bwgRadialProtrusionHeight: inputParams.bwgRadialProtrusionHeight,
+            bwgAxialHeight: inputParams.bwgAxialHeight,
+            bwgAxialPosition: inputParams.bwgAxialPosition,
+            radialGridRatio: inputParams.radialGridRatio,
+            feedingMethod: inputParams.feedingMethod,
+            compensationCoefficient: inputParams.compensationCoefficient,
+            streamlineData: inputParams.streamlineData,
             sepPower: sepPowerData.actualSepPower,
             sepFactor: sepPowerData.actualSepFactor,
           })
