@@ -75,4 +75,3 @@ export interface ProcessedChartData {
   xAxisName?: string // X轴名称
   yAxisName?: string // Y轴名称
 }
-

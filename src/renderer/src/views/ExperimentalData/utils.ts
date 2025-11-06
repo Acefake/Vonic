@@ -7,9 +7,10 @@ import type { StatisticalMethod, TableColumn, TableDataRow } from './types'
 import * as XLSX from 'xlsx'
 
 /**
- * 计算均方差
+ * 计算均方差（标准差）
+ * 均方差 = 标准差 = √[Σ(xi - μ)² / n]
  * @param values - 数值数组
- * @returns 均方差
+ * @returns 均方差（标准差）
  */
 function calculateMeanSquareDeviation(values: number[]): number {
   if (values.length === 0)
@@ -18,14 +19,17 @@ function calculateMeanSquareDeviation(values: number[]): number {
   // 1. 计算平均值
   const mean = values.reduce((sum, val) => sum + val, 0) / values.length
 
-  // 2. 计算每个值与平均值的差
-  // 3. 对每个差进行平方
-  // 4. 求所有差的平方的平均值
+  // 2. 计算每个值与平均值的差的平方
   const squaredDifferences = values.map(val => (val - mean) ** 2)
-  const meanSquareDev = squaredDifferences.reduce((sum, val) => sum + val, 0) / values.length
+
+  // 3. 计算方差（差的平方的平均值）
+  const variance = squaredDifferences.reduce((sum, val) => sum + val, 0) / values.length
+
+  // 4. 计算标准差（均方差）= 方差的平方根
+  const standardDeviation = Math.sqrt(variance)
 
   // 保留两位小数
-  return Math.round(meanSquareDev * 100) / 100
+  return Math.round(standardDeviation * 100) / 100
 }
 
 /**
@@ -151,7 +155,7 @@ export function parseExcelFile(arrayBuffer: ArrayBuffer): Promise<{ columns: Tab
       })
 
       if (jsonData.length === 0) {
-          resolve({ columns: [], data: [] })
+        resolve({ columns: [], data: [] })
         return
       }
 
@@ -177,13 +181,13 @@ export function parseExcelFile(arrayBuffer: ArrayBuffer): Promise<{ columns: Tab
 
         // 添加序号列（如果需要）
         if (!hasIndexColumn) {
-            obj.序号 = i + 1
-          }
+          obj.序号 = i + 1
+        }
 
         // 复制所有有效列的数据
         validCols.forEach((colName) => {
           const value = row[colName]
-            if (value !== undefined && value !== null) {
+          if (value !== undefined && value !== null) {
             // 确保类型正确：字符串或数字
             if (typeof value === 'number') {
               obj[colName] = value

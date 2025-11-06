@@ -187,11 +187,11 @@ export function createSyncPlugin() {
 
             // 只接受更新的数据（时间戳更大）
             if (newTimestamp <= currentTimestamp) {
-              console.log(`[Store Sync] experimentalData 拒绝旧数据 - 当前时间戳: ${currentTimestamp}, 新时间戳: ${newTimestamp}`)
+              // console.log(`[Store Sync] experimentalData 拒绝旧数据 - 当前时间戳: ${currentTimestamp}, 新时间戳: ${newTimestamp}`)
               return
             }
 
-            console.log(`[Store Sync] experimentalData 接受新数据 - 时间戳: ${newTimestamp}`)
+            // console.log(`[Store Sync] experimentalData 接受新数据 - 时间戳: ${newTimestamp}`)
           }
 
           let stateChanged = false

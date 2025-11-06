@@ -1,8 +1,5 @@
-import type { DesignScheme, FeedingMethod } from '../../shared/design-scheme'
 import { Buffer } from 'node:buffer'
 import { createReadStream } from 'node:fs'
-import iconv from 'iconv-lite'
-import JSON5 from 'json5'
 import * as fs from 'node:fs'
 import { access, readFile as fsReadFile, readdir, rm, unlink, writeFile } from 'node:fs/promises'
 import { dirname, extname, join } from 'node:path'
@@ -79,7 +76,7 @@ export class FileManager {
    * @param _ IPC 事件对象
    * @param filePath 文件路径
    * @param content 文件内容
-   * @param encoding 编码格式
+   *c@param encoding 编码格式
    */
   private async writeFile(_: Electron.IpcMainInvokeEvent, filePath: string, content: string, encoding: BufferEncoding = 'utf-8'): Promise<void> {
     try {
@@ -398,13 +395,13 @@ export class FileManager {
             if (dirName.startsWith('scheme_')) {
               const match = dirName.match(/scheme_(\d+)/)
               if (match) {
-                schemeIndex = parseInt(match[1], 10) - 1 // 转换为0-based索引
+                schemeIndex = Number.parseInt(match[1], 10) - 1 // 转换为0-based索引
               }
             }
             else if (dirName.startsWith('out_')) {
               const match = dirName.match(/^out_(\d+)$/)
               if (match) {
-                schemeIndex = parseInt(match[1], 10) - 1 // 转换为0-based索引
+                schemeIndex = Number.parseInt(match[1], 10) - 1 // 转换为0-based索引
               }
             }
           }
@@ -510,7 +507,7 @@ export class FileManager {
         if (entry.isDirectory() && entry.name.startsWith('out_')) {
           const match = entry.name.match(/^out_(\d+)$/)
           if (match) {
-            const num = parseInt(match[1], 10)
+            const num = Number.parseInt(match[1], 10)
             if (!Number.isNaN(num)) {
               existingNumbers.push(num)
             }

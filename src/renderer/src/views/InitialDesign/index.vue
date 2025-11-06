@@ -335,7 +335,7 @@ async function simulateCalculation(): Promise<void> {
     completeProgress(false)
     stopProgress()
     isLoading.value = false
-    return // 调用失败时立即停止，不继续执行
+    // 调用失败时立即停止，不继续执行
   }
 }
 
