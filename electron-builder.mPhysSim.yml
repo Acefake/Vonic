@@ -48,7 +48,7 @@ extraResources:
 win:
   executableName: mPhysSim
   target:
-    - zip
+    - dir
 
 appImage:
   artifactName: ${name}-mPhysSim.${ext}

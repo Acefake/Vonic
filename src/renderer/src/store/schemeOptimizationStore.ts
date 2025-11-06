@@ -9,6 +9,9 @@ export const useSchemeOptimizationStore = defineStore('schemeOptimization', () =
   /** 样本空间数据 */
   const sampleSpaceData = ref<SampleData[]>([])
 
+  /** res返回样本数量 */
+  const samplePointCountforRes = ref(0)
+
   /** 当前优化算法 */
   const optimizationAlgorithm = ref<'NSGA-II' | 'MOPSO'>('NSGA-II')
 
@@ -72,6 +75,7 @@ export const useSchemeOptimizationStore = defineStore('schemeOptimization', () =
     getDesignFactor,
     getSampleSpaceData,
     factorCount,
+    samplePointCountforRes,
     setAlgorithm,
     setDesignFactors,
     updateDesignFactorById,

@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer'
 import { createReadStream } from 'node:fs'
 import * as fs from 'node:fs'
-import { access, readFile as fsReadFile, readdir, rm, unlink, writeFile } from 'node:fs/promises'
+import { access, copyFile, readFile as fsReadFile, readdir, rm, unlink, writeFile } from 'node:fs/promises'
 import { dirname, extname, join } from 'node:path'
 import { app, ipcMain } from 'electron'
 import { parseSepPower } from '@/main/utils/parseSepPower'
@@ -27,6 +27,8 @@ export class FileManager {
     ipcMain.handle('file:get-work-dir', this.getWorkDir.bind(this))
     ipcMain.handle('file:create-output-dir', this.createOutputDir.bind(this))
     ipcMain.handle('file:delete-dir', this.deleteDir.bind(this))
+    ipcMain.handle('file:copy-file', this.copyFile.bind(this))
+    ipcMain.handle('file:find-exe', this.findExe.bind(this))
   }
 
   /**
@@ -693,6 +695,74 @@ export class FileManager {
     catch (error) {
       console.error('删除目录失败:', error)
       throw new Error(`删除目录失败: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  /**
+   * 复制文件
+   * @param _ IPC 事件对象
+   * @param sourcePath 源文件路径
+   * @param targetPath 目标文件路径
+   */
+  private async copyFile(_: Electron.IpcMainInvokeEvent, sourcePath: string, targetPath: string): Promise<void> {
+    try {
+      // 检查源文件是否存在
+      if (!fs.existsSync(sourcePath)) {
+        throw new Error(`源文件不存在: ${sourcePath}`)
+      }
+
+      // 确保目标目录存在
+      const targetDir = dirname(targetPath)
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true })
+      }
+
+      // 复制文件
+      await copyFile(sourcePath, targetPath)
+    }
+    catch (error) {
+      console.error('复制文件失败:', error)
+      throw new Error(`复制文件失败: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  /**
+   * 查找 exe 文件路径
+   * @param _ IPC 事件对象
+   * @param exeName exe 文件名
+   * @returns exe 文件路径，如果不存在则返回 null
+   */
+  private findExe(_: Electron.IpcMainInvokeEvent, exeName: string): string | null {
+    try {
+      const isDev = fs.existsSync(join(process.cwd(), 'testFile'))
+      
+      if (isDev) {
+        // 开发环境：在 testFile 目录查找
+        const testFileDir = join(process.cwd(), 'testFile')
+        const exePath = join(testFileDir, exeName)
+        if (fs.existsSync(exePath)) {
+          return exePath
+        }
+      }
+      else {
+        // 生产环境：在多个可能的位置查找
+        const exeDir = dirname(app.getPath('exe'))
+        const candidatePaths = [
+          join(exeDir, exeName),
+          join(exeDir, 'resources', exeName),
+          join(exeDir, 'resources', 'unpacked', exeName),
+        ]
+        const foundPath = candidatePaths.find(p => fs.existsSync(p))
+        if (foundPath) {
+          return foundPath
+        }
+      }
+      
+      return null
+    }
+    catch (error) {
+      console.error('查找 exe 文件失败:', error)
+      return null
     }
   }
 }

@@ -196,4 +196,22 @@ export const fileAPI: FileAPI = {
   async deleteDir(dirPath: string): Promise<void> {
     await window.electron.ipcRenderer.invoke('file:delete-dir', dirPath)
   },
+
+  /**
+   * 复制文件
+   * @param sourcePath 源文件路径
+   * @param targetPath 目标文件路径
+   */
+  async copyFile(sourcePath: string, targetPath: string): Promise<void> {
+    await window.electron.ipcRenderer.invoke('file:copy-file', sourcePath, targetPath)
+  },
+
+  /**
+   * 查找 exe 文件路径
+   * @param exeName exe 文件名
+   * @returns exe 文件路径，如果不存在则返回 null
+   */
+  async findExe(exeName: string): Promise<string | null> {
+    return window.electron.ipcRenderer.invoke('file:find-exe', exeName)
+  },
 }

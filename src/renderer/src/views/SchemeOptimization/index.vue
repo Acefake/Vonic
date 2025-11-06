@@ -2,12 +2,13 @@
 import type { DesignFactor, SampleData, SampleSpaceData } from './type'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { storeToRefs } from 'pinia'
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { getProductConfig } from '../../../../config/product.config'
 import app from '../../app/index'
 import { useLogStore, useSchemeOptimizationStore } from '../../store'
 import { useDesignStore } from '../../store/designStore'
 import { FIELD_LABELS } from '../../utils/field-labels'
+import { parseSepPower } from '../../utils/parseSepPower'
 
 import { ALGORITHM_OPTIONS, RESPONSE_VALUES, SAMPLING_CRITERION_OPTIONS } from './constants'
 import { AlgorithmType, ParameterType } from './type'
@@ -15,11 +16,10 @@ import { AlgorithmType, ParameterType } from './type'
 const logStore = useLogStore()
 const designStore = useDesignStore()
 const schemeOptimizationStore = useSchemeOptimizationStore()
-const { designFactors, sampleSpaceData, optimizationAlgorithm, samplePointCount, samplingCriterion, factorCount } = storeToRefs(schemeOptimizationStore)
+const { designFactors, sampleSpaceData, optimizationAlgorithm, samplePointCount, samplingCriterion, factorCount, samplePointCountforRes } = storeToRefs(schemeOptimizationStore)
 
 // 采样进行中状态
 const isSampling = ref(false)
-
 // 选中的设计因子行
 const selectedDesignFactorIds = ref<number[]>([])
 
@@ -203,42 +203,7 @@ function convertSampleDataToKeys(sample: SampleData): Record<string, any> {
   return result
 }
 
-/**
- * 解析Sep_power.dat内容（在渲染进程中实现）
- */
-function parseSepPower(content: string): { actualSepPower: number | null, actualSepFactor: number | null } {
-  const lineArr = content
-    .replace(/\r\n/g, '\n')
-    .split('\n')
-    .map(line => line.trim())
-    .filter(line => line !== '')
-
-  // 兼容 "KEY =   123" 的格式（= 后允许空格），并兼容大小写
-  const regex = /^([^=]+)=\s*([+-]?\d+(?:\.\d+)?)$/
-  const result: Record<string, number> = {}
-
-  lineArr.forEach((line) => {
-    const match = line.match(regex)
-    if (match) {
-      const rawKey = match[1].trim()
-      const key = rawKey.toUpperCase()
-      const value = Number(match[2])
-      if (!Number.isNaN(value)) {
-        result[key] = value
-      }
-    }
-  })
-
-  return {
-    // 兼容 ACTURAL/ACTUAL 拼写，以及大小写
-    actualSepPower: result['ACTURAL SEPERATIVE POWER']
-      ?? result['ACTUAL SEPERATIVE POWER']
-      ?? null,
-    actualSepFactor: result['ACTURAL SEPERATIVE FACTOR']
-      ?? result['ACTUAL SEPERATIVE FACTOR']
-      ?? null,
-  }
-}
+// parseSepPower 函数已移至工具函数 utils/parseSepPower.ts
 
 /**
  * 获取工作目录（testFile或exe同级目录）
@@ -250,9 +215,6 @@ async function getWorkBaseDir(): Promise<string> {
 
 /** 仿真优化计算 */
 const isOptimizing = ref(false)
-
-/** 样本数量 */
-const samplePointCountforRes = ref(0)
 
 async function performOptimization(): Promise<void> {
   if (designFactors.value.length === 0) {
@@ -270,142 +232,496 @@ async function performOptimization(): Promise<void> {
   const hideLoading = app.message.loading('正在进行仿真优化计算...', 0)
 
   try {
-    logStore.info('开始仿真优化计算')
+    logStore.info('开始仿真优化计算（多进程模式）')
     logStore.info(`算法=${optimizationAlgorithm.value}, 样本点数=${samplePointCountforRes.value}, 样本空间数据=${sampleSpaceData.value.length}`)
 
     const baseDir = await getWorkBaseDir()
     const exeName = 'ns-linear.exe'
+
+    // 第一步：查找 exe 文件路径
+    const exeSourcePath = await app.file.findExe(exeName)
+    if (!exeSourcePath) {
+      hideLoading()
+      app.message.error(`找不到 ${exeName} 文件`)
+      logStore.error(`找不到 ${exeName} 文件`)
+      return
+    }
+
+    logStore.info(`开启启动exe进程...`)
+
+    // 存储每个样本的信息
+    interface SampleInfo {
+      index: number
+      sampleId: number
+      sample: SampleData
+      workDir: string
+      dirName: string
+      eventResolve: (() => void) | null
+      isResolved: boolean
+      timeoutId: NodeJS.Timeout | null
+    }
+
+    const sampleInfos: SampleInfo[] = []
     const results: Array<{
       index: number
       sampleData: SampleData
       sepPower: number | null
       sepFactor: number | null
-      dirName: string // 保存目录名
+      dirName: string
     }> = []
 
-    let hasExeFailure = false // 标记是否有exe调用失败
-
-    // 循环处理每个样本（使用算法参数设置的样本点数）
+    // 第一步：创建所有文件夹
     for (let i = 0; i < samplePointCountforRes.value; i++) {
-      // 从样本空间数据中获取样本（如果索引超出范围，使用取模循环使用）
       const sampleIndex = i % sampleSpaceData.value.length
       const sample = sampleSpaceData.value[sampleIndex]
-      const sampleId = i + 1 // 使用循环序号作为样本ID
-      logStore.info(`处理样本 ${i + 1}/${samplePointCountforRes.value}: 样本数据索引=${sampleIndex}, 数据ID=${sample.id}`)
+      const sampleId = i + 1
 
-      // 为每个样本创建唯一的工作目录（out/out_XXXXXX 格式，自动避免重复）
       const workDir = await app.file.createOutputDir(baseDir)
-      const dirName = workDir.split(/[/\\]/).pop() || '' // 提取目录名（如 out_000001）
-      logStore.info(`样本 ${sampleId} 创建输出目录: ${workDir}`)
+      const dirName = workDir.split(/[/\\]/).pop() || ''
 
-      // 组合数据：样本空间数据 + 未添加至设计因子的参数
-      const sampleParams = convertSampleDataToKeys(sample)
+      sampleInfos.push({
+        index: i,
+        sampleId,
+        sample,
+        workDir,
+        dirName,
+        eventResolve: null,
+        isResolved: false,
+        timeoutId: null,
+      })
+
+      // logStore.info(`样本 ${sampleId}/${samplePointCountforRes.value} 创建目录: ${dirName}`)
+    }
+
+    // 第二步：写入所有 input.dat
+    for (const info of sampleInfos) {
+      const sampleParams = convertSampleDataToKeys(info.sample)
       const nonFactorParams = getNonFactorParams()
       const combinedParams = {
         ...nonFactorParams,
         ...sampleParams,
       }
 
-      // 写入 input.dat（在子文件夹内）
-      const writeResult = await app.file.writeDatFile('input.dat', combinedParams, workDir)
+      const writeResult = await app.file.writeDatFile('input.dat', combinedParams, info.workDir)
       if (writeResult.code !== 200) {
-        logStore.error(`样本 ${sampleId} 写入input.dat失败: ${writeResult.message}`)
+        logStore.error(`样本 ${info.sampleId} 写入input.dat失败: ${writeResult.message}`)
         results.push({
-          index: sampleId,
-          sampleData: sample,
+          index: info.sampleId,
+          sampleData: info.sample,
           sepPower: null,
           sepFactor: null,
-          dirName,
+          dirName: info.dirName,
         })
-        continue
+      }
+      else {
+        // logStore.info(`样本 ${info.sampleId} input.dat写入成功`)
+      }
+    }
+
+    // 第三步：复制所有 exe 文件
+    for (const info of sampleInfos) {
+      try {
+        // 使用路径分隔符构建目标路径
+        const targetExePath = info.workDir.includes('\\')
+          ? `${info.workDir}\\${exeName}`
+          : `${info.workDir}/${exeName}`
+        await app.file.copyFile(exeSourcePath, targetExePath)
+        // logStore.info(`样本 ${info.sampleId} exe 复制成功: ${targetExePath}`)
+      }
+      catch (error) {
+        logStore.error(`样本 ${info.sampleId} exe 复制失败: ${error instanceof Error ? error.message : String(error)}`)
+        results.push({
+          index: info.sampleId,
+          sampleData: info.sample,
+          sepPower: null,
+          sepFactor: null,
+          dirName: info.dirName,
+        })
+      }
+    }
+
+    // 第四步：注册全局事件监听器（使用工作目录区分不同进程）
+    const pendingInfos = new Map<string, SampleInfo>()
+    sampleInfos.forEach((info) => {
+      // 只处理成功写入 input.dat 且成功复制 exe 的样本
+      const hasResult = results.some(r => r.index === info.sampleId)
+      if (!hasResult) {
+        pendingInfos.set(info.workDir, info)
+      }
+    })
+
+    if (pendingInfos.size === 0) {
+      logStore.warning('没有可执行的样本')
+      hideLoading()
+      app.message.warning('没有可执行的样本')
+      return
+    }
+
+    // 注册全局事件监听器
+    const globalHandler = async (_: any, receivedExeName: string, result: any) => {
+      console.info(`[事件监听器] 收到 exe-closed 事件: exeName=${receivedExeName}, workingDir=${result?.workingDir}, exitCode=${result?.exitCode}, isSuccess=${result?.isSuccess}`)
+
+      // 验证 exe 名称
+      if (receivedExeName !== exeName) {
+        logStore.warning(`收到不匹配的exe-closed事件: ${receivedExeName}，期望: ${exeName}`)
+        return
       }
 
-      logStore.info(`样本 ${sampleId} input.dat写入成功`)
+      // 通过工作目录匹配对应的样本
+      const workingDir = result.workingDir
+      if (!workingDir) {
+        logStore.warning('收到exe-closed事件，但工作目录为空')
+        return
+      }
 
-      // 调用 exe
-      const exeResult = await app.callExe(exeName, workDir)
-      if (exeResult.status !== 'started') {
-        logStore.error(`样本 ${sampleId} 调用exe失败: ${exeResult.reason}`)
-        // 调用失败时，删除该样本的目录
+      if (!pendingInfos.has(workingDir)) {
+        logStore.warning(`收到exe-closed事件，但工作目录不在待处理列表中: ${workingDir}`)
+        logStore.info(`当前待处理样本数: ${pendingInfos.size}`)
+        return
+      }
+
+      const info = pendingInfos.get(workingDir)!
+
+      // 防止重复处理
+      if (info.isResolved) {
+        logStore.warning(`样本 ${info.sampleId} 收到重复的exe-closed事件，已忽略`)
+        return
+      }
+
+      info.isResolved = true
+      pendingInfos.delete(workingDir)
+
+      // 清理超时定时器
+      if (info.timeoutId) {
+        clearTimeout(info.timeoutId)
+        info.timeoutId = null
+      }
+
+      // logStore.info(`样本 ${info.sampleId} 收到exe-closed事件，退出码=${result.exitCode}, isSuccess=${result.isSuccess}`)
+
+      if (result.isSuccess === false || result.exitCode !== 0) {
+        logStore.error(`样本 ${info.sampleId} exe执行失败: 退出码=${result.exitCode}, 工作目录=${info.workDir}, signal=${result.signal || 'none'}`)
+        results.push({
+          index: info.sampleId,
+          sampleData: info.sample,
+          sepPower: null,
+          sepFactor: null,
+          dirName: info.dirName,
+        })
+      }
+      else {
         try {
-          await app.file.deleteDir(workDir)
-          logStore.info(`样本 ${sampleId} 失败目录已删除: ${workDir}`)
+          // 读取 Sep_power.dat
+          const content = await app.file.readDatFile('Sep_power.dat', info.workDir)
+          const parsedData = parseSepPower(content)
+
+          results.push({
+            index: info.sampleId,
+            sampleData: info.sample,
+            sepPower: parsedData.actualSepPower,
+            sepFactor: parsedData.actualSepFactor,
+            dirName: info.dirName,
+          })
+
+          logStore.info(`样本 ${info.sampleId} 完成: 分离功率=${parsedData.actualSepPower}, 分离系数=${parsedData.actualSepFactor}`)
         }
         catch (error) {
-          logStore.error(`样本 ${sampleId} 删除失败目录时出错: ${error instanceof Error ? error.message : String(error)}`)
+          logStore.error(`样本 ${info.sampleId} 读取结果失败: ${error instanceof Error ? error.message : String(error)}`)
+          results.push({
+            index: info.sampleId,
+            sampleData: info.sample,
+            sepPower: null,
+            sepFactor: null,
+            dirName: info.dirName,
+          })
         }
-        results.push({
-          index: sampleId,
-          sampleData: sample,
-          sepPower: null,
-          sepFactor: null,
-          dirName,
-        })
-        // 调用失败时，停止整个优化流程，不继续处理后续样本
-        const remainingCount = samplePointCountforRes.value - i
-        logStore.error(`优化流程因exe调用失败而终止：已处理 ${i}/${samplePointCountforRes.value} 个样本，剩余 ${remainingCount} 个样本未处理`)
-        hasExeFailure = true
-        break
       }
 
-      logStore.info(`样本 ${sampleId} exe启动成功，等待完成...`)
+      // 调用 resolve
+      if (info.eventResolve) {
+        // logStore.info(`样本 ${info.sampleId} 调用 eventResolve，通知批处理完成`)
+        info.eventResolve()
+        info.eventResolve = null
+      }
+      else {
+        logStore.warning(`样本 ${info.sampleId} 收到exe-closed事件，但 eventResolve 为 null`)
+      }
+    }
 
-      // 等待exe完成（通过事件监听）
-      await new Promise<void>((resolve) => {
-        const handler = async (_: any, _exeName: string, result: any) => {
-          if (result.isSuccess === false) {
-            logStore.error(`样本 ${sampleId} exe执行失败: 退出码=${result.exitCode}`)
+    // 注册事件监听器
+    console.info('注册 exe-closed 事件监听器，开始监听进程完成事件')
+    console.info(`检查 ipcRenderer 可用性: ${window.electron?.ipcRenderer ? '可用' : '不可用'}`)
+
+    // 移除所有旧的监听器
+    window.electron.ipcRenderer.removeAllListeners('exe-closed')
+    console.info('已移除所有旧的 exe-closed 监听器')
+
+    // 注册新的监听器
+    window.electron.ipcRenderer.on('exe-closed', globalHandler)
+    console.info('exe-closed 事件监听器已注册')
+
+    // 测试监听器是否工作：尝试发送一个测试消息（仅用于调试，实际不会收到）
+    // 注意：这里不实际发送，只是验证监听器函数本身是否正确
+    console.info(`globalHandler 函数类型: ${typeof globalHandler}`)
+
+    // 启动超时的包装函数，带重试机制
+    const callExeWithTimeout = async (exeName: string, workingDir: string, sampleId: number, maxRetries = 2): Promise<{ status: string, pid?: number, reason?: string }> => {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          // 创建超时 Promise
+          const timeoutPromise = new Promise<{ status: string, reason: string }>((resolve) => {
+            setTimeout(() => {
+              resolve({
+                status: 'timeout',
+                reason: '启动超时（30秒）',
+              })
+            }, 30000) // 30秒启动超时
+          })
+
+          // 启动 exe 的 Promise
+          const exePromise = app.callExe(exeName, workingDir)
+
+          // 使用 Promise.race 实现超时
+          const result = await Promise.race([exePromise, timeoutPromise])
+
+          if (result.status === 'timeout') {
+            if (attempt < maxRetries) {
+              logStore.warning(`样本 ${sampleId} 启动超时，第 ${attempt} 次尝试失败，将重试...`)
+              // 等待一段时间后重试
+              await new Promise(resolve => setTimeout(resolve, 2000))
+              continue
+            }
+            return result
+          }
+
+          if (result.status === 'started') {
+            return result
+          }
+
+          // 如果启动失败，尝试重试
+          if (attempt < maxRetries) {
+            logStore.warning(`样本 ${sampleId} 启动失败: ${result.reason}，第 ${attempt} 次尝试失败，将重试...`)
+            await new Promise(resolve => setTimeout(resolve, 2000))
+            continue
+          }
+
+          return result
+        }
+        catch (error) {
+          if (attempt < maxRetries) {
+            logStore.warning(`样本 ${sampleId} 启动异常: ${error instanceof Error ? error.message : String(error)}，第 ${attempt} 次尝试失败，将重试...`)
+            await new Promise(resolve => setTimeout(resolve, 2000))
+            continue
+          }
+          return {
+            status: 'failed',
+            reason: `启动异常: ${error instanceof Error ? error.message : String(error)}`,
+          }
+        }
+      }
+
+      return {
+        status: 'failed',
+        reason: '启动失败，已达到最大重试次数',
+      }
+    }
+
+    // 分批并行启动 exe 进程，每批3个，等待每批完成后再处理下一批
+    const pendingInfosArray = Array.from(pendingInfos.values())
+    const batchSize = 3 // 每批并行数量
+    const totalBatches = Math.ceil(pendingInfosArray.length / batchSize)
+
+    logStore.info(`将分批处理 ${pendingInfosArray.length} 个样本，每批 ${batchSize} 个，共 ${totalBatches} 批`)
+
+    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+      const batch = pendingInfosArray.slice(batchIndex * batchSize, (batchIndex + 1) * batchSize)
+      logStore.info(`开始处理第 ${batchIndex + 1}/${totalBatches} 批，共 ${batch.length} 个样本`)
+
+      // 当前批次需要等待执行完成的 Promise
+      const batchExecutionPromises: Promise<void>[] = []
+
+      // 顺序启动当前批次的所有进程，每个之间添加延迟，避免同时启动导致资源冲突
+      const batchStartPromises: Promise<void>[] = []
+      // 每个进程启动之间的延迟（毫秒）
+      const startDelay = 500
+
+      for (let i = 0; i < batch.length; i++) {
+        const info = batch[i]
+
+        if (i > 0) {
+          // 等待前一个进程的启动完成
+          await batchStartPromises[i - 1]
+          await new Promise(resolve => setTimeout(resolve, startDelay))
+        }
+
+        logStore.info(`样本 ${info.sampleId} 开始启动 exe...`)
+
+        const startPromise = (async () => {
+          // 启动 exe（使用工作目录中的 exe），带超时和重试机制
+          const exeResult = await callExeWithTimeout(exeName, info.workDir, info.sampleId)
+
+          if (exeResult.status !== 'started') {
+            logStore.error(`样本 ${info.sampleId} 调用exe失败: ${exeResult.reason || '未知错误'}`)
+            info.isResolved = true
+            pendingInfos.delete(info.workDir)
+
+            try {
+              await app.file.deleteDir(info.workDir)
+              logStore.info(`样本 ${info.sampleId} 失败目录已删除`)
+            }
+            catch (error) {
+              logStore.error(`样本 ${info.sampleId} 删除失败目录时出错: ${error instanceof Error ? error.message : String(error)}`)
+            }
+
             results.push({
-              index: sampleId,
-              sampleData: sample,
+              index: info.sampleId,
+              sampleData: info.sample,
               sepPower: null,
               sepFactor: null,
-              dirName,
+              dirName: info.dirName,
             })
-            resolve()
             return
           }
 
-          try {
-            // 读取 Sep_power.dat
-            const content = await app.file.readDatFile('Sep_power.dat', workDir)
-            const parsedData = parseSepPower(content)
+          logStore.info(`样本 ${info.sampleId} exe启动成功 (PID: ${exeResult.pid || 'unknown'})`)
 
-            results.push({
-              index: sampleId,
-              sampleData: sample,
-              sepPower: parsedData.actualSepPower,
-              sepFactor: parsedData.actualSepFactor,
-              dirName,
-            })
+          // 创建等待执行完成的 Promise
+          const executionPromise = new Promise<void>((resolve) => {
+            info.eventResolve = resolve
 
-            logStore.info(`样本 ${sampleId} 完成: 分离功率=${parsedData.actualSepPower}, 分离系数=${parsedData.actualSepFactor}`)
+            // 设置超时机制（增加到120秒）
+            info.timeoutId = setTimeout(() => {
+              if (!info.isResolved) {
+                info.isResolved = true
+                pendingInfos.delete(info.workDir)
+                logStore.error(`样本 ${info.sampleId} 等待exe完成超时（120秒），可能进程仍在运行，将标记为失败`)
+                results.push({
+                  index: info.sampleId,
+                  sampleData: info.sample,
+                  sepPower: null,
+                  sepFactor: null,
+                  dirName: info.dirName,
+                })
+                resolve()
+              }
+            }, 120000)
+          })
+
+          // 将执行 Promise 添加到当前批次的集合中
+          batchExecutionPromises.push(executionPromise)
+        })()
+
+        batchStartPromises.push(startPromise)
+      }
+
+      // 等待当前批次的所有进程启动完成
+      try {
+        await Promise.all(batchStartPromises)
+        logStore.info(`第 ${batchIndex + 1}/${totalBatches} 批启动完成，共 ${batchExecutionPromises.length} 个进程需要等待执行完成...`)
+      }
+      catch (error) {
+        logStore.error(`第 ${batchIndex + 1}/${totalBatches} 批启动过程中出错: ${error instanceof Error ? error.message : String(error)}`)
+      }
+
+      // 等待当前批次的所有进程执行完成后再继续下一批
+      if (batchExecutionPromises.length > 0) {
+        try {
+          logStore.info(`第 ${batchIndex + 1}/${totalBatches} 批：开始等待 ${batchExecutionPromises.length} 个进程完成...`)
+          // logStore.info(`当前待处理的样本信息: ${Array.from(pendingInfos.keys()).map((wd) => {
+          //   const info = pendingInfos.get(wd)
+          //   return `${info?.sampleId}(${wd})`
+          // }).join(', ')}`)
+
+          // 添加整体超时机制，避免批处理卡死
+          let batchTimeoutId: NodeJS.Timeout | null = null
+          const batchTimeoutPromise = new Promise<void>((resolve) => {
+            batchTimeoutId = setTimeout(() => {
+              logStore.warning(`第 ${batchIndex + 1}/${totalBatches} 批等待超时（150秒），强制继续下一批`)
+              // 检查哪些进程还没完成
+              const unfinishedCount = batch.filter(info => !info.isResolved).length
+              if (unfinishedCount > 0) {
+                logStore.warning(`第 ${batchIndex + 1}/${totalBatches} 批仍有 ${unfinishedCount} 个进程未完成，将标记为失败`)
+                for (const info of batch) {
+                  if (!info.isResolved) {
+                    info.isResolved = true
+                    pendingInfos.delete(info.workDir)
+                    if (info.timeoutId) {
+                      clearTimeout(info.timeoutId)
+                      info.timeoutId = null
+                    }
+                    if (info.eventResolve) {
+                      logStore.warning(`样本 ${info.sampleId} 因批处理超时，强制调用 eventResolve`)
+                      info.eventResolve()
+                      info.eventResolve = null
+                    }
+                    results.push({
+                      index: info.sampleId,
+                      sampleData: info.sample,
+                      sepPower: null,
+                      sepFactor: null,
+                      dirName: info.dirName,
+                    })
+                  }
+                }
+              }
+              resolve()
+            }, 150000)
+          })
+
+          // 记录等待前的状态
+          const beforeWaitPendingCount = pendingInfos.size
+          logStore.info(`等待前：待处理样本数=${beforeWaitPendingCount}，当前批次样本数=${batch.length}`)
+
+          // 使用 Promise.race 等待批次完成或超时
+          const raceResult = await Promise.race([
+            Promise.all(batchExecutionPromises).then(() => 'completed'),
+            batchTimeoutPromise.then(() => 'timeout'),
+          ])
+
+          // 如果批次正常完成，清除超时定时器，避免后续触发超时警告
+          if (raceResult === 'completed' && batchTimeoutId) {
+            clearTimeout(batchTimeoutId)
+            batchTimeoutId = null
+            // logStore.info(`第 ${batchIndex + 1}/${totalBatches} 批正常完成，已清除超时定时器`)
           }
-          catch (error) {
-            logStore.error(`样本 ${sampleId} 读取结果失败: ${error instanceof Error ? error.message : String(error)}`)
-            results.push({
-              index: sampleId,
-              sampleData: sample,
-              sepPower: null,
-              sepFactor: null,
-              dirName,
-            })
-          }
 
-          window.electron.ipcRenderer.removeListener('exe-closed', handler)
-          resolve()
+          // 记录等待后的状态
+          const afterWaitPendingCount = pendingInfos.size
+          const completedCount = beforeWaitPendingCount - afterWaitPendingCount
+          logStore.info(`第 ${batchIndex + 1}/${totalBatches} 批等待完成：完成 ${completedCount} 个进程，剩余待处理样本数=${afterWaitPendingCount}`)
+
+          // 检查当前批次中还有哪些未完成
+          const unfinishedInBatch = batch.filter(info => !info.isResolved)
+          if (unfinishedInBatch.length > 0) {
+            logStore.warning(`第 ${batchIndex + 1}/${totalBatches} 批等待完成后，仍有 ${unfinishedInBatch.length} 个进程标记为未完成: ${unfinishedInBatch.map(info => `${info.sampleId}(${info.workDir})`).join(', ')}`)
+          }
+          else {
+            logStore.info(`第 ${batchIndex + 1}/${totalBatches} 批所有进程已标记为完成`)
+          }
         }
-
-        window.electron.ipcRenderer.on('exe-closed', handler)
-      })
+        catch (error) {
+          logStore.error(`第 ${batchIndex + 1}/${totalBatches} 批执行过程中出错: ${error instanceof Error ? error.message : String(error)}`)
+          logStore.error(`错误堆栈: ${error instanceof Error ? error.stack : '无堆栈信息'}`)
+          // 即使出错也继续处理下一批
+        }
+      }
+      else {
+        logStore.warning(`第 ${batchIndex + 1}/${totalBatches} 批没有需要等待的进程（可能全部启动失败）`)
+      }
     }
 
-    // 如果exe调用失败，直接返回，不继续执行后续处理
-    if (hasExeFailure) {
-      hideLoading()
-      const processedCount = results.length
-      app.message.error(`仿真优化计算失败：exe程序调用失败（已处理 ${processedCount}/${samplePointCountforRes.value} 个样本）`)
-      return
+    // 清理事件监听器
+    // logStore.info('开始清理 exe-closed 事件监听器')
+    window.electron.ipcRenderer.removeListener('exe-closed', globalHandler)
+    // logStore.info('exe-closed 事件监听器已清理')
+
+    logStore.info(`所有批次处理完成，共处理 ${results.length} 个样本结果`)
+    logStore.info(`最终剩余待处理样本数: ${pendingInfos.size}`)
+    if (pendingInfos.size > 0) {
+      logStore.warning(`仍有未处理的样本: ${Array.from(pendingInfos.keys()).map((wd) => {
+        const info = pendingInfos.get(wd)
+        return `${info?.sampleId}(${wd})`
+      }).join(', ')}`)
     }
 
     // 所有样本处理完成后，找出最优方案
@@ -451,6 +767,90 @@ async function performOptimization(): Promise<void> {
         }
 
         finalResults.push(optimalData)
+
+        // 将最优方案的结果和参数值更新到 InitialDesign 的 store 中
+        try {
+          // 更新输出结果
+          designStore.updateOutputResults({
+            separationPower: optimal.sepPower ?? undefined,
+            separationFactor: optimal.sepFactor ?? undefined,
+          })
+
+          // 将最优方案的参数值更新到对应的 store 中
+          const optimalParams = convertSampleDataToKeys(optimal.sampleData)
+
+          // 根据字段 key 的类型更新到对应的 store
+          const topKeys = ['angularVelocity', 'rotorRadius', 'rotorShoulderLength']
+          const opKeys = ['rotorSidewallPressure', 'gasDiffusionCoefficient', 'feedFlowRate', 'splitRatio', 'feedingMethod']
+          const drvKeys = [
+            'depletedEndCapTemperature',
+            'enrichedEndCapTemperature',
+            'feedAxialDisturbance',
+            'feedAngularDisturbance',
+            'depletedMechanicalDriveAmount',
+          ]
+          const sepKeys = [
+            'extractionChamberHeight',
+            'enrichedBaffleHoleDiameter',
+            'feedBoxShockDiskHeight',
+            'depletedExtractionArmRadius',
+            'depletedExtractionPortInnerDiameter',
+            'depletedBaffleInnerHoleOuterDiameter',
+            'enrichedBaffleHoleDistributionCircleDiameter',
+            'depletedExtractionPortOuterDiameter',
+            'depletedBaffleOuterHoleInnerDiameter',
+            'minAxialDistance',
+            'depletedBaffleAxialPosition',
+            'depletedBaffleOuterHoleOuterDiameter',
+            'bwgRadialProtrusionHeight',
+            'bwgAxialHeight',
+            'bwgAxialPosition',
+            'radialGridRatio',
+            'compensationCoefficient',
+            'streamlineData',
+            'innerBoundaryMirrorPosition',
+            'gridGenerationMethod',
+          ]
+
+          const topParams: Record<string, any> = {}
+          const opParams: Record<string, any> = {}
+          const drvParams: Record<string, any> = {}
+          const sepParams: Record<string, any> = {}
+
+          for (const [key, value] of Object.entries(optimalParams)) {
+            if (topKeys.includes(key)) {
+              topParams[key] = value
+            }
+            else if (opKeys.includes(key)) {
+              opParams[key] = value
+            }
+            else if (drvKeys.includes(key)) {
+              drvParams[key] = value
+            }
+            else if (sepKeys.includes(key)) {
+              sepParams[key] = value
+            }
+          }
+
+          // 批量更新 store
+          if (Object.keys(topParams).length > 0) {
+            designStore.updateTopLevelParams(topParams as any)
+          }
+          if (Object.keys(opParams).length > 0) {
+            designStore.updateOperatingParams(opParams as any)
+          }
+          if (Object.keys(drvParams).length > 0) {
+            designStore.updateDrivingParams(drvParams as any)
+          }
+          if (Object.keys(sepParams).length > 0) {
+            designStore.updateSeparationComponents(sepParams as any)
+          }
+
+          logStore.info(`已将最优方案（序号 ${optimalIndex}）的结果和参数值更新到初始设计`)
+        }
+        catch (error) {
+          logStore.error(`更新最优方案到初始设计时出错: ${error instanceof Error ? error.message : String(error)}`)
+        }
       }
     }
 
@@ -1047,7 +1447,7 @@ async function sampleSpace() {
 
   <!-- 底部操作栏 -->
   <div class="bottom-actions">
-    <a-button type="primary" @click="performOptimization">
+    <a-button :loading="isOptimizing" type="primary" @click="performOptimization">
       仿真优化计算
     </a-button>
   </div>
