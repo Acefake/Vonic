@@ -81,6 +81,6 @@ export const useSchemeOptimizationStore = defineStore('schemeOptimization', () =
 }, {
   persist: {
     key: 'schemeOptimization-store',
-    storage: localStorage,
+    storage: sessionStorage,
   },
 })

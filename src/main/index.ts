@@ -7,6 +7,7 @@ import { Logger } from './app/handlers/LogerManager'
 import { StoreManage } from './app/handlers/storeManage'
 import getWindowManager, { WindowName } from './app/handlers/window'
 import { createDoeServiceManager } from './services/runService'
+import { deleteOutFolder } from './utils/cleanup'
 import { runExe } from './utils/exeRunner'
 
 const storeManage = new StoreManage()
@@ -15,6 +16,8 @@ const appManager = new AppManager()
 let logger: Logger
 let serviceManager: DoeServiceManager
 let isQuitting = false
+
+// 删除 out 目录的实现已迁移至 utils/cleanup.ts
 
 // 单实例锁：只允许启动一个应用实例
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
@@ -137,6 +140,10 @@ app.on('before-quit', async (event) => {
     await logger.log('info', '应用退出中，停止 DOE 服务...')
     await serviceManager.stop()
     await logger.log('info', 'DOE 服务已停止')
+
+    // 删除 out 输出目录
+    await logger.log('info', '应用退出中，删除输出目录 out...')
+    await deleteOutFolder(logger)
   }
   catch (error) {
     console.error('退出时停止 DOE 服务失败:', error)

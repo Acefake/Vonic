@@ -261,6 +261,6 @@ export const usePowerAnalysisDesignStore = defineStore('powerAnalysisDesign', ()
 }, {
   persist: {
     key: 'power-analysis-design-store',
-    storage: localStorage,
+    storage: sessionStorage,
   },
 })

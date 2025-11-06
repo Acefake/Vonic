@@ -2,10 +2,13 @@
 import type { TableProps } from 'ant-design-vue'
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import { Button, InputNumber, message, Space } from 'ant-design-vue'
-import { computed, h, nextTick, onMounted, reactive, ref } from 'vue'
+import { storeToRefs } from 'pinia'
 
+import { computed, h, nextTick, onMounted, reactive, ref } from 'vue'
+import app from '../../app/index'
 import SchemeChart from '../../components/SchemeChart/index.vue'
-import { getFieldLabel } from '../../utils/field-labels'
+import { useSchemeOptimizationStore } from '../../store'
+import { FIELD_LABELS, getFieldLabel } from '../../utils/field-labels'
 import InitialDesign from '../InitialDesign/index.vue'
 
 interface SchemeData {
@@ -114,6 +117,25 @@ const fieldConfigs = [
   { key: 'streamlineData', label: '流线数据', width: 120 },
 ]
 
+// 反查：根据中文标签获取字段 key
+function getFieldKeyByLabel(label: string): string | null {
+  for (const [key, map] of Object.entries(FIELD_LABELS)) {
+    if (map['zh-CN'] === label)
+      return key
+  }
+  return null
+}
+
+// 从方案优化中获取当前选中的设计因子，转换为字段 key 列表
+const schemeOptimizationStore = useSchemeOptimizationStore()
+const { designFactors } = storeToRefs(schemeOptimizationStore)
+const selectedDesignFactorKeys = computed<string[]>(() => {
+  const keys = designFactors.value
+    .map(f => getFieldKeyByLabel(f.name))
+    .filter((k): k is string => !!k)
+  return keys
+})
+
 // 创建数值范围筛选面板
 function createNumberRangeFilterPanel(dataIndex: string, unit?: string) {
   return ({
@@ -221,7 +243,10 @@ const columns = computed(() => {
     },
   ]
 
-  const fieldColumns = fieldConfigs.map(config => ({
+  // 仅显示方案优化中选中的设计因子对应的列
+  const activeFieldConfigs = fieldConfigs.filter(cfg => selectedDesignFactorKeys.value.includes(cfg.key))
+
+  const fieldColumns = activeFieldConfigs.map(config => ({
     title: config.label,
     dataIndex: config.key,
     key: config.key,
@@ -257,12 +282,15 @@ const columns = computed(() => {
   return [...baseColumns, ...fieldColumns, ...resultColumns]
 })
 
-// X 轴列定义（设计因子）- 包含所有 input.dat 中的字段
-const xColumns = fieldConfigs.map(config => ({
-  title: config.label,
-  dataIndex: config.key,
-  key: config.key,
-}))
+// X 轴列定义（设计因子）- 仅包含方案优化选中的设计因子
+const xColumns = computed(() => {
+  const activeFieldConfigs = fieldConfigs.filter(cfg => selectedDesignFactorKeys.value.includes(cfg.key))
+  return activeFieldConfigs.map(config => ({
+    title: config.label,
+    dataIndex: config.key,
+    key: config.key,
+  }))
+})
 
 // Y 轴列定义（结果指标）- 分离功率和分离系数
 const yColumns = [

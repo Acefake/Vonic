@@ -2,7 +2,7 @@
 import type { DesignFactor, SampleData, SampleSpaceData } from './type'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { storeToRefs } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { getProductConfig } from '../../../../config/product.config'
 import app from '../../app/index'
 import { useLogStore, useSchemeOptimizationStore } from '../../store'
@@ -216,8 +216,6 @@ function parseSepPower(content: string): { actualSepPower: number | null, actual
   // 兼容 "KEY =   123" 的格式（= 后允许空格），并兼容大小写
   const regex = /^([^=]+)=\s*([+-]?\d+(?:\.\d+)?)$/
   const result: Record<string, number> = {}
-
-  console.log(content)
 
   lineArr.forEach((line) => {
     const match = line.match(regex)
