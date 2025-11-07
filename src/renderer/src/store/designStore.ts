@@ -187,8 +187,12 @@ export const useDesignStore = defineStore('design', () => {
    * 检查表单是否完整
    */
   const isFormValid = computed((): boolean => {
-    // 这里可以根据业务需求添加验证逻辑
-    return true
+    // 所有参数都已填写，且没有未填写的参数
+    return Object.values(topLevelParams.value).every(value => value !== undefined)
+      && Object.values(operatingParams.value).every(value => value !== undefined)
+      && Object.values(drivingParams.value).every(value => value !== undefined)
+      && Object.values(separationComponents.value).every(value => value !== undefined)
+      && Object.values(outputResults.value).every(value => value !== undefined)
   })
 
   /**

@@ -4,11 +4,11 @@ import * as fs from 'node:fs'
 import { access, copyFile, readFile as fsReadFile, readdir, rm, unlink, writeFile } from 'node:fs/promises'
 import { dirname, extname, join } from 'node:path'
 import { app, ipcMain } from 'electron'
+import { deleteOutFolder } from '@/main/utils/cleanup'
 import { parseSepPower } from '@/main/utils/parseSepPower'
 import { readFileData } from '@/main/utils/readFileData'
 import { writeDatFile } from '@/main/utils/writeDatFile'
 import { ALLOWED_DELETE_EXTENSIONS, ALLOWED_READ_EXTENSIONS, ALLOWED_WRITE_EXTENSIONS } from '@/shared/files-config'
-
 /**
  * 文件管理器类
  */
@@ -29,6 +29,7 @@ export class FileManager {
     ipcMain.handle('file:delete-dir', this.deleteDir.bind(this))
     ipcMain.handle('file:copy-file', this.copyFile.bind(this))
     ipcMain.handle('file:find-exe', this.findExe.bind(this))
+    ipcMain.handle('file:delete-out-folder', this.deleteOutFolder.bind(this))
   }
 
   /**
@@ -554,39 +555,47 @@ export class FileManager {
         }
       }
 
-      // 按分离功率降序排序，相同值按序号升序
-      schemes.sort((a, b) => {
-        const powerA = a.sepPower ?? -Infinity
-        const powerB = b.sepPower ?? -Infinity
-        if (powerA !== powerB) {
-          return powerB - powerA // 降序
-        }
-        return a.index - b.index // 升序
-      })
-
-      // 重新分配序号
-      schemes.forEach((scheme, idx) => {
-        scheme.index = idx
-      })
-
       // 在所有采样空间数据循环结束后，判断各方案中分离功率最大值所在方案，作为最优方案
-      // 获取方案数据插入多方案设计结果表格第一行，序号为 -1（表示最优方案，前端显示为 '*'）
+      // 先找到最优方案，记录其原始序号
+      let optimalOriginalIndex = -1
+      let optimalScheme: typeof schemes[0] | null = null
+
       if (schemes.length > 0) {
         const validPowers = schemes.filter(s => s.sepPower !== null && s.sepPower !== undefined)
         if (validPowers.length > 0) {
-          // 找到最大分离功率的方案（排序后第一条就是最大值）
-          const optimalScheme = schemes[0]
-          // 创建最优方案的副本，序号设为 -1
-          const optimalSchemeCopy = {
-            ...optimalScheme,
-            index: -1, // -1 表示最优方案，前端显示为 '*'
+          // 找到最大分离功率的方案
+          let maxSepPower = -Infinity
+          for (const scheme of validPowers) {
+            const power = scheme.sepPower!
+            // 严格比较：只有分离功率更大时才更新最优方案
+            // 如果分离功率相同，选择序号更小的
+            if (power > maxSepPower || (power === maxSepPower && (optimalScheme === null || scheme.index < optimalScheme.index))) {
+              maxSepPower = power
+              optimalScheme = scheme
+            }
           }
-          // 插入到第一行
-          schemes.unshift(optimalSchemeCopy)
-          // 重新分配其他方案的序号（从 0 开始）
-          for (let i = 1; i < schemes.length; i++) {
-            schemes[i].index = i - 1
+          if (optimalScheme) {
+            optimalOriginalIndex = optimalScheme.index
+            console.log(`[FileManager] 找到最优方案: 原始序号=${optimalOriginalIndex + 1}, sepPower=${optimalScheme.sepPower}`)
           }
+        }
+      }
+
+      // 按原始序号排序（保持原有顺序）
+      schemes.sort((a, b) => a.index - b.index)
+
+      // 如果找到最优方案，创建一个副本放在第一行（index = -1），同时保留原位置的最优方案
+      if (optimalOriginalIndex >= 0 && optimalScheme) {
+        const originalOptimalScheme = schemes.find(s => s.index === optimalOriginalIndex)
+        if (originalOptimalScheme) {
+          // 创建最优方案的副本，用于第一行显示（序号为 '*'，绿色背景）
+          const optimalCopy = JSON.parse(JSON.stringify(originalOptimalScheme)) as any
+          optimalCopy.index = -1 // -1 表示最优方案，前端显示为 '*'
+          optimalCopy.originalIndex = optimalOriginalIndex // 保存原始序号
+          optimalCopy.isOptimalCopy = true // 标记这是最优方案的副本
+
+          // 将副本插入到数组的第一位
+          schemes.unshift(optimalCopy)
         }
       }
 
@@ -735,7 +744,7 @@ export class FileManager {
   private findExe(_: Electron.IpcMainInvokeEvent, exeName: string): string | null {
     try {
       const isDev = fs.existsSync(join(process.cwd(), 'testFile'))
-      
+
       if (isDev) {
         // 开发环境：在 testFile 目录查找
         const testFileDir = join(process.cwd(), 'testFile')
@@ -757,12 +766,20 @@ export class FileManager {
           return foundPath
         }
       }
-      
+
       return null
     }
     catch (error) {
       console.error('查找 exe 文件失败:', error)
       return null
     }
+  }
+
+  /**
+   * 删除输出目录
+   * @param _ IPC 事件对象
+   */
+  private async deleteOutFolder(_: Electron.IpcMainInvokeEvent): Promise<void> {
+    await deleteOutFolder()
   }
 }

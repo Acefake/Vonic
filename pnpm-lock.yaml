@@ -29,6 +29,9 @@ importers:
       electron-updater:
         specifier: ^6.3.9
         version: 6.6.2
+      event-bus-common:
+        specifier: ^1.2.1
+        version: 1.2.1
       iconv-lite:
         specifier: ^0.7.0
         version: 0.7.0
@@ -1824,6 +1827,9 @@ packages:
   esutils@2.0.3:
     resolution: {integrity: sha512-kVscqXk4OCp68SZ0dkgEKVi6/8ij300KBWTJq32P/dYeWTSwK41WyTxalN1eRmA5Z9UU/LX9D7FWSmV9SAYx6g==}
     engines: {node: '>=0.10.0'}
+
+  event-bus-common@1.2.1:
+    resolution: {integrity: sha512-KA19+ISu9xerfiYALGhXzEqbie8T8UMNj7WqONP+BKhhhjj+0dfJ8B+Bdp8SVcAFGyNKFUUTGs3CzaOjPPgjJg==}
 
   exponential-backoff@3.1.3:
     resolution: {integrity: sha512-ZgEeZXj30q+I0EN+CbSSpIyPaJ5HVQD18Z1m+u1FXbAeT94mr1zw50q4q6jiiC447Nl/YTcIYSAftiGqetwXCA==}
@@ -5426,6 +5432,8 @@ snapshots:
   estree-walker@2.0.2: {}
 
   esutils@2.0.3: {}
+
+  event-bus-common@1.2.1: {}
 
   exponential-backoff@3.1.3: {}
 

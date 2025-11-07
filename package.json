@@ -30,6 +30,7 @@
     "binary-parser": "^2.2.1",
     "echarts": "^6.0.0",
     "electron-updater": "^6.3.9",
+    "event-bus-common": "^1.2.1",
     "iconv-lite": "^0.7.0",
     "json5": "^2.2.3",
     "pinia": "^3.0.3",

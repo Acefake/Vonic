@@ -12,8 +12,10 @@ import { FIELD_LABELS, getFieldLabel } from '../../utils/field-labels'
 import InitialDesign from '../InitialDesign/index.vue'
 
 interface SchemeData {
-  index: number // -1 表示最优方案，显示为 '*'
+  index: number // -1 表示最优方案（第一行），显示为 '*'；其他为原始序号
+  originalIndex?: number // 最优方案的原始序号（当 index === -1 时使用）
   fileName: string
+  isOptimalCopy?: boolean // 标记是否为最优方案的副本（第一行）
   // 第1行：网格数
   radialGridCount: number
   axialGridCount: number
@@ -306,14 +308,10 @@ const yColumns = [
   },
 ]
 
-// 确保最优方案行始终在顶部
-function ensureOptimalRowFirst(data: SchemeData[]): SchemeData[] {
-  const optimalRow = data.find(row => row.index === -1)
-  const otherRows = data.filter(row => row.index !== -1)
-
-  if (optimalRow) {
-    return [optimalRow, ...otherRows]
-  }
+// 保持数据原有顺序（最优方案保持在原位置）
+function maintainOriginalOrder(data: SchemeData[]): SchemeData[] {
+  // 按 index 排序，但 -1（最优方案）保持在其原始位置
+  // 由于后端已经保持了顺序，这里直接返回即可
   return data
 }
 
@@ -327,8 +325,8 @@ async function loadSchemes() {
 
     console.log(data, 'data')
 
-    // 确保最优方案行在顶部
-    const sortedData = ensureOptimalRowFirst(data)
+    // 保持原有顺序（最优方案保持在原位置）
+    const sortedData = maintainOriginalOrder(data)
 
     schemes.value = sortedData
     filteredData.value = sortedData
@@ -414,8 +412,8 @@ const handleTableChange: TableProps['onChange'] = (pagination, filters) => {
     }
   })
 
-  // 确保最优方案行始终在顶部
-  data = ensureOptimalRowFirst(data)
+  // 保持原有顺序（最优方案保持在原位置）
+  data = maintainOriginalOrder(data)
 
   filteredData.value = data
 
@@ -470,7 +468,7 @@ onMounted(() => {
 
       <a-table
         :columns="columns" :data-source="filteredData" :loading="loading" :pagination="paginationConfig"
-        :row-class-name="(record) => isMaxSepPowerRow(record) ? 'optimal-row' : ''" row-key="index" size="small"
+        :row-class-name="(record) => isMaxSepPowerRow(record) ? 'optimal-row' : ''" :row-key="(record) => `${record.index}_${record.fileName}`" size="small"
         :scroll="{ x: 'max-content' }" @change="handleTableChange"
       >
         <template #bodyCell="{ column, record }">

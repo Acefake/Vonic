@@ -61,6 +61,7 @@ function startProgress() {
   progressVisible.value = true
   progressStatus.value = 'active'
   progressPercent.value = 0
+
   // 清理旧定时器
   if (progressTimer != null) {
     window.clearInterval(progressTimer)
@@ -579,16 +580,15 @@ async function handleExeClose(_: Electron.IpcRendererEvent, exeName: string, res
 onMounted(() => {
   window.electron.ipcRenderer.removeAllListeners?.('exe-closed')
   window.electron.ipcRenderer.on('exe-closed', handleExeClose)
-  // 初始化一次表单模型与前次合法值
   syncFormFromStore()
-  // readTakeData()
 })
 
 onUnmounted(() => {
   window.electron.ipcRenderer.removeListener?.('exe-closed', handleExeClose)
   stopProgress()
+  // app.eventBus.off('validateDesignFactors')
 })
-</script>
+</script>validateDesignFactors
 
 <template>
   <div class="initial-design-container">

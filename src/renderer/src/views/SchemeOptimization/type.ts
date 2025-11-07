@@ -14,13 +14,13 @@ export interface DesignFactor {
   /** 类型 */
   type: FactorType
   /** 下限 */
-  lowerLimit?: number
+  lowerLimit?: number | null
   /** 上限 */
-  upperLimit?: number
+  upperLimit?: number | null
   /** 水平数 */
-  levelCount?: number
+  levelCount?: number | null
   /** 取值 */
-  values?: string
+  values?: string | null
 }
 
 /**
