@@ -1,24 +1,39 @@
 <script setup lang="ts">
 import type { TableColumnType } from 'ant-design-vue'
-import type { ChartConfig, TableColumn, TableDataRow } from '../ExperimentalData/types'
+import type { ChartConfig, ProcessedChartData, SeriesData, TableColumn, TableDataRow } from '../ExperimentalData/types'
 import { SearchOutlined } from '@ant-design/icons-vue'
 import { computed, ref, toRefs } from 'vue'
-import { useExperimentalDataStore } from '../../store'
+import { useDesignStore, useExperimentalDataStore } from '../../store'
+import { getFieldLabel } from '../../utils/field-labels'
 import DataChart from '../ExperimentalData/DataChart.vue'
 
 const experimentalDataStore = useExperimentalDataStore()
 const { tableColumns, tableData } = toRefs(experimentalDataStore)
+const designStore = useDesignStore()
+const { drivingParams, operatingParams, separationComponents, topLevelParams, isMultiScheme } = toRefs(designStore)
 console.log(tableColumns.value, 'tableColumns')
 console.log(tableData.value, 'tableData')
+console.log(drivingParams.value, 'drivingParams')
+console.log(operatingParams.value, 'operatingParams')
+console.log(separationComponents.value, 'separationComponents')
+console.log(topLevelParams.value, 'topLevelParams')
 // =====================
 // 数据状态
 // =====================
-// 方案类型：true=多方案，false=单方案（临时假数据控制）
-const isMultiScheme = ref<boolean>(false)
-
 // 试验数据（从 store 获取）
 const experimentalTableColumns = tableColumns
-const experimentalTableData = tableData
+
+/**
+ * 过滤后的试验数据
+ * 去除均方差和最大偏差统计行
+ */
+const experimentalTableData = computed(() => {
+  return tableData.value.filter((row) => {
+    const seqNum = row.序号
+    // 过滤掉统计行
+    return seqNum !== '均方差' && seqNum !== '最大偏差'
+  })
+})
 
 // 仿真数据（假数据）
 const simulationTableColumns = ref<TableColumn[]>([
@@ -41,19 +56,97 @@ const simulationTableData = ref<TableDataRow[]>([
 // 数据对比内容选择
 const selectedCompareFields = ref<string[]>([])
 
-// 图表配置（假数据）
+/**
+ * 图表配置
+ * 包含试验曲线颜色和仿真曲线颜色
+ */
 const chartConfig = ref<ChartConfig>({
-  xAxis: '角度度',
-  yAxis: '供料后退',
-  chartType: '曲线图',
-  lineColor: '#1890ff',
-  titleText: '数据对比曲线',
-  titleColor: '#000000',
+  xAxis: '', // X轴不设置默认值
+  yAxis: '', // Y轴不设置默认值
+  chartType: '散点图', // 默认展示散点图
+  lineColor: '#ff0000', // 试验曲线颜色（默认红色）
+  simulationLineColor: '#00ff00', // 仿真曲线颜色（默认绿色）
+  titleText: '试验仿真数据对比曲线',
+  titleColor: '#2c3e50', // 标题颜色（默认深灰蓝色，视觉接近黑色）
+  titleFont: '宋体',
 })
 
 // =====================
 // 计算属性
 // =====================
+/**
+ * 合并设计参数数据
+ * 将 topLevelParams、operatingParams、drivingParams、separationComponents 合并成一个对象
+ */
+const mergedDesignData = computed(() => {
+  // 合并所有参数对象
+  return {
+    ...topLevelParams.value,
+    ...operatingParams.value,
+    ...drivingParams.value,
+    ...separationComponents.value,
+  }
+})
+
+/**
+ * 根据文字长度计算列宽
+ * @param text 文字内容
+ * @returns 计算后的宽度（像素）
+ */
+function calculateColumnWidth(text: string): number {
+  const minWidth = 80 // 最小宽度
+  const maxWidth = 250 // 最大宽度
+  const charWidth = 14 // 每个字符的平均宽度（中文字符）
+  const padding = 32 // 列的内边距
+
+  const calculatedWidth = text.length * charWidth + padding
+
+  // 限制在最小和最大宽度之间
+  return Math.min(Math.max(calculatedWidth, minWidth), maxWidth)
+}
+
+/**
+ * 单方案仿真数据的表格列配置
+ * 将每个参数作为一列（横向显示），列宽根据表头内容自动适应
+ */
+const singleSchemeSimulationColumns = computed<TableColumn[]>(() => {
+  const data = mergedDesignData.value
+  console.log(data, 'data---------------')
+  const columns: TableColumn[] = [
+    { title: '序号', dataIndex: '序号', key: '序号', width: 80 },
+  ]
+
+  // 为每个参数创建一列，根据表头文字长度自动计算列宽
+  Object.keys(data).forEach((key) => {
+    const title = getFieldLabel(key) // 使用中文标签作为列标题
+    columns.push({
+      title,
+      dataIndex: key,
+      key,
+      width: calculateColumnWidth(title), // 根据表头文字长度计算宽度
+    })
+  })
+
+  return columns
+})
+
+/**
+ * 单方案仿真数据的表格数据
+ * 所有参数值合并为一条数据（横向显示）
+ */
+const singleSchemeSimulationData = computed<TableDataRow[]>(() => {
+  const data = mergedDesignData.value
+
+  // 创建一条数据行，包含所有参数
+  const row: TableDataRow = {
+    key: 'design-params-row-1',
+    序号: 1,
+    ...data, // 将所有参数展开到一行中
+  }
+
+  return [row] // 只返回一条数据
+})
+
 // 数据对比内容选项
 const compareFieldOptions = computed(() => {
   if (isMultiScheme.value) {
@@ -84,8 +177,42 @@ const compareFieldOptions = computed(() => {
   }
 })
 
-// 过滤后的仿真数据表格列（多方案时支持搜索）
+/**
+ * 过滤后的仿真数据表格列
+ * 单方案时：根据选中的字段过滤设计参数列（通过中文标签匹配）
+ * 多方案时：根据选中的字段过滤仿真数据列，并支持搜索
+ */
 const filteredSimulationColumns = computed<TableColumnType[]>(() => {
+  // ===== 处理仿真数据表格的列过滤逻辑 =====
+  // 单方案：使用设计参数的列配置，并根据选中字段过滤
+  if (!isMultiScheme.value) {
+    // 如果没有选择任何字段，显示所有列
+    if (selectedCompareFields.value.length === 0) {
+      return singleSchemeSimulationColumns.value
+    }
+
+    // 获取选中字段对应的中文标签（试验数据表头的 title）
+    // 因为试验数据的 dataIndex 是中文，而设计参数的 dataIndex 是英文
+    // 所以需要通过中文标签（title）来匹配两个表格的列
+    const selectedTitles = selectedCompareFields.value.map((fieldDataIndex) => {
+      const col = experimentalTableColumns.value.find(c => c.dataIndex === fieldDataIndex)
+      // 去除首尾空格，避免匹配失败
+      return (col?.title || fieldDataIndex).trim()
+    })
+
+    // 通过中文标签匹配设计参数表格的列（仿真数据表格）
+    // 同样去除表格列标题的首尾空格进行匹配
+    const filtered = singleSchemeSimulationColumns.value.filter((col) => {
+      return selectedTitles.includes(col.title.trim())
+    })
+
+    return [
+      singleSchemeSimulationColumns.value[0], // 序号列
+      ...filtered,
+    ]
+  }
+
+  // 多方案：使用原有的列配置和过滤逻辑
   const baseColumns = selectedCompareFields.value.length === 0
     ? simulationTableColumns.value
     : [
@@ -96,30 +223,36 @@ const filteredSimulationColumns = computed<TableColumnType[]>(() => {
       ]
 
   // 多方案时，为非序号列添加搜索功能
-  if (isMultiScheme.value) {
-    return baseColumns.map((col) => {
-      if (col.dataIndex === '序号') {
-        return col
-      }
+  return baseColumns.map((col) => {
+    if (col.dataIndex === '序号') {
+      return col
+    }
 
-      const dataIndex = col.dataIndex as string
+    const dataIndex = col.dataIndex as string
 
-      return {
-        ...col,
-        customFilterDropdown: true,
-        onFilter: (value: string, record: TableDataRow) => {
-          const recordValue = String(record[dataIndex] || '')
-          return recordValue.toLowerCase().includes(value.toLowerCase())
-        },
-      }
-    })
-  }
-
-  return baseColumns
+    return {
+      ...col,
+      customFilterDropdown: true,
+      onFilter: (value: string, record: TableDataRow) => {
+        const recordValue = String(record[dataIndex] || '')
+        return recordValue.toLowerCase().includes(value.toLowerCase())
+      },
+    }
+  })
 })
 
-// 过滤后的仿真数据表格数据
+/**
+ * 过滤后的仿真数据表格数据
+ * 单方案时：显示合并的设计参数数据
+ * 多方案时：显示原有的多方案数据
+ */
 const filteredSimulationData = computed(() => {
+  // 单方案：使用设计参数数据
+  if (!isMultiScheme.value) {
+    return singleSchemeSimulationData.value
+  }
+
+  // 多方案：使用原有的数据和过滤逻辑
   if (selectedCompareFields.value.length === 0) {
     return simulationTableData.value
   }
@@ -134,7 +267,7 @@ const filteredSimulationData = computed(() => {
     return filteredRow
   })
 })
-console.log(filteredSimulationData.value, '真数据表格数据---------------')
+console.log(filteredSimulationData.value, '仿真数据表格数据---------------')
 // 过滤后的试验数据表格列
 const filteredExperimentalColumns = computed(() => {
   const addWidth = (cols: TableColumn[]) => {
@@ -179,6 +312,86 @@ const filteredExperimentalData = computed(() => {
   })
 })
 
+/**
+ * 处理数据对比图表数据
+ * - 散点/曲线：使用 X/Y 轴，每个点是 (x, y)
+ */
+const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
+  const xAxis = chartConfig.value.xAxis
+  const yAxis = chartConfig.value.yAxis
+
+  if (!xAxis || !yAxis) {
+    return null
+  }
+
+  // ===== 散点图/曲线图：X-Y 坐标点 =====
+
+  const series: SeriesData[] = []
+
+  const simulationData = filteredSimulationData.value
+  const simulationColumns = filteredSimulationColumns.value
+
+  const simXCol = simulationColumns.find(col => typeof col.title === 'string' && col.title.trim() === xAxis.trim())
+  const simYCol = simulationColumns.find(col => typeof col.title === 'string' && col.title.trim() === yAxis.trim())
+
+  if (simXCol && simYCol && simulationData.length > 0) {
+    const points: [number, number][] = []
+    simulationData.forEach((row) => {
+      const xVal = row[simXCol.dataIndex as string]
+      const yVal = row[simYCol.dataIndex as string]
+
+      if (xVal != null && yVal != null && !Number.isNaN(Number(xVal)) && !Number.isNaN(Number(yVal))) {
+        points.push([Number(xVal), Number(yVal)])
+      }
+    })
+
+    if (points.length > 0) {
+      series.push({
+        name: '仿真数据',
+        data: points,
+        color: chartConfig.value.simulationLineColor || '#ff6b6b',
+      })
+    }
+  }
+
+  const experimentalData = filteredExperimentalData.value
+  const experimentalColumns = filteredExperimentalColumns.value
+
+  const expXCol = experimentalColumns.find(col => col.dataIndex === xAxis || col.title?.trim() === xAxis.trim())
+  const expYCol = experimentalColumns.find(col => col.dataIndex === yAxis || col.title?.trim() === yAxis.trim())
+
+  if (expXCol && expYCol && experimentalData.length > 0) {
+    const points: [number, number][] = []
+    experimentalData.forEach((row) => {
+      const xVal = row[expXCol.dataIndex as string]
+      const yVal = row[expYCol.dataIndex as string]
+
+      if (xVal != null && yVal != null && !Number.isNaN(Number(xVal)) && !Number.isNaN(Number(yVal))) {
+        points.push([Number(xVal), Number(yVal)])
+      }
+    })
+
+    if (points.length > 0) {
+      series.push({
+        name: '试验数据',
+        data: points,
+        color: chartConfig.value.lineColor,
+      })
+    }
+  }
+
+  if (series.length === 0) {
+    return null
+  }
+
+  return {
+    type: chartConfig.value.chartType === '曲线图' ? 'line' : 'scatter',
+    series,
+    xAxisName: xAxis,
+    yAxisName: yAxis,
+  }
+})
+
 // =====================
 // 事件处理函数
 // =====================
@@ -213,6 +426,7 @@ const filteredExperimentalData = computed(() => {
             placeholder="请选择对比字段"
             style="min-width: 300px"
             :options="compareFieldOptions"
+            not-found-content="暂无数据"
           />
         </div>
       </div>
@@ -225,7 +439,8 @@ const filteredExperimentalData = computed(() => {
         <div class="table-container">
           <div class="table-header">
             <span class="table-title">仿真数据</span>
-            <span v-if="isMultiScheme" class="table-subtitle">（多方案-支持搜索）</span>
+            <span v-if="isMultiScheme" class="table-subtitle">（多方案）</span>
+            <span v-else class="table-subtitle">（单方案）</span>
           </div>
           <a-table
             :columns="filteredSimulationColumns"
@@ -304,8 +519,10 @@ const filteredExperimentalData = computed(() => {
         </div>
         <DataChart
           v-model:chart-config="chartConfig"
-          :table-columns="filteredSimulationColumns as TableColumn[]"
-          :chart-data="null"
+          :table-columns="compareFieldOptions"
+          :chart-data="processedComparisonChartData"
+          :show-simulation-color="true"
+          :hide-radar-chart="true"
         />
       </div>
     </div>

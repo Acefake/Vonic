@@ -21,10 +21,11 @@ export const useExperimentalDataStore = defineStore('experimentalData', () => {
   const chartConfig = ref<ChartConfig>({
     xAxis: '',
     yAxis: '',
-    chartType: '曲线图',
-    lineColor: '#1890ff',
-    titleText: '',
-    titleColor: '#000000',
+    chartType: '散点图', // 默认展示散点图
+    lineColor: '#1890ff', // 默认蓝色
+    titleText: '试验数据统计曲线',
+    titleColor: '#2c3e50', // 默认深灰蓝色（视觉接近黑色）
+    titleFont: '宋体',
   })
 
   /** 最后更新时间戳（用于区分用户操作和同步） */
@@ -86,10 +87,11 @@ export const useExperimentalDataStore = defineStore('experimentalData', () => {
     chartConfig.value = {
       xAxis: '',
       yAxis: '',
-      chartType: '曲线图',
-      lineColor: '#1890ff',
-      titleText: '',
-      titleColor: '#000000',
+      chartType: '散点图', // 默认展示散点图
+      lineColor: '#1890ff', // 默认蓝色
+      titleText: '试验数据统计曲线',
+      titleColor: '#2c3e50', // 默认深灰蓝色（视觉接近黑色）
+      titleFont: '宋体',
     }
   }
 

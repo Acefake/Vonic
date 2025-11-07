@@ -77,9 +77,9 @@ async function handleStatisticsCalculate(): Promise<void> {
 
   // 滚动到底部显示新添加的统计行
   await nextTick()
-  const tabPane = document.querySelector('.ant-tabs-tabpane')
-  if (tabPane) {
-    tabPane.scrollTop = tabPane.scrollHeight
+  const tableWrapper = document.querySelector('.table-wrapper')
+  if (tableWrapper) {
+    tableWrapper.scrollTop = tableWrapper.scrollHeight
   }
 }
 </script>
@@ -94,6 +94,7 @@ async function handleStatisticsCalculate(): Promise<void> {
           v-model:value="statisticalMethod"
           style="width: 150px"
           :options="statisticalMethodOptions.map(m => ({ label: m, value: m }))"
+          not-found-content="暂无数据"
         />
       </div>
     </div>
@@ -132,13 +133,16 @@ async function handleStatisticsCalculate(): Promise<void> {
 .statistics-panel {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 0 16px 16px 0; /* 右侧和底部留白，避免滚动条紧贴边缘 */
+  height: 100%;
+  min-height: 500px; /* 设置最小高度，防止屏幕太小 */
+  padding: 0 16px 16px 0;
 }
 
 .config-section {
-  flex-shrink: 0;
+  flex-shrink: 0; /* 固定在顶部，不收缩 */
   padding: 12px 0;
+  background: #fff;
+  z-index: 1;
 }
 
 .config-item {
@@ -157,14 +161,19 @@ async function handleStatisticsCalculate(): Promise<void> {
 .table-section {
   display: flex;
   flex-direction: column;
+  flex: 1; /* 占据剩余空间 */
+  min-height: 0; /* 允许子元素滚动 */
+  overflow: hidden; /* 防止溢出 */
 }
 
 .table-header {
   display: flex;
   justify-content: space-between;
-  flex-shrink: 0;
+  flex-shrink: 0; /* 固定在顶部，不收缩 */
   padding: 8px 0;
   margin-bottom: 8px;
+  background: #fff;
+  z-index: 1;
 }
 
 .table-title {
@@ -174,7 +183,9 @@ async function handleStatisticsCalculate(): Promise<void> {
 }
 
 .table-wrapper {
-  min-height: 200px;
+  flex: 1; /* 占据剩余空间 */
+  overflow: auto; /* 允许表格滚动 */
+  min-height: 300px; /* 表格区域最小高度 */
 }
 
 .data-table {
