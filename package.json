@@ -25,6 +25,7 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@types/lodash": "^4.17.20",
     "ant-design-vue": "~4.2.6",
     "axios": "^1.13.1",
     "binary-parser": "^2.2.1",

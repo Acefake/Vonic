@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DesignFactor, SampleData, SampleSpaceData } from './type'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue'
+import { debounce } from 'lodash'
 import { storeToRefs } from 'pinia'
 import { computed, ref } from 'vue'
 import { getProductConfig } from '../../../../config/product.config'
@@ -231,10 +232,12 @@ async function getWorkBaseDir(): Promise<string> {
 const isOptimizing = ref(false)
 
 async function performOptimization(): Promise<void> {
-  // if (!designStore.isFormValid) {
-  //   app.message.error('方案设计因子未填写完整，请检查输入！')
-  //   return
-  // }
+  console.log('designStore.isFormValid()', designStore.isFormValid())
+
+  if (!designStore.isFormValid()) {
+    app.message.error('方案设计因子未填写完整，请检查输入！')
+    return
+  }
 
   if (designFactors.value.length === 0) {
     app.message.warning('请先添加设计因子')
@@ -268,7 +271,7 @@ async function performOptimization(): Promise<void> {
       return
     }
 
-    logStore.info(`开启启动exe进程...`)
+    logStore.info(`开始启动Fortran进程...`)
 
     // 存储每个样本的信息
     interface SampleInfo {
@@ -917,8 +920,8 @@ async function performOptimization(): Promise<void> {
   }
 }
 
-// 错误提示回调函数
-const showError = (message: string) => app.message.error(message)
+// 错误提示回调函数（使用防抖减少频繁提示）
+const showError = debounce((message: string) => app.message.error(message), 500)
 
 /**
  * values 列的更新处理，抽离到脚本中避免模板内含复杂正则导致编译报错
@@ -1305,14 +1308,14 @@ async function sampleSpace() {
               <a-form layout="vertical" :model="{}">
                 <div class="form-row">
                   <a-form-item label="因子数量" class="form-col">
-                    <a-input-number
+                    <a-input
                       :value="factorCount" disabled :min="1" style="width: 100%"
                       @update:value="(val) => { factorCount = val ?? 3; onFactorCountChange(val) }"
                     />
                   </a-form-item>
 
                   <a-form-item label="样本点数" class="form-col">
-                    <a-input-number
+                    <a-input
                       :value="samplePointCount" :min="1" style="width: 100%"
                       @update:value="(val) => samplePointCount = val ?? 50"
                     />
@@ -1395,14 +1398,9 @@ async function sampleSpace() {
                       const prev = factor.lowerLimit
                       let newVal = val ?? undefined
 
-                      // 如果输入0，提示错误并置为空
-                      if (handleZeroInput(factor, newVal, 'lowerLimit', record, showError)) {
-                        return
-                      }
-
                       if (optimizationAlgorithm === 'NSGA-II') {
                         // NSGA-II: 校验（清空时不触发必填校验）
-                        if (!validateLowerLimitNSGAII(factor, newVal, prev ?? undefined, showError)) {
+                        if (!validateLowerLimitNSGAII(factor, newVal, prev ?? undefined, showError, record)) {
                           return
                         }
                         factor.lowerLimit = newVal
@@ -1424,14 +1422,9 @@ async function sampleSpace() {
                       const prev = factor.upperLimit
                       let newVal = val ?? undefined
 
-                      // 如果输入0，提示错误并置为空
-                      if (handleZeroInput(factor, newVal, 'upperLimit', record, showError)) {
-                        return
-                      }
-
                       if (optimizationAlgorithm === 'NSGA-II') {
                         // NSGA-II: 校验（清空时不触发必填校验）
-                        if (!validateUpperLimitNSGAII(factor, newVal, prev ?? undefined, showError)) {
+                        if (!validateUpperLimitNSGAII(factor, newVal, prev ?? undefined, showError, record)) {
                           return
                         }
                         factor.upperLimit = newVal
@@ -1439,25 +1432,20 @@ async function sampleSpace() {
                       }
                       else if (optimizationAlgorithm === 'MOPSO') {
                         // MOPSO: 处理更新逻辑
-                        handleMOPSOUpperLimitUpdate(factor, record, newVal, showError)
+                        handleMOPSOUpperLimitUpdate(factor, record, newVal, prev ?? undefined, showError)
                       }
                     }"
                   />
                 </template>
                 <template v-else-if="column.key === 'levelCount'">
                   <a-input-number
-                    :value="record.levelCount" :min="3" style="width: 100%"
+                    :value="record.levelCount" style="width: 100%"
                     :disabled="(optimizationAlgorithm === 'NSGA-II' && record.type !== '离散') || (optimizationAlgorithm === 'MOPSO' && hasValues(record))"
                     @update:value="(val) => {
                       const factor = designFactors.find(f => f.id === record.id)
                       if (!factor) return
                       const prev = factor.levelCount
                       let newVal = val ?? undefined
-
-                      // 如果输入0，提示错误并置为空
-                      if (handleZeroInput(factor, newVal, 'levelCount', record, showError)) {
-                        return
-                      }
 
                       if (optimizationAlgorithm === 'NSGA-II') {
                         // NSGA-II: 处理水平数更新

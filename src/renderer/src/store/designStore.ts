@@ -86,6 +86,22 @@ export interface SeparationComponents {
   depletedBaffleAxialPosition?: number
   /** 贫料挡板外孔外径 (mm) */
   depletedBaffleOuterHoleOuterDiameter?: number
+  /** 内边界镜像位置 (mm) */
+  innerBoundaryMirrorPosition?: number
+  /** 网格生成方式 */
+  gridGenerationMethod?: number
+  /** BWG径向凸起高度 (mm) */
+  bwgRadialProtrusionHeight?: number
+  /** BWG轴向高度 (mm) */
+  bwgAxialHeight?: number
+  /** BWG轴向位置 (mm) */
+  bwgAxialPosition?: number
+  /** 径向网格比 */
+  radialGridRatio?: number
+  /** 补偿系数 */
+  compensationCoefficient?: number
+  /** 流线数据 */
+  streamlineData?: number
 }
 
 /**
@@ -163,6 +179,14 @@ export const useDesignStore = defineStore('design', () => {
     minAxialDistance: undefined,
     depletedBaffleAxialPosition: undefined,
     depletedBaffleOuterHoleOuterDiameter: undefined,
+    innerBoundaryMirrorPosition: undefined,
+    gridGenerationMethod: undefined,
+    bwgRadialProtrusionHeight: undefined,
+    bwgAxialHeight: undefined,
+    bwgAxialPosition: undefined,
+    radialGridRatio: undefined,
+    compensationCoefficient: undefined,
+    streamlineData: undefined,
   })
 
   /** 输出结果 */
@@ -185,15 +209,54 @@ export const useDesignStore = defineStore('design', () => {
 
   /**
    * 检查表单是否完整
+   * 只检查必需的字段，不包括输出结果和可选字段
    */
-  const isFormValid = computed((): boolean => {
-    // 所有参数都已填写，且没有未填写的参数
-    return Object.values(topLevelParams.value).every(value => value !== undefined)
-      && Object.values(operatingParams.value).every(value => value !== undefined)
-      && Object.values(drivingParams.value).every(value => value !== undefined)
-      && Object.values(separationComponents.value).every(value => value !== undefined)
-      && Object.values(outputResults.value).every(value => value !== undefined)
-  })
+  function isFormValid(): boolean {
+    // 必需的顶层参数
+    const requiredTopLevel = ['angularVelocity', 'rotorRadius', 'rotorShoulderLength'] as const
+    const topLevelValid = requiredTopLevel.every(key =>
+      topLevelParams.value[key] !== undefined && topLevelParams.value[key] !== null,
+    )
+
+    // 必需的运行参数（feedingMethod 有默认值，不需要检查）
+    const requiredOperating = ['rotorSidewallPressure', 'gasDiffusionCoefficient', 'feedFlowRate', 'splitRatio'] as const
+    const operatingValid = requiredOperating.every(key =>
+      operatingParams.value[key] !== undefined && operatingParams.value[key] !== null,
+    )
+
+    // 必需的驱动参数
+    const requiredDriving = [
+      'depletedEndCapTemperature',
+      'enrichedEndCapTemperature',
+      'feedAxialDisturbance',
+      'feedAngularDisturbance',
+      'depletedMechanicalDriveAmount',
+    ] as const
+    const drivingValid = requiredDriving.every(key =>
+      drivingParams.value[key] !== undefined && drivingParams.value[key] !== null,
+    )
+
+    // 必需的分离部件参数（排除可选字段）
+    const requiredSeparation = [
+      'extractionChamberHeight',
+      'enrichedBaffleHoleDiameter',
+      'feedBoxShockDiskHeight',
+      'depletedExtractionArmRadius',
+      'depletedExtractionPortInnerDiameter',
+      'depletedBaffleInnerHoleOuterDiameter',
+      'enrichedBaffleHoleDistributionCircleDiameter',
+      'depletedExtractionPortOuterDiameter',
+      'depletedBaffleOuterHoleInnerDiameter',
+      'minAxialDistance',
+      'depletedBaffleAxialPosition',
+      'depletedBaffleOuterHoleOuterDiameter',
+    ] as const
+    const separationValid = requiredSeparation.every(key =>
+      separationComponents.value[key] !== undefined && separationComponents.value[key] !== null,
+    )
+
+    return topLevelValid && operatingValid && drivingValid && separationValid
+  }
 
   /**
    * 设置是否多方案
@@ -286,6 +349,14 @@ export const useDesignStore = defineStore('design', () => {
       minAxialDistance: undefined,
       depletedBaffleAxialPosition: undefined,
       depletedBaffleOuterHoleOuterDiameter: undefined,
+      innerBoundaryMirrorPosition: undefined,
+      gridGenerationMethod: undefined,
+      bwgRadialProtrusionHeight: undefined,
+      bwgAxialHeight: undefined,
+      bwgAxialPosition: undefined,
+      radialGridRatio: undefined,
+      compensationCoefficient: undefined,
+      streamlineData: undefined,
     }
     outputResults.value = {
       separationPower: undefined,

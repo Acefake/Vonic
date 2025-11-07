@@ -64,37 +64,75 @@ function clearMOPSORelatedFields(factor: DesignFactor, record: DesignFactor): vo
 }
 
 /**
- * 校验正数（大于指定最小值）
+ * 将值转换为数字（如果可能）
+ * 支持数字类型和可转换为数字的字符串
+ * @returns 转换后的数字，如果无法转换则返回原值
  */
-function validatePositiveNumber(
-  val: number,
-  min: number,
-  fieldName: string,
-  factor: DesignFactor,
-  showError: ErrorCallback,
-): boolean {
-  if (val <= min) {
-    showError(formatError(factor, `${fieldName}应大于${min}`))
-    return false
+function toNumber(val: unknown): number | unknown {
+  if (typeof val === 'number') {
+    return val
   }
-  return true
+  if (typeof val === 'string') {
+    const trimmed = val.trim()
+    if (trimmed === '') {
+      return val
+    }
+    const num = Number(trimmed)
+    if (!Number.isNaN(num) && Number.isFinite(num)) {
+      return num
+    }
+  }
+  return val
 }
 
 /**
- * 校验整数（大于指定最小值）
+ * 校验是否为有效数字（包括 0）
+ * 支持数字类型和可转换为数字的字符串
  */
-function validateIntegerGreaterThan(
-  val: number,
-  min: number,
-  fieldName: string,
+export function isValidNumber(val: unknown): val is number {
+  // 如果是数字类型，直接校验
+  if (typeof val === 'number') {
+    return !Number.isNaN(val) && Number.isFinite(val)
+  }
+
+  // 如果是字符串，尝试转换为数字
+  if (typeof val === 'string') {
+    const trimmed = val.trim()
+    // 空字符串不算有效数字
+    if (trimmed === '') {
+      return false
+    }
+    const num = Number(trimmed)
+    return !Number.isNaN(num) && Number.isFinite(num)
+  }
+
+  return false
+}
+
+/**
+ * 校验数字输入格式，只允许数字
+ * @returns 如果输入无效返回 true（已处理，需要停止后续流程），否则返回 false（输入有效，继续处理）
+ */
+export function validateNumberInput(
   factor: DesignFactor,
+  newVal: number | undefined | null,
+  fieldName: 'lowerLimit' | 'upperLimit' | 'levelCount',
+  record: DesignFactor,
   showError: ErrorCallback,
 ): boolean {
-  if (!Number.isInteger(val) || val <= min) {
-    showError(formatError(factor, `${fieldName}应为大于${min}的正整数`))
-    return false
+  // 允许为空
+  if (isNullOrUndefined(newVal)) {
+    return false // 输入有效，继续处理
   }
-  return true
+
+  // 校验是否为有效数字
+  if (!isValidNumber(newVal)) {
+    showError(formatError(factor, '参数不合法'))
+    setFieldValue(factor, record, fieldName, null)
+    return true // 返回 true 表示已处理，需要停止后续流程
+  }
+
+  return false // 输入有效，继续处理
 }
 
 /**
@@ -139,22 +177,42 @@ export function hasBoundsOrLevels(factor: DesignFactor): boolean {
 export function validateLowerLimitNSGAII(
   factor: DesignFactor,
   newVal: number | undefined,
-  _prev: number | undefined,
+  prev: number | undefined,
   showError: ErrorCallback,
+  record?: DesignFactor,
 ): boolean {
   // 清空时不触发必填校验，允许清空
   if (isNullOrUndefined(newVal)) {
     return true
   }
-  // 范围校验：>0
-  if (!validatePositiveNumber(newVal, 0, '下限', factor, showError)) {
-    factor.lowerLimit = null
+  // 校验是否为有效数字（允许 0）
+  if (!isValidNumber(newVal)) {
+    showError(formatError(factor, '参数不合法'))
+    if (record && prev !== undefined) {
+      restoreFieldValue(factor, record, 'lowerLimit', prev)
+    }
+    else {
+      factor.lowerLimit = null
+      if (record) {
+        record.lowerLimit = null
+      }
+    }
     return false
   }
+  // 将字符串转换为数字（如果可能）
+  const numVal = toNumber(newVal) as number
   // 下限应小于上限
-  if (hasFieldValue(factor, 'upperLimit') && newVal >= factor.upperLimit!) {
+  if (hasFieldValue(factor, 'upperLimit') && numVal >= factor.upperLimit!) {
     showError(formatError(factor, '下限应小于其上限'))
-    factor.lowerLimit = null
+    if (record && prev !== undefined) {
+      restoreFieldValue(factor, record, 'lowerLimit', prev)
+    }
+    else {
+      factor.lowerLimit = null
+      if (record) {
+        record.lowerLimit = null
+      }
+    }
     return false
   }
   return true
@@ -166,22 +224,42 @@ export function validateLowerLimitNSGAII(
 export function validateUpperLimitNSGAII(
   factor: DesignFactor,
   newVal: number | undefined,
-  _prev: number | undefined,
+  prev: number | undefined,
   showError: ErrorCallback,
+  record?: DesignFactor,
 ): boolean {
   // 清空时不触发必填校验，允许清空
   if (isNullOrUndefined(newVal)) {
     return true
   }
-  // 范围校验：>0
-  if (!validatePositiveNumber(newVal, 0, '上限', factor, showError)) {
-    factor.upperLimit = null
+  // 校验是否为有效数字（允许 0）
+  if (!isValidNumber(newVal)) {
+    showError(formatError(factor, '参数不合法'))
+    if (record && prev !== undefined) {
+      restoreFieldValue(factor, record, 'upperLimit', prev)
+    }
+    else {
+      factor.upperLimit = null
+      if (record) {
+        record.upperLimit = null
+      }
+    }
     return false
   }
+  // 将字符串转换为数字（如果可能）
+  const numVal = toNumber(newVal) as number
   // 上限应大于下限
-  if (hasFieldValue(factor, 'lowerLimit') && newVal <= factor.lowerLimit!) {
+  if (hasFieldValue(factor, 'lowerLimit') && numVal <= factor.lowerLimit!) {
     showError(formatError(factor, '上限应大于其下限'))
-    factor.upperLimit = null
+    if (record && prev !== undefined) {
+      restoreFieldValue(factor, record, 'upperLimit', prev)
+    }
+    else {
+      factor.upperLimit = null
+      if (record) {
+        record.upperLimit = null
+      }
+    }
     return false
   }
   return true
@@ -206,14 +284,6 @@ export function validateMOPSOBounds(factor: DesignFactor, showError: ErrorCallba
     if (!validateBoundsRelation(lower, upper, factor, showError)) {
       return false
     }
-
-    // 校验范围 > 0（0会被置空）
-    if (!validatePositiveNumber(lower, 0, '下限', factor, showError)) {
-      return false
-    }
-    if (!validatePositiveNumber(upper, 0, '上限', factor, showError)) {
-      return false
-    }
   }
 
   return true
@@ -221,6 +291,7 @@ export function validateMOPSOBounds(factor: DesignFactor, showError: ErrorCallba
 
 /**
  * 处理输入值为 0 的情况（所有字段通用）
+ * @deprecated 已改为 validateNumberInput，保留此函数以保持兼容性
  */
 export function handleZeroInput(
   factor: DesignFactor,
@@ -229,12 +300,7 @@ export function handleZeroInput(
   record: DesignFactor,
   showError: ErrorCallback,
 ): boolean {
-  if (newVal === 0) {
-    showError(formatError(factor, '不能输入0'))
-    setFieldValue(factor, record, fieldName, null)
-    return true // 返回 true 表示已处理，需要停止后续流程
-  }
-  return false
+  return validateNumberInput(factor, newVal, fieldName, record, showError)
 }
 
 /**
@@ -257,20 +323,24 @@ export function handleMOPSOLowerLimitUpdate(
     return true // 返回 true 表示已处理
   }
 
-  // 基本校验：>0
-  if (!validatePositiveNumber(newVal, 0, '下限', factor, showError)) {
+  // 校验是否为有效数字（允许 0）
+  if (!isValidNumber(newVal)) {
+    showError(formatError(factor, '参数不合法'))
     restoreFieldValue(factor, record, 'lowerLimit', prev)
-    return false // 返回 false 表示校验失败
+    return false
   }
 
+  // 将字符串转换为数字（如果可能）
+  const numVal = toNumber(newVal) as number
+
   // 如果上限已填写，校验下限 < 上限
-  if (hasFieldValue(factor, 'upperLimit') && newVal >= factor.upperLimit!) {
+  if (hasFieldValue(factor, 'upperLimit') && numVal >= factor.upperLimit!) {
     showError(formatError(factor, '下限应小于其上限'))
     restoreFieldValue(factor, record, 'lowerLimit', prev)
     return false
   }
 
-  setFieldValue(factor, record, 'lowerLimit', newVal)
+  setFieldValue(factor, record, 'lowerLimit', numVal)
   factor.values = undefined
   // 校验关联性
   return validateMOPSOBounds(factor, showError)
@@ -283,6 +353,7 @@ export function handleMOPSOUpperLimitUpdate(
   factor: DesignFactor,
   record: DesignFactor,
   newVal: number | undefined,
+  prev: number | undefined,
   showError: ErrorCallback,
 ): boolean {
   // 允许为空，但如果填写了则需要校验关联性
@@ -295,20 +366,34 @@ export function handleMOPSOUpperLimitUpdate(
     return true // 返回 true 表示已处理
   }
 
-  // 基本校验：>0
-  if (!validatePositiveNumber(newVal, 0, '上限', factor, showError)) {
-    setFieldValue(factor, record, 'upperLimit', null)
-    return false // 返回 false 表示校验失败
-  }
-
-  // 如果下限已填写，校验上限 > 下限
-  if (hasFieldValue(factor, 'lowerLimit') && newVal <= factor.lowerLimit!) {
-    showError(formatError(factor, '上限应大于其下限'))
-    setFieldValue(factor, record, 'upperLimit', null)
+  // 校验是否为有效数字（允许 0）
+  if (!isValidNumber(newVal)) {
+    showError(formatError(factor, '参数不合法'))
+    if (prev !== undefined) {
+      restoreFieldValue(factor, record, 'upperLimit', prev)
+    }
+    else {
+      setFieldValue(factor, record, 'upperLimit', null)
+    }
     return false
   }
 
-  setFieldValue(factor, record, 'upperLimit', newVal)
+  // 将字符串转换为数字（如果可能）
+  const numVal = toNumber(newVal) as number
+
+  // 如果下限已填写，校验上限 > 下限
+  if (hasFieldValue(factor, 'lowerLimit') && numVal <= factor.lowerLimit!) {
+    showError(formatError(factor, '上限应大于其下限'))
+    if (prev !== undefined) {
+      restoreFieldValue(factor, record, 'upperLimit', prev)
+    }
+    else {
+      setFieldValue(factor, record, 'upperLimit', null)
+    }
+    return false
+  }
+
+  setFieldValue(factor, record, 'upperLimit', numVal)
   factor.values = undefined
   // 校验关联性
   return validateMOPSOBounds(factor, showError)
@@ -321,7 +406,7 @@ export function handleNSGAIILevelCountUpdate(
   factor: DesignFactor,
   record: DesignFactor,
   newVal: number | undefined,
-  _prev: number | undefined,
+  prev: number | undefined,
   showError: ErrorCallback,
 ): boolean {
   // 允许为空（仅离散类型需要）
@@ -330,12 +415,46 @@ export function handleNSGAIILevelCountUpdate(
     return true
   }
 
-  if (!validateIntegerGreaterThan(newVal, 2, '水平数', factor, showError)) {
-    setFieldValue(factor, record, 'levelCount', null)
+  // 校验是否为有效数字（允许 0）
+  if (!isValidNumber(newVal)) {
+    showError(formatError(factor, '参数不合法'))
+    if (prev !== undefined) {
+      restoreFieldValue(factor, record, 'levelCount', prev)
+    }
+    else {
+      setFieldValue(factor, record, 'levelCount', null)
+    }
     return false
   }
 
-  setFieldValue(factor, record, 'levelCount', newVal)
+  // 将字符串转换为数字（如果可能）
+  const numVal = toNumber(newVal) as number
+
+  // 校验是否为整数（允许 0）
+  if (!Number.isInteger(numVal)) {
+    showError(formatError(factor, '水平数应为整数'))
+    if (prev !== undefined) {
+      restoreFieldValue(factor, record, 'levelCount', prev)
+    }
+    else {
+      setFieldValue(factor, record, 'levelCount', null)
+    }
+    return false
+  }
+
+  // 校验水平数不能小于3
+  if (numVal < 3) {
+    showError(formatError(factor, '水平数不能小于3'))
+    if (prev !== undefined) {
+      restoreFieldValue(factor, record, 'levelCount', prev)
+    }
+    else {
+      setFieldValue(factor, record, 'levelCount', null)
+    }
+    return false
+  }
+
+  setFieldValue(factor, record, 'levelCount', numVal)
   return true
 }
 
@@ -359,13 +478,46 @@ export function handleMOPSOLevelCountUpdate(
     return true
   }
 
-  // 基本校验：>2 的正整数
-  if (!validateIntegerGreaterThan(newVal, 2, '水平数', factor, showError)) {
-    restoreFieldValue(factor, record, 'levelCount', prev)
+  // 校验是否为有效数字（允许 0）
+  if (!isValidNumber(newVal)) {
+    showError(formatError(factor, '参数不合法'))
+    if (prev !== undefined) {
+      restoreFieldValue(factor, record, 'levelCount', prev)
+    }
+    else {
+      setFieldValue(factor, record, 'levelCount', null)
+    }
     return false
   }
 
-  setFieldValue(factor, record, 'levelCount', newVal)
+  // 将字符串转换为数字（如果可能）
+  const numVal = toNumber(newVal) as number
+
+  // 校验是否为整数（允许 0）
+  if (!Number.isInteger(numVal)) {
+    showError(formatError(factor, '水平数应为整数'))
+    if (prev !== undefined) {
+      restoreFieldValue(factor, record, 'levelCount', prev)
+    }
+    else {
+      setFieldValue(factor, record, 'levelCount', null)
+    }
+    return false
+  }
+
+  // 校验水平数不能小于3
+  if (numVal < 3) {
+    showError(formatError(factor, '水平数不能小于3'))
+    if (prev !== undefined) {
+      restoreFieldValue(factor, record, 'levelCount', prev)
+    }
+    else {
+      setFieldValue(factor, record, 'levelCount', null)
+    }
+    return false
+  }
+
+  setFieldValue(factor, record, 'levelCount', numVal)
   factor.values = undefined
   // 校验关联性
   return validateMOPSOBounds(factor, showError)
@@ -404,19 +556,9 @@ function validateContinuousBounds(
     return false
   }
 
-  // 检查数值有效性
+  // 检查数值有效性（允许 0）
   if (!isValidFiniteNumber(lower) || !isValidFiniteNumber(upper)) {
     errors.push(formatBatchError(factorName, '下限/上限必须为有效数值'))
-    return false
-  }
-
-  // 校验范围 > 0
-  if (lower <= 0) {
-    errors.push(formatBatchError(factorName, '下限应大于0'))
-    return false
-  }
-  if (upper <= 0) {
-    errors.push(formatBatchError(factorName, '上限应大于0'))
     return false
   }
 
@@ -518,6 +660,11 @@ export function validateMOPSOFactors(factors: DesignFactor[]): string[] {
         errors.push(formatBatchError(name, '取值不能为空'))
         continue
       }
+
+      if (arr.length < 3) {
+        errors.push(formatBatchError(name, '取值数量应大于等于3'))
+        continue
+      }
       // 校验通过，可以继续处理该因子
       continue
     }
@@ -544,9 +691,9 @@ export function validateMOPSOFactors(factors: DesignFactor[]): string[] {
         continue
       }
 
-      // 校验水平数
-      if (!isValidFiniteNumber(level) || !Number.isInteger(level) || level <= 2) {
-        errors.push(formatBatchError(name, '水平数应为大于2的正整数'))
+      // 校验水平数（不能小于3）
+      if (!isValidFiniteNumber(level) || !Number.isInteger(level) || level < 3) {
+        errors.push(formatBatchError(name, '水平数不能小于3'))
         continue
       }
 

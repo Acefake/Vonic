@@ -46,10 +46,10 @@ extraResources:
 #   target: portable
 
 win:
-  icon: build/icons/logo.ico
+  # icon: build/icons/logo.ico
   executableName: mPhysSim
   target:
-    - zip
+    - dir
 
 appImage:
   artifactName: ${name}-mPhysSim.${ext}

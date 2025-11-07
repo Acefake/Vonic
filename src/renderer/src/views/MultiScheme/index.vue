@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TableProps } from 'ant-design-vue'
-import { ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue'
+import { SearchOutlined } from '@ant-design/icons-vue'
 import { Button, InputNumber, message, Space } from 'ant-design-vue'
 import { storeToRefs } from 'pinia'
 
@@ -66,9 +66,29 @@ const activeKey = ref('1')
 // 分页配置
 const paginationConfig = reactive({
   current: 1,
-  pageSize: 10,
+  pageSize: 20,
   showSizeChanger: true,
   showTotal: (total: number) => `共 ${total} 条`,
+})
+
+// 行选择相关
+const selectedRowKeys = ref<(string | number)[]>([])
+const selectedRows = ref<SchemeData[]>([])
+
+// 方案对比：多选数据（用于雷达图）
+const comparisonSelectedData = computed(() => {
+  if (activeKey.value === '1') {
+    return selectedRows.value
+  }
+  return []
+})
+
+// 方案修正：单选数据（用于数据修正）
+const correctionSelectedData = computed(() => {
+  if (activeKey.value === '2') {
+    return selectedRows.value.length > 0 ? selectedRows.value[0] : null
+  }
+  return null
 })
 
 // 筛选状态
@@ -444,7 +464,29 @@ function isMaxSepPowerRow(record: SchemeData): boolean {
 
 function handleTabChange(key: string) {
   activeKey.value = key
+  // 切换标签页时清空选择
+  selectedRowKeys.value = []
+  selectedRows.value = []
 }
+
+// 处理行选择变化
+function handleRowSelectionChange(selectedKeys: (string | number)[], selectedRowsData: SchemeData[]) {
+  selectedRowKeys.value = selectedKeys
+  selectedRows.value = selectedRowsData
+}
+
+// 计算行选择配置
+const rowSelection = computed(() => {
+  // 方案对比（tab 1）不显示选择框，方案修正（tab 2）显示单选
+  if (activeKey.value === '1') {
+    return undefined
+  }
+  return {
+    type: 'radio',
+    selectedRowKeys: selectedRowKeys.value,
+    onChange: handleRowSelectionChange,
+  }
+})
 
 onMounted(() => {
   loadSchemes()
@@ -457,30 +499,24 @@ onMounted(() => {
       <template #title>
         <a-space>
           <span>多方案对比</span>
-          <a-button type="link" size="small" :loading="loading" @click="loadSchemes">
-            <template #icon>
-              <ReloadOutlined />
-            </template>
-            刷新
-          </a-button>
         </a-space>
       </template>
 
       <a-table
         :columns="columns" :data-source="filteredData" :loading="loading" :pagination="paginationConfig"
         :row-class-name="(record) => isMaxSepPowerRow(record) ? 'optimal-row' : ''" :row-key="(record) => `${record.index}_${record.fileName}`" size="small"
-        :scroll="{ x: 'max-content' }" @change="handleTableChange"
+        :scroll="{ x: 'max-content' }" :row-selection="rowSelection" @change="handleTableChange"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'index'">
             {{ record.index === -1 ? '*' : record.index + 1 }}
           </template>
           <template v-else-if="column.key === 'fileName'">
-            {{ record.fileName }}
+            {{ record.fileName }}{{ fieldConfigs }}
           </template>
           <template v-else-if="column.key === 'sepPower'">
             <span :class="{ 'max-power': isOptimalSchemeRow(record) }">
-              {{ formatNumber(record.sepPower) }} W
+              {{ formatNumber(record.sepPower) }}
             </span>
           </template>
           <template v-else-if="column.key === 'sepFactor'">
@@ -505,11 +541,11 @@ onMounted(() => {
           <template #title>
             <span>方案对比图表</span>
           </template>
-          <SchemeChart :data="filteredData" :x-columns="xColumns" :y-columns="yColumns" />
+          <SchemeChart :data="comparisonSelectedData.length > 0 ? comparisonSelectedData : filteredData" :x-columns="xColumns" :y-columns="yColumns" />
         </a-card>
       </a-tab-pane>
       <a-tab-pane key="2" tab="方案修正">
-        <InitialDesign />
+        <InitialDesign :selected-scheme="correctionSelectedData" />
       </a-tab-pane>
     </a-tabs>
   </div>
@@ -521,27 +557,6 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.max-power {
-  font-weight: 600;
-  color: #ff4d4f;
-}
-
-:deep(.ant-table-tbody > tr) {
-  transition: background-color 0.2s;
-}
-
-:deep(.ant-table-tbody > tr:hover) {
-  background-color: #f5f5f5;
-}
-
-:deep(.ant-table-tbody > tr.optimal-row) {
-  background-color: #f6ffed !important;
-}
-
-:deep(.ant-table-tbody > tr.optimal-row:hover) {
-  background-color: #d9f7be !important;
 }
 
 .unit {

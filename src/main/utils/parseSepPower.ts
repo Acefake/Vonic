@@ -1,5 +1,3 @@
-import { Logger } from '@/main/app/handlers/LogerManager'
-
 /**
  * 解析 Sep_power.dat 文件内容
  * 参考 InitialDesign 中的 replaceSepPowerParams 函数逻辑
@@ -19,7 +17,6 @@ export interface SepPowerData {
 }
 
 export function parseSepPower(content: string): SepPowerData {
-  const logger: Logger = new Logger()
   // 统一换行符为 \n（兼容 Windows 环境）
   const lineArr = content
     .replace(/\r\n/g, '\n')
@@ -42,8 +39,6 @@ export function parseSepPower(content: string): SepPowerData {
       result[key] = value
     }
   })
-
-  logger.log('info', `解析 Sep_power.dat 文件内容${lineArr}`)
 
   return {
     maxSepPower: result['MAXINMUM SEPERATIVE POWER seperative power'] ?? result['MAXIMUM SEPERATIVE POWER seperative power'] ?? null,
