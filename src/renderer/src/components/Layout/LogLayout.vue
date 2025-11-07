@@ -161,10 +161,13 @@ defineExpose({
       >
         <span class="log-content">
           <span>[{{ log.level.toUpperCase() }}]</span>
-          <span class="log-timestamp"> {{ log.timestamp }}</span>
           <span class="log-message">{{ log.message }}</span>
           <span v-if="log.details" class="log-details">{{ log.details }}</span>
         </span>
+
+        <div class="log-timestamp">
+          {{ log.timestamp }}
+        </div>
       </div>
 
       <!-- 空状态 -->
@@ -190,7 +193,7 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 4px 12px;
   border-bottom: 1px solid #e8e8e8;
   background: #fafafa;
 }
@@ -229,8 +232,7 @@ defineExpose({
 
 .log-timestamp {
   color: #8c8c8c;
-  font-size: 10px;
-  margin-right: 6px;
+  font-size: 11px;
 }
 
 .log-message {
@@ -240,8 +242,7 @@ defineExpose({
 .log-details {
   display: block;
   margin-left: 4px;
-  color: #595959;
-  font-size: 10px;
+  font-size: 9px;
   opacity: 0.85;
 }
 

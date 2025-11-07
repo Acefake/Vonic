@@ -689,7 +689,6 @@ export class WindowManager {
       })
     })
 
-    // IPC: 通过 ID 获取窗口实例
     ipcMain.handle('window:get-by-id', (_, windowName: WindowName, windowId: number) => {
       const instance = this.getWindowById(windowId)
       if (!instance || instance.windowName !== windowName) {

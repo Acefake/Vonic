@@ -13,7 +13,7 @@
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "start": "electron-vite preview",
-    "dev": "electron-vite dev",
+    "dev": "chcp 65001 >nul && electron-vite dev",
     "dev:mPhysSim": "chcp 65001 >nul && cross-env VITE_APP_PRODUCT=mPhysSim electron-vite dev --mode mPhysSim",
     "dev:powerAnalysis": "cross-env VITE_APP_PRODUCT=powerAnalysis electron-vite dev --mode powerAnalysis",
     "build": "npm run typecheck && electron-vite build",

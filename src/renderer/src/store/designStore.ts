@@ -315,6 +315,6 @@ export const useDesignStore = defineStore('design', () => {
 }, {
   persist: {
     key: 'design-store',
-    storage: localStorage,
+    storage: sessionStorage,
   },
 })

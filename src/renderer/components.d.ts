@@ -41,7 +41,6 @@ declare module 'vue' {
     ATextarea: typeof import('ant-design-vue/es')['Textarea']
     ATooltip: typeof import('ant-design-vue/es')['Tooltip']
     ATypographyText: typeof import('ant-design-vue/es')['TypographyText']
-    AUpload: typeof import('ant-design-vue/es')['Upload']
     CustomHeader: typeof import('./src/components/Layout/CustomHeader.vue')['default']
     Layout: typeof import('./src/components/Layout/index.vue')['default']
     Loding: typeof import('./src/components/Loding/index.vue')['default']

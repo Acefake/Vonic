@@ -12,6 +12,7 @@ import { FEEDING_METHOD_MAP, useDesignStore } from '../../store/designStore'
 import { useLogStore } from '../../store/logStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { FIELD_LABELS, getFieldLabel } from '../../utils/field-labels'
+import { findValue, parseSepPowerFile } from '../../utils/parseSepPower'
 
 const designStore = useDesignStore()
 const logStore = useLogStore()
@@ -335,8 +336,8 @@ async function simulateCalculation(): Promise<void> {
   try {
     await formRef.value?.validate()
   }
-  catch (e: any) {
-    const msg = e?.errorFields?.[0]?.errors?.[0] || '参数校验未通过，请检查输入！'
+  catch {
+    const msg = '参数校验未通过，请检查输入！'
     message.error(msg)
     return
   }
@@ -417,26 +418,11 @@ async function submitDesign(): Promise<void> {
 function replaceSepPowerParams(content: string): void {
   logStore.info('读取仿真结果文件')
 
-  const lineArr = content
-    .replace(/\r\n/g, '\n') // 统一换行符为 \n（兼容 Windows 环境）
-    .split('\n') // 按换行符拆分
-    .filter(line => line.trim() !== '') // 过滤空行
-
-  // eslint-disable-next-line regexp/no-super-linear-backtracking
-  const regex = /^\s*([^=]+?)\s*=\s*(\d+)\s*$/
-  const result = {}
-  lineArr.forEach((line) => {
-    const match = line.match(regex) // 执行匹配
-    if (match) {
-      const key = match[1].trim() // 指标名（去除前后空格）
-      const value = Number(match[2]) // 数值（转为 Number 类型，避免字符串）
-      result[key] = value
-    }
-  })
+  const result = parseSepPowerFile(content)
 
   designStore.updateOutputResults({
-    separationPower: result['ACTURAL SEPERATIVE POWER'],
-    separationFactor: result['ACTURAL SEPERATIVE FACTOR'],
+    separationPower: findValue(result, ['ACTURAL SEPERATIVE POWER', 'ACTUAL SEPERATIVE POWER']),
+    separationFactor: findValue(result, ['ACTURAL SEPERATIVE FACTOR', 'ACTUAL SEPERATIVE FACTOR']),
   })
 
   logStore.info('仿真计算完成')

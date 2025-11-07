@@ -331,6 +331,10 @@ export interface FileAPI {
   createOutputDir: (baseDir: string) => Promise<string>
   /** 删除目录（递归删除） */
   deleteDir: (dirPath: string) => Promise<void>
+  /** 复制文件 */
+  copyFile: (sourcePath: string, targetPath: string) => Promise<void>
+  /** 查找 exe 文件路径 */
+  findExe: (exeName: string) => Promise<string | null>
 }
 
 export interface RequestConfig {

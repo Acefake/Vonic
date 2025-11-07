@@ -193,7 +193,7 @@ export class DoeServiceManager {
           await this.logger?.log('error', `重启 DOE 服务失败: ${error}`)
         }
       }
-    }, 30000) // 每30秒检查一次
+    }, 3000000) // 每30秒检查一次
   }
 
   /**
