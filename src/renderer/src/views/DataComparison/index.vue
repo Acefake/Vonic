@@ -64,7 +64,7 @@ const chartConfig = ref<ChartConfig>({
   xAxis: '', // X轴不设置默认值
   yAxis: '', // Y轴不设置默认值
   chartType: '散点图', // 默认展示散点图
-  lineColor: '#ff0000', // 试验曲线颜色（默认红色）
+  lineColor: '#1890ff', // 试验曲线颜色（默认蓝色）
   simulationLineColor: '#00ff00', // 仿真曲线颜色（默认绿色）
   titleText: '试验仿真数据对比曲线',
   titleColor: '#2c3e50', // 标题颜色（默认深灰蓝色，视觉接近黑色）

@@ -192,34 +192,34 @@ const chartOption = computed<EChartsOption>(() => {
           fontFamily: props.chartConfig.titleFont || '宋体',
         },
       },
-      tooltip: {
-        show: true,
-        trigger: 'item',
-        confine: true,
-        formatter: (params: any) => {
-          const { name, value } = params
+      // tooltip: {
+      //   show: true,
+      //   trigger: 'item',
+      //   confine: true,
+      //   formatter: (params: any) => {
+      //     const { name, value } = params
 
-          if (!Array.isArray(value))
-            return `${name}: ${value}`
+      //     if (!Array.isArray(value))
+      //       return `${name}: ${value}`
 
-          const maxDisplay = 10
-          const total = value.length
-          let result = `<div><strong>${name}</strong> (共 ${total} 条数据)<br/>`
-          result += `<table style="border-collapse: collapse; font-size: 12px; margin-top: 4px;">`
+      //     const maxDisplay = 10
+      //     const total = value.length
+      //     let result = `<div><strong>${name}</strong> (共 ${total} 条数据)<br/>`
+      //     result += `<table style="border-collapse: collapse; font-size: 12px; margin-top: 4px;">`
 
-          value.slice(0, maxDisplay).forEach((yVal: number, index: number) => {
-            const indicator = indicators[index]
-            result += `<tr><td style="padding: 2px 8px 2px 0;">${indicator.name}</td><td style="padding: 2px 0;">→ ${yVal.toFixed(2)}</td></tr>`
-          })
+      //     value.slice(0, maxDisplay).forEach((yVal: number, index: number) => {
+      //       const indicator = indicators[index]
+      //       result += `<tr><td style="padding: 2px 8px 2px 0;">${indicator.name}</td><td style="padding: 2px 0;">→ ${yVal.toFixed(2)}</td></tr>`
+      //     })
 
-          if (total > maxDisplay) {
-            result += `<tr><td colspan="2" style="padding-top: 4px; color: #999; font-size: 11px;">... 还有 ${total - maxDisplay} 条数据</td></tr>`
-          }
+      //     if (total > maxDisplay) {
+      //       result += `<tr><td colspan="2" style="padding-top: 4px; color: #999; font-size: 11px;">... 还有 ${total - maxDisplay} 条数据</td></tr>`
+      //     }
 
-          result += `</table></div>`
-          return result
-        },
-      },
+      //     result += `</table></div>`
+      //     return result
+      //   },
+      // },
       legend: {
         bottom: 10,
         data: radarData.map(d => d.name),
@@ -458,11 +458,12 @@ const chartOption = computed<EChartsOption>(() => {
       <div class="config-item">
         <span class="label">X轴：</span>
         <a-select
-          :value="chartConfig.xAxis"
+          :value="chartConfig.xAxis || undefined"
           class="config-input"
-          placeholder="选择X轴"
+          placeholder="请选择X轴"
           :options="headerOptions"
           not-found-content="暂无数据"
+          allow-clear
           @update:value="(val) => updateChartConfig('xAxis', val)"
         />
       </div>
@@ -470,11 +471,12 @@ const chartOption = computed<EChartsOption>(() => {
       <div class="config-item">
         <span class="label">Y轴：</span>
         <a-select
-          :value="chartConfig.yAxis"
+          :value="chartConfig.yAxis || undefined"
           class="config-input"
-          placeholder="选择Y轴"
+          placeholder="请选择Y轴"
           :options="headerOptions"
           not-found-content="暂无数据"
+          allow-clear
           @update:value="(val) => updateChartConfig('yAxis', val)"
         />
       </div>
