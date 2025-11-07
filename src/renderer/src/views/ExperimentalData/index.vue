@@ -16,21 +16,16 @@ const experimentalDataStore = useExperimentalDataStore()
 // 当前激活的页签
 const activeTab = ref<'statistics' | 'chart'>('statistics')
 
-// 组件挂载时检查是否有历史数据
-onMounted(() => {
-  // 使用 setTimeout 确保 syncPlugin 有足够时间加载数据
-  setTimeout(() => {
-    if (experimentalDataStore.hasData()) {
-      console.log('[实验数据] 已恢复历史数据:', {
-        fileName: experimentalDataStore.fileName,
-        columnsCount: experimentalDataStore.tableColumns.length,
-        dataCount: experimentalDataStore.tableData.length,
-      })
-    }
-    else {
-      console.log('[实验数据] 暂无历史数据，请上传文件')
-    }
-  }, 300) // 等待 syncPlugin 完成（syncPlugin 有 200ms 延迟）
+/**
+ * 将表格列转换为字段选项格式（用于图表组件）
+ */
+const chartFieldOptions = computed(() => {
+  return experimentalDataStore.tableColumns
+    .filter(col => col.dataIndex !== '序号')
+    .map(col => ({
+      label: col.title,
+      value: col.dataIndex,
+    }))
 })
 
 /**
@@ -38,13 +33,6 @@ onMounted(() => {
  * 根据配置和表格数据计算出图表所需的数据格式
  */
 const processedChartData = computed<ProcessedChartData | null>(() => {
-  console.log('[processedChartData] 计算图表数据:', {
-    hasTableData: !!experimentalDataStore.tableData,
-    dataLength: experimentalDataStore.tableData?.length || 0,
-    xAxis: experimentalDataStore.chartConfig.xAxis,
-    yAxis: experimentalDataStore.chartConfig.yAxis,
-  })
-
   // 检查是否有数据
   if (!experimentalDataStore.tableData || experimentalDataStore.tableData.length === 0) {
     console.log('[processedChartData] 无表格数据，返回 null')
@@ -211,7 +199,7 @@ function handleFileSelect(): void {
           <template #icon>
             <UploadOutlined />
           </template>
-          上传文件
+          导入文件
         </a-button>
       </div>
     </div>
@@ -230,7 +218,7 @@ function handleFileSelect(): void {
       <a-tab-pane key="chart" tab="数据曲线">
         <DataChart
           v-model:chart-config="experimentalDataStore.chartConfig"
-          :table-columns="experimentalDataStore.tableColumns"
+          :table-columns="chartFieldOptions"
           :chart-data="processedChartData"
         />
       </a-tab-pane>

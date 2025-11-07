@@ -93,7 +93,7 @@ const routes: RouteRecordRaw[] = [
     name: 'DataComparison',
     component: () => import('../views/DataComparison/index.vue'),
     meta: {
-      title: '数据对比',
+      title: '试验仿真数据对比',
       icon: 'FundOutlined',
       order: 5,
       feature: 'dataComparison',

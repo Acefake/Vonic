@@ -19,7 +19,7 @@ export interface TableColumn {
   title: string
   dataIndex: string
   key: string
-  width?: number
+  width?: number | string
 }
 
 /**
@@ -47,9 +47,11 @@ export interface ChartConfig {
   xAxis: string // X轴数据列
   yAxis: string // Y轴数据列
   chartType: ChartType // 图表类型
-  lineColor: string // 曲线颜色
+  lineColor: string // 试验曲线颜色
+  simulationLineColor?: string // 仿真曲线颜色（可选，仅在数据对比页面使用）
   titleText: string // 标题文本
   titleColor: string // 标题颜色
+  titleFont?: string // 标题字体
 }
 
 /**
@@ -58,11 +60,20 @@ export interface ChartConfig {
 export type ChartDataPoint = [number, number] // [x, y]
 
 /**
- * 雷达图数据
+ * 雷达图数据（单数据源）
  */
 export interface RadarChartData {
   indicators: Array<{ name: string, max: number }> // 雷达图维度
   values: number[] // 雷达图数据值
+}
+
+/**
+ * 单个系列的数据（散点图/曲线图）
+ */
+export interface SeriesData {
+  name: string // 系列名称
+  data: ChartDataPoint[] // 数据点
+  color: string // 颜色
 }
 
 /**
@@ -71,7 +82,8 @@ export interface RadarChartData {
 export interface ProcessedChartData {
   type: 'scatter' | 'line' | 'radar'
   scatterData?: ChartDataPoint[] // 散点图/曲线图数据
-  radarData?: RadarChartData // 雷达图数据
+  radarData?: RadarChartData // 雷达图数据（单系列）
+  series?: SeriesData[] // 多系列（散点/曲线）
   xAxisName?: string // X轴名称
   yAxisName?: string // Y轴名称
 }
