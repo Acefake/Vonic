@@ -2,7 +2,6 @@
  * 剪贴板 API
  * 基于浏览器的 Clipboard API 封装
  */
-
 import type { ClipboardAPI } from '../types'
 
 export const clipboardAPI: ClipboardAPI = {
@@ -64,8 +63,8 @@ export const clipboardAPI: ClipboardAPI = {
    */
   async copy(text: string, successMessage = '复制成功'): Promise<void> {
     await this.writeText(text)
-    // 动态导入 message API 避免循环依赖
-    const { messageAPI } = await import('./message')
-    messageAPI.success(successMessage)
+    // 直接导入 app 实例获取 message API，避免动态导入警告
+    const { default: app } = await import('../index')
+    app.message.success(successMessage)
   },
 }
