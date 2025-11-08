@@ -3,7 +3,7 @@ import type { ProcessedChartData } from './types'
 
 import { UploadOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 
 import { useExperimentalDataStore } from '../../store'
 import DataChart from './DataChart.vue'

@@ -121,8 +121,8 @@ export function createSyncPlugin() {
     const { store, pinia } = context
 
     // 检查当前 store 是否正在同步
-    const isSyncing = () => syncingStores.get(store.$id) || false
-    const setSyncing = (value: boolean) => syncingStores.set(store.$id, value)
+    const isSyncing = (): boolean => syncingStores.get(store.$id) || false
+    const setSyncing = (value: boolean): any => syncingStores.set(store.$id, value)
 
     // 订阅 store 变化，发送到主进程
     // 对于 log store，使用防抖避免快速连续更新导致的循环

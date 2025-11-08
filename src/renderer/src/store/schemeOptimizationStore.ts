@@ -31,7 +31,7 @@ export const useSchemeOptimizationStore = defineStore('schemeOptimization', () =
   const factorCount = computed(() => designFactors.value.length)
 
   /** 设置算法并做必要的状态重置 */
-  function setAlgorithm(algo: 'NSGA-II' | 'MOPSO') {
+  function setAlgorithm(algo: 'NSGA-II' | 'MOPSO'): void {
     optimizationAlgorithm.value = algo
     // 切换算法后，清空设计因子，避免不同算法的参数互相污染
     designFactors.value = []
@@ -44,12 +44,12 @@ export const useSchemeOptimizationStore = defineStore('schemeOptimization', () =
   }
 
   /** 设置设计因子列表 */
-  function setDesignFactors(list: DesignFactor[]) {
+  function setDesignFactors(list: DesignFactor[]): void {
     designFactors.value = list
   }
 
   /** 更新指定设计因子（按 id） */
-  function updateDesignFactorById(id: number, patch: Partial<DesignFactor>) {
+  function updateDesignFactorById(id: number, patch: Partial<DesignFactor>): void {
     const idx = designFactors.value.findIndex(f => f.id === id)
     if (idx !== -1) {
       designFactors.value[idx] = { ...designFactors.value[idx], ...patch }
@@ -57,12 +57,12 @@ export const useSchemeOptimizationStore = defineStore('schemeOptimization', () =
   }
 
   /** 设置样本空间数据 */
-  function setSampleSpaceData(list: SampleData[]) {
+  function setSampleSpaceData(list: SampleData[]): void {
     sampleSpaceData.value = list
   }
 
   /** 清空样本空间数据 */
-  function clearSampleSpace() {
+  function clearSampleSpace(): void {
     sampleSpaceData.value = []
   }
 

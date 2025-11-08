@@ -1,5 +1,5 @@
-import { appendFile, mkdir, readdir, stat, unlink } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
+import { appendFile, mkdir, readdir, stat, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain } from 'electron'
 

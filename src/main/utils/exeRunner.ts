@@ -83,7 +83,7 @@ function getMainWindow(logger: Logger): BrowserWindow | null {
  * @param {string} workingDir - 可选的工作目录，如果提供则在该目录中执行
  * @returns {Promise<object>} 启动状态结果
  */
-export async function runExe(exeName: string, workingDir?: string) {
+export async function runExe(exeName: string, workingDir?: string): Promise<object> {
   const logger: Logger = new Logger()
 
   // 获取主窗口实例用于发送IPC消息（延迟获取，在需要时再获取）
