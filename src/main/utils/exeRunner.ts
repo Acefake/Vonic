@@ -1,5 +1,5 @@
 import type { ChildProcess } from 'node:child_process'
-import { execFile } from 'node:child_process'
+import { exec, execFile } from 'node:child_process'
 import { existsSync, mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { app, BrowserWindow } from 'electron'
@@ -8,6 +8,41 @@ import getWindowManager, { WindowName } from '@/main/app/handlers/window'
 
 // 跟踪多个正在运行的进程，key 为工作目录路径
 const runningProcesses = new Map<string, ChildProcess>()
+
+/**
+ * 设置进程优先级（仅 Windows）
+ * @param pid 进程ID
+ * @param priority 优先级：'low' | 'below normal' | 'normal' | 'above normal' | 'high'
+ * @param logger 日志记录器
+ */
+function setProcessPriority(pid: number, priority: string, logger: Logger): void {
+  if (process.platform !== 'win32') {
+    return
+  }
+
+  // 使用 wmic 设置进程优先级
+  const priorityMap: Record<string, string> = {
+    'low': '64',
+    'below normal': '16384',
+    'normal': '32',
+    'above normal': '32768',
+    'high': '128',
+  }
+
+  const priorityValue = priorityMap[priority] || priorityMap['below normal']
+
+  exec(`wmic process where processid="${pid}" CALL setpriority ${priorityValue}`, (error, _stdout, stderr) => {
+    if (error) {
+      logger.log('warn', `设置进程 ${pid} 优先级失败: ${error.message}`)
+    }
+    else if (stderr) {
+      logger.log('warn', `设置进程 ${pid} 优先级警告: ${stderr}`)
+    }
+    else {
+      logger.log('info', `进程 ${pid} 优先级已设置为 ${priority}`)
+    }
+  })
+}
 
 /**
  * 获取主窗口实例
@@ -186,6 +221,12 @@ export async function runExe(exeName: string, workingDir?: string) {
         // 进程成功启动，立即 resolve 返回 started 状态
         if (!isResolved) {
           isResolved = true
+
+          // 设置进程优先级为 below normal，避免影响主进程和系统性能
+          if (child.pid) {
+            setProcessPriority(child.pid, 'below normal', logger)
+          }
+
           resolve({
             status: 'started',
             reason: '程序成功启动',
@@ -336,6 +377,12 @@ export async function runExe(exeName: string, workingDir?: string) {
         // 进程成功启动，立即 resolve 返回 started 状态
         if (!isResolved) {
           isResolved = true
+
+          // 设置进程优先级为 below normal，避免影响主进程和系统性能
+          if (child.pid) {
+            setProcessPriority(child.pid, 'below normal', logger)
+          }
+
           resolve({
             status: 'started',
             reason: '程序成功启动',

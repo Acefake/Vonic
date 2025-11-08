@@ -11,6 +11,7 @@ import { createDoeServiceManager } from './services/runService'
 import { deleteOutFolder } from './utils/cleanup'
 import { runExe } from './utils/exeRunner'
 import { killProcessesOnPorts } from './utils/portCleanup'
+import { SystemMonitor } from './utils/systemMonitor'
 
 const storeManage = new StoreManage()
 const appManager = new AppManager()
@@ -45,6 +46,23 @@ ipcMain.handle('call-exe', async (_, exeName, workingDir) => {
   console.log('主进程接收到调用请求，exe名称：', exeName, '工作目录：', workingDir)
   const result = await runExe(exeName, workingDir) // 调用exe并等待结果
   return result
+})
+
+// 系统资源监控 IPC 处理器
+ipcMain.handle('system:get-cpu-cores', () => {
+  return SystemMonitor.getCPUCores()
+})
+
+ipcMain.handle('system:get-memory-info', async () => {
+  return await SystemMonitor.getWindowsMemoryInfo()
+})
+
+ipcMain.handle('system:get-optimal-concurrency', async (_, baseConcurrency?: number, memoryThreshold?: number) => {
+  return await SystemMonitor.getOptimalConcurrency(baseConcurrency, memoryThreshold)
+})
+
+ipcMain.handle('system:check-resource', async (_, minFreeMemoryMB?: number, maxMemoryUsagePercent?: number) => {
+  return await SystemMonitor.isResourceSufficient(minFreeMemoryMB, maxMemoryUsagePercent)
 })
 
 app.whenReady().then(async () => {

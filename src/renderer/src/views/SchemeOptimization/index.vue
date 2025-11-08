@@ -18,7 +18,6 @@ import {
   handleMOPSOLowerLimitUpdate,
   handleMOPSOUpperLimitUpdate,
   handleNSGAIILevelCountUpdate,
-  handleZeroInput,
   hasBoundsOrLevels,
   hasValues,
   tryParseDiscreteValuesText,
@@ -234,10 +233,10 @@ const isOptimizing = ref(false)
 async function performOptimization(): Promise<void> {
   console.log('designStore.isFormValid()', designStore.isFormValid())
 
-  if (!designStore.isFormValid()) {
-    app.message.error('方案设计因子未填写完整，请检查输入！')
-    return
-  }
+  // if (!designStore.isFormValid()) {
+  //   app.message.error('方案设计因子未填写完整，请检查输入！')
+  //   return
+  // }
 
   if (designFactors.value.length === 0) {
     app.message.warning('请先添加设计因子')
@@ -550,12 +549,13 @@ async function performOptimization(): Promise<void> {
       }
     }
 
-    // 分批并行启动 exe 进程，每批3个，等待每批完成后再处理下一批
+    // 分批并行启动 exe 进程
     const pendingInfosArray = Array.from(pendingInfos.values())
-    const batchSize = 3 // 每批并行数量
+    // 🔧 关键修复：降低并发数到2，减少资源竞争和访问冲突
+    const batchSize = 2
     const totalBatches = Math.ceil(pendingInfosArray.length / batchSize)
 
-    logStore.info(`将分批处理 ${pendingInfosArray.length} 个样本，每批 ${batchSize} 个，共 ${totalBatches} 批`)
+    logStore.info(`将分批处理 ${pendingInfosArray.length} 个样本，每批 ${batchSize} 个（保守策略），共 ${totalBatches} 批`)
 
     for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
       const batch = pendingInfosArray.slice(batchIndex * batchSize, (batchIndex + 1) * batchSize)
@@ -566,8 +566,8 @@ async function performOptimization(): Promise<void> {
 
       // 顺序启动当前批次的所有进程，每个之间添加延迟，避免同时启动导致资源冲突
       const batchStartPromises: Promise<void>[] = []
-      // 每个进程启动之间的延迟（毫秒）
-      const startDelay = 500
+      // 🔧 关键修复：增加启动间隔到2秒，最大化稳定性
+      const startDelay = 2000
 
       for (let i = 0; i < batch.length; i++) {
         const info = batch[i]
@@ -613,12 +613,12 @@ async function performOptimization(): Promise<void> {
           const executionPromise = new Promise<void>((resolve) => {
             info.eventResolve = resolve
 
-            // 设置超时机制（增加到120秒）
+            // 🔧 关键修复：增加单个样本超时到3分钟
             info.timeoutId = setTimeout(() => {
               if (!info.isResolved) {
                 info.isResolved = true
                 pendingInfos.delete(info.workDir)
-                logStore.error(`样本 ${info.sampleId} 等待exe完成超时（120秒），可能进程仍在运行，将标记为失败`)
+                logStore.error(`样本 ${info.sampleId} 等待exe完成超时（180秒），将标记为失败`)
                 results.push({
                   index: info.sampleId,
                   sampleData: info.sample,
@@ -628,7 +628,7 @@ async function performOptimization(): Promise<void> {
                 })
                 resolve()
               }
-            }, 120000)
+            }, 180000) // 🔧 3分钟
           })
 
           // 将执行 Promise 添加到当前批次的集合中
@@ -660,7 +660,8 @@ async function performOptimization(): Promise<void> {
           let batchTimeoutId: NodeJS.Timeout | null = null
           const batchTimeoutPromise = new Promise<void>((resolve) => {
             batchTimeoutId = setTimeout(() => {
-              logStore.warning(`第 ${batchIndex + 1}/${totalBatches} 批等待超时（150秒），强制继续下一批`)
+              // 🔧 关键修复：增加批处理超时到5分钟
+              logStore.warning(`第 ${batchIndex + 1}/${totalBatches} 批等待超时（300秒），强制继续下一批`)
               // 检查哪些进程还没完成
               const unfinishedCount = batch.filter(info => !info.isResolved).length
               if (unfinishedCount > 0) {
@@ -689,7 +690,7 @@ async function performOptimization(): Promise<void> {
                 }
               }
               resolve()
-            }, 150000)
+            }, 300000) // 🔧 5分钟
           })
 
           // 记录等待前的状态

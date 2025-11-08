@@ -488,6 +488,71 @@ const rowSelection = computed(() => {
   }
 })
 
+/**
+ * 提交方案
+ */
+async function handleSubmitScheme() {
+  if (!correctionSelectedData.value) {
+    message.warning('请先选择一个方案')
+    return
+  }
+
+  try {
+    const scheme = correctionSelectedData.value
+
+    // 构建设计表单数据
+    const designForm = {
+      angularVelocity: scheme.angularVelocity,
+      rotorRadius: scheme.rotorRadius,
+      rotorShoulderLength: scheme.rotorShoulderLength,
+      rotorSidewallPressure: scheme.rotorSidewallPressure,
+      gasDiffusionCoefficient: scheme.gasDiffusionCoefficient,
+      feedFlowRate: scheme.feedFlowRate,
+      splitRatio: scheme.splitRatio,
+      feedingMethod: scheme.feedingMethod,
+      depletedEndCapTemperature: scheme.depletedEndCapTemperature,
+      enrichedEndCapTemperature: scheme.enrichedEndCapTemperature,
+      feedAxialDisturbance: scheme.feedAxialDisturbance,
+      feedAngularDisturbance: scheme.feedAngularDisturbance,
+      depletedMechanicalDriveAmount: scheme.depletedMechanicalDriveAmount,
+      extractionChamberHeight: scheme.extractionChamberHeight,
+      enrichedBaffleHoleDiameter: scheme.enrichedBaffleHoleDiameter,
+      feedBoxShockDiskHeight: scheme.feedBoxShockDiskHeight,
+      depletedExtractionArmRadius: scheme.depletedExtractionArmRadius,
+      depletedExtractionPortInnerDiameter: scheme.depletedExtractionPortInnerDiameter,
+      depletedBaffleInnerHoleOuterDiameter: scheme.depletedBaffleInnerHoleOuterDiameter,
+      enrichedBaffleHoleDistributionCircleDiameter: scheme.enrichedBaffleHoleDistributionCircleDiameter,
+      depletedExtractionPortOuterDiameter: scheme.depletedExtractionPortOuterDiameter,
+      depletedBaffleOuterHoleInnerDiameter: scheme.depletedBaffleOuterHoleInnerDiameter,
+      minAxialDistance: scheme.minAxialDistance,
+      depletedBaffleAxialPosition: scheme.depletedBaffleAxialPosition,
+      depletedBaffleOuterHoleOuterDiameter: scheme.depletedBaffleOuterHoleOuterDiameter,
+      innerBoundaryMirrorPosition: scheme.innerBoundaryMirrorPosition,
+      gridGenerationMethod: scheme.gridGenerationMethod,
+      bwgRadialProtrusionHeight: scheme.bwgRadialProtrusionHeight,
+      bwgAxialHeight: scheme.bwgAxialHeight,
+      bwgAxialPosition: scheme.bwgAxialPosition,
+      radialGridRatio: scheme.radialGridRatio,
+      compensationCoefficient: scheme.compensationCoefficient,
+      streamlineData: scheme.streamlineData,
+      separationPower: scheme.sepPower,
+      separationFactor: scheme.sepFactor,
+    }
+
+    const res = await app.file.writeDatFile('input.dat', designForm)
+    if (res?.code === 0) {
+      message.success('提交方案成功，已生成输入文件')
+    }
+    else {
+      message.error(res?.message ?? '生成输入文件失败')
+    }
+  }
+  catch (error) {
+    console.error('提交方案失败:', error)
+    message.error(`提交方案失败: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
 onMounted(() => {
   loadSchemes()
 })
@@ -545,9 +610,18 @@ onMounted(() => {
         </a-card>
       </a-tab-pane>
       <a-tab-pane key="2" tab="方案修正">
-        <InitialDesign :selected-scheme="correctionSelectedData" />
+        <InitialDesign :selected-scheme="correctionSelectedData" :show-button="false" />
       </a-tab-pane>
     </a-tabs>
+
+    <!-- 底部提交方案按钮 -->
+    <div v-if="activeKey === '2'" class="bottom-actions">
+      <div class="action-row">
+        <a-button type="primary" size="large" @click="handleSubmitScheme">
+          提交方案
+        </a-button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -563,5 +637,21 @@ onMounted(() => {
   margin-left: 4px;
   color: #999;
   font-size: 12px;
+}
+
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.optimal-row {
+  background-color: #fff7e6;
+  font-weight: 600;
+}
+
+.max-power {
+  color: #ff4d4f;
+  font-weight: 600;
 }
 </style>
