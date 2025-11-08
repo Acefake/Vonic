@@ -27,6 +27,9 @@ AGENTS
 # Electron
 out
 doeService
+# Electron-vite temporary config files
+electron.vite.config.*.mjs
+electron.vite.config.*.js
 
 # Environment variables
 .env
