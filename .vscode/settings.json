@@ -83,11 +83,5 @@
     "scss",
     "pcss",
     "postcss"
-  ],
-  "explorer.fileNesting.enabled": true,
-  "explorer.fileNesting.patterns": {
-    ".env": ".env.*",
-    "electron-builder.yml": "electron-builder.*.yml",
-    "eslint.config.mjs": "eslint.config.mjs, .prettierrc.yaml, .prettierignore"
-  }
+  ]
 }
