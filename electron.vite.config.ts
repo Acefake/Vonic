@@ -60,8 +60,8 @@ export default defineConfig(({ command }) => {
               importStyle: false,
             }),
           ],
+          dts: 'src/components.d.ts',
         }),
-
       ],
       build: {
         minify: isProduction ? 'esbuild' : false,

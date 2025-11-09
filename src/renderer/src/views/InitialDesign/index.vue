@@ -636,7 +636,7 @@ onUnmounted(() => {
   window.electron.ipcRenderer.removeListener?.('exe-closed', handleExeClose)
   stopProgress()
 })
-</script>validateDesignFactors
+</script>
 
 <template>
   <div
@@ -659,6 +659,12 @@ onUnmounted(() => {
         <a-checkbox :checked="isMultiScheme" @update:checked="designStore.setIsMultiScheme">
           {{ getFieldLabel('isMultiScheme', fieldLabelMode) }}
         </a-checkbox>
+      </a-card>
+
+      <a-card :title="getFieldLabel('designType', fieldLabelMode)">
+        <a-form ref="formRef" layout="vertical" :model="formModel" :rules="rules">
+          <a-input />
+        </a-form>
       </a-card>
 
       <div style="height: 5px" />
