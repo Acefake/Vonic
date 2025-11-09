@@ -9,7 +9,6 @@ const store = useStore()
 const { count, message, doubleCount } = storeToRefs(store)
 const { increment } = store
 const logStore = useLogStore()
-
 // 测试日志 API
 function testLogger(): void {
   logStore.info('这是一条信息日志，这是一条信息日志这是一条信息日志这是一条信息日志这是一条信息日志这是一条信息日志这是一条信息日志这是一条信息日志')

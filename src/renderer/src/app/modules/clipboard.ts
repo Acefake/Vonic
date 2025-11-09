@@ -1,7 +1,3 @@
-/**
- * 剪贴板 API
- * 基于浏览器的 Clipboard API 封装
- */
 import type { ClipboardAPI } from '../types'
 
 export const clipboardAPI: ClipboardAPI = {

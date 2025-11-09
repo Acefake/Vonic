@@ -5,6 +5,7 @@ import { SearchOutlined } from '@ant-design/icons-vue'
 import { computed, ref, toRefs } from 'vue'
 import { useDesignStore, useExperimentalDataStore } from '../../store'
 import { getFieldLabel } from '../../utils/field-labels'
+
 import DataChart from '../ExperimentalData/DataChart.vue'
 
 const experimentalDataStore = useExperimentalDataStore()
