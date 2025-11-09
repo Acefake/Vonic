@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import type { TableProps } from 'ant-design-vue'
-import { SearchOutlined } from '@ant-design/icons-vue'
-import { Button, InputNumber, message, Space } from 'ant-design-vue'
+import { Button, message } from 'ant-design-vue'
+import { cloneDeep } from 'lodash-es'
 import { storeToRefs } from 'pinia'
 
-import { computed, h, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, h, nextTick, onMounted, ref } from 'vue'
 import app from '../../app/index'
 import SchemeChart from '../../components/SchemeChart/index.vue'
 import { useSchemeOptimizationStore } from '../../store'
@@ -63,13 +63,6 @@ const schemes = ref<SchemeData[]>([])
 const loading = ref(false)
 const filteredData = ref<SchemeData[]>([])
 const activeKey = ref('1')
-// 分页配置
-const paginationConfig = reactive({
-  current: 1,
-  pageSize: 20,
-  showSizeChanger: true,
-  showTotal: (total: number) => `共 ${total} 条`,
-})
 
 // 行选择相关
 const selectedRowKeys = ref<(string | number)[]>([])
@@ -90,12 +83,6 @@ const correctionSelectedData = computed(() => {
   }
   return null
 })
-
-// 筛选状态
-const filterState = reactive<Record<string, { min?: number, max?: number }>>({})
-
-// 筛选面板状态（每个列的独立状态）
-const filterPanelState = reactive<Record<string, { min: number | null, max: number | null }>>({})
 
 // 判断是否为最优方案行（index === -1 表示最优方案，需要高亮）
 function isOptimalSchemeRow(record: SchemeData): boolean {
@@ -158,97 +145,79 @@ const selectedDesignFactorKeys = computed<string[]>(() => {
   return keys
 })
 
-// 创建数值范围筛选面板
-function createNumberRangeFilterPanel(dataIndex: string, unit?: string) {
+// 获取某列的所有唯一值（去重）
+function getUniqueValues(dataIndex: string): any[] {
+  const values = schemes.value
+    .map(record => record[dataIndex as keyof SchemeData])
+    .filter((value): value is number => value !== null && value !== undefined)
+
+  // 使用Set去重，然后排序
+  const uniqueValues = Array.from(new Set(values)).sort((a, b) => a - b)
+  return uniqueValues
+}
+
+// 创建基于唯一值的筛选面板
+function createUniqueValueFilterPanel(dataIndex: string) {
   return ({
     setSelectedKeys,
+    selectedKeys,
     confirm,
-    clearFilters,
   }: any) => {
-    // 初始化状态
-    if (!filterPanelState[dataIndex]) {
-      filterPanelState[dataIndex] = { min: null, max: null }
+    const uniqueValues = getUniqueValues(dataIndex)
+
+    const handleCheckboxChange = (value: any, checked: boolean) => {
+      const newKeys = checked
+        ? [...selectedKeys, value]
+        : selectedKeys.filter((k: any) => k !== value)
+      setSelectedKeys(newKeys)
+      // 选中即生效
+      confirm({ closeDropdown: false })
     }
 
-    const handleSearch = () => {
-      const filters: number[] = []
-      const state = filterPanelState[dataIndex]
-      if (state.min !== null && state.min !== undefined)
-        filters.push(state.min)
-      if (state.max !== null && state.max !== undefined)
-        filters.push(state.max)
-      setSelectedKeys(filters.length > 0 ? filters : [])
-      confirm()
-    }
-
-    const handleReset = () => {
-      filterPanelState[dataIndex] = { min: null, max: null }
-      setSelectedKeys([])
-      clearFilters()
-    }
-
-    return h('div', { style: 'padding: 8px' }, [
-      h('div', { style: 'margin-bottom: 8px' }, [
-        h(InputNumber as any, {
-          'style': 'width: 100%; margin-bottom: 8px',
-          'placeholder': `最小值${unit ? ` (${unit})` : ''}`,
-          'value': filterPanelState[dataIndex].min,
-          'onUpdate:value': (val: number | null) => {
-            filterPanelState[dataIndex].min = val
+    return h('div', { style: 'max-height: 300px; display: flex; flex-direction: column; min-width: 150px' }, [
+      // 重置按钮放在顶部
+      h('div', { style: 'padding: 8px; border-bottom: 1px solid #e8e8e8' }, [
+        h(
+          Button,
+          {
+            size: 'small',
+            block: true,
+            onClick: () => {
+              setSelectedKeys([])
+              confirm({ closeDropdown: true })
+            },
           },
-        }),
-        h(InputNumber as any, {
-          'style': 'width: 100%',
-          'placeholder': `最大值${unit ? ` (${unit})` : ''}`,
-          'value': filterPanelState[dataIndex].max,
-          'onUpdate:value': (val: number | null) => {
-            filterPanelState[dataIndex].max = val
-          },
-        }),
+          { default: () => '重置' },
+        ),
       ]),
-      h(Space as any, { style: 'display: flex; justify-content: space-between; width: 100%' }, {
-        default: () => [
-          h(
-            Button,
-            {
-              type: 'primary',
-              size: 'small',
-              onClick: handleSearch,
-              icon: h(SearchOutlined),
-            },
-            { default: () => '筛选' },
-          ),
-          h(
-            Button,
-            {
-              size: 'small',
-              onClick: handleReset,
-            },
-            { default: () => '重置' },
-          ),
-        ],
-      }),
+      // 可滚动的选项列表
+      h('div', { style: 'padding: 8px; overflow-y: auto; flex: 1' }, uniqueValues.map(value =>
+        h('div', {
+          key: value,
+          style: 'padding: 4px 0; cursor: pointer; display: flex; align-items: center;',
+          onClick: (e: Event) => {
+            e.preventDefault()
+            const checked = !selectedKeys.includes(value)
+            handleCheckboxChange(value, checked)
+          },
+        }, [
+          h('input', {
+            type: 'checkbox',
+            checked: selectedKeys.includes(value),
+            style: 'margin-right: 8px; pointer-events: none;',
+          }),
+          h('span', {}, value.toString()),
+        ]),
+      )),
     ])
   }
 }
 
-// 数值范围筛选函数
-function numberRangeFilter(dataIndex: string) {
-  return (_value: number, record: SchemeData) => {
-    const filter = filterState[dataIndex]
-    if (!filter || (filter.min === undefined && filter.max === undefined))
-      return true
-
-    const recordValue = record[dataIndex as keyof SchemeData] as number
-    if (recordValue === undefined || recordValue === null)
-      return false
-
-    if (filter.min !== undefined && recordValue < filter.min)
-      return false
-    if (filter.max !== undefined && recordValue > filter.max)
-      return false
-
-    return true
+// 基于唯一值的筛选函数
+function uniqueValueFilter(dataIndex: string) {
+  return (value: any, record: SchemeData) => {
+    const recordValue = record[dataIndex as keyof SchemeData]
+    return recordValue === value
   }
 }
 
@@ -261,21 +230,20 @@ const columns = computed(() => {
       key: 'index',
       width: 80,
       align: 'center' as const,
-      fixed: 'left' as const,
     },
   ]
 
   // 仅显示方案优化中选中的设计因子对应的列
   const activeFieldConfigs = fieldConfigs.filter(cfg => selectedDesignFactorKeys.value.includes(cfg.key))
-
-  const fieldColumns = activeFieldConfigs.map(config => ({
+  // 深拷贝避免修改原始数据和被引用
+  const fieldColumns = cloneDeep(activeFieldConfigs).map(config => ({
     title: config.label,
     dataIndex: config.key,
     key: config.key,
     width: config.width,
     align: 'right' as const,
-    filterDropdown: createNumberRangeFilterPanel(config.key, config.unit),
-    onFilter: numberRangeFilter(config.key),
+    filterDropdown: createUniqueValueFilterPanel(config.key),
+    onFilter: uniqueValueFilter(config.key),
   }))
 
   const resultColumns = [
@@ -285,9 +253,8 @@ const columns = computed(() => {
       key: 'sepPower',
       width: 120,
       align: 'right' as const,
-      fixed: 'right' as const,
-      filterDropdown: createNumberRangeFilterPanel('sepPower', 'W'),
-      onFilter: numberRangeFilter('sepPower'),
+      filterDropdown: createUniqueValueFilterPanel('sepPower'),
+      onFilter: uniqueValueFilter('sepPower'),
     },
     {
       title: '分离系数',
@@ -295,9 +262,8 @@ const columns = computed(() => {
       key: 'sepFactor',
       width: 120,
       align: 'right' as const,
-      fixed: 'right' as const,
-      filterDropdown: createNumberRangeFilterPanel('sepFactor'),
-      onFilter: numberRangeFilter('sepFactor'),
+      filterDropdown: createUniqueValueFilterPanel('sepFactor'),
+      onFilter: uniqueValueFilter('sepFactor'),
     },
   ]
 
@@ -351,9 +317,6 @@ async function loadSchemes() {
     schemes.value = sortedData
     filteredData.value = sortedData
 
-    // 重置分页
-    paginationConfig.current = 1
-
     if (data.length === 0) {
       message.warning('未找到任何方案数据文件')
     }
@@ -373,61 +336,15 @@ async function loadSchemes() {
 /**
  * 处理表格变化（筛选、分页）
  */
-const handleTableChange: TableProps['onChange'] = (pagination, filters) => {
-  // 更新分页配置
-  if (pagination) {
-    if (pagination.current !== undefined)
-      paginationConfig.current = pagination.current
-    if (pagination.pageSize !== undefined)
-      paginationConfig.pageSize = pagination.pageSize
-  }
-
-  // 更新筛选状态
-  Object.keys(filterState).forEach((key) => {
-    delete filterState[key]
-  })
+const handleTableChange: TableProps['onChange'] = (_pagination, filters) => {
+  let data = [...schemes.value]
 
   Object.keys(filters).forEach((key) => {
     const filterValues = filters[key]
-    if (filterValues && filterValues.length > 0) {
-      if (filterValues.length === 2) {
-        filterState[key] = {
-          min: filterValues[0] as number,
-          max: filterValues[1] as number,
-        }
-      }
-      else if (filterValues.length === 1) {
-        // 如果只有一个值，判断是 min 还是 max
-        // 根据筛选面板的状态来判断
-        const panelState = filterPanelState[key]
-        if (panelState) {
-          if (panelState.min !== null && panelState.min !== undefined) {
-            filterState[key] = { min: filterValues[0] as number }
-          }
-          else if (panelState.max !== null && panelState.max !== undefined) {
-            filterState[key] = { max: filterValues[0] as number }
-          }
-        }
-      }
-    }
-  })
-
-  // 应用筛选
-  let data = [...schemes.value]
-
-  // 应用筛选
-  Object.keys(filterState).forEach((key) => {
-    const filter = filterState[key]
-    if (filter && (filter.min !== undefined || filter.max !== undefined)) {
+    if (Array.isArray(filterValues) && filterValues.length > 0) {
       data = data.filter((record) => {
-        const value = record[key as keyof SchemeData] as number
-        if (value === undefined || value === null)
-          return false
-        if (filter.min !== undefined && value < filter.min)
-          return false
-        if (filter.max !== undefined && value > filter.max)
-          return false
-        return true
+        const value = record[key as keyof SchemeData]
+        return filterValues.includes(value as any)
       })
     }
   })
@@ -462,7 +379,7 @@ function isMaxSepPowerRow(record: SchemeData): boolean {
   return isOptimalSchemeRow(record)
 }
 
-function handleTabChange(key: string) {
+function handleTabChange(key: string): void {
   activeKey.value = key
   // 切换标签页时清空选择
   selectedRowKeys.value = []
@@ -568,9 +485,10 @@ onMounted(() => {
       </template>
 
       <a-table
-        :columns="columns" :data-source="filteredData" :loading="loading" :pagination="paginationConfig"
-        :row-class-name="(record) => isMaxSepPowerRow(record) ? 'optimal-row' : ''" :row-key="(record) => `${record.index}_${record.fileName}`" size="small"
-        :scroll="{ x: 'max-content' }" :row-selection="rowSelection" @change="handleTableChange"
+        :columns="columns" :data-source="filteredData" :loading="loading" :pagination="false"
+        :row-class-name="(record) => isMaxSepPowerRow(record) ? 'optimal-row' : ''"
+        :row-key="(record) => `${record.index}_${record.fileName}`" size="small" :scroll="{ x: 'max-content', y: 520 }" sticky
+        :row-selection="rowSelection" @change="handleTableChange"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'index'">
@@ -606,7 +524,10 @@ onMounted(() => {
           <template #title>
             <span>方案对比图表</span>
           </template>
-          <SchemeChart :data="comparisonSelectedData.length > 0 ? comparisonSelectedData : filteredData" :x-columns="xColumns" :y-columns="yColumns" />
+          <SchemeChart
+            :data="comparisonSelectedData.length > 0 ? comparisonSelectedData : filteredData"
+            :x-columns="xColumns" :y-columns="yColumns"
+          />
         </a-card>
       </a-tab-pane>
       <a-tab-pane key="2" tab="方案修正">
@@ -627,10 +548,10 @@ onMounted(() => {
 
 <style scoped>
 .multi-scheme-container {
-  padding: 10px;
+  padding: 5px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 5px;
 }
 
 .unit {
@@ -642,16 +563,22 @@ onMounted(() => {
 .action-row {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 5px;
 }
 
 .optimal-row {
-  background-color: #fff7e6;
+  background-color: #f6ffed !important;
   font-weight: 600;
 }
 
 .max-power {
-  color: #ff4d4f;
+  color: #52c41a;
   font-weight: 600;
+}
+
+:deep(.ant-table-tbody > tr.optimal-row > td),
+:deep(.ant-table-tbody > tr.optimal-row.ant-table-row:hover > td),
+:deep(.ant-table-tbody > tr.optimal-row.ant-table-row-hover > td) {
+  background-color: #f6ffed !important;
 }
 </style>

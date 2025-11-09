@@ -3,7 +3,7 @@ import type { DesignFactor, SampleData, SampleSpaceData } from './type'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { debounce } from 'lodash'
 import { storeToRefs } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { getProductConfig } from '../../../../config/product.config'
 import app from '../../app/index'
 import { useLogStore, useSchemeOptimizationStore } from '../../store'
@@ -56,7 +56,7 @@ const sampleSpaceColumns = computed(() => {
       title: factor.name,
       dataIndex: factor.name,
       key: factor.name,
-      width: 150,
+      width: 120,
     })
   })
 
@@ -217,8 +217,6 @@ function convertSampleDataToKeys(sample: SampleData): Record<string, any> {
   return result
 }
 
-// parseSepPower 函数已移至工具函数 utils/parseSepPower.ts
-
 /**
  * 获取工作目录（testFile或exe同级目录）
  * 通过IPC调用主进程获取
@@ -248,23 +246,66 @@ async function performOptimization(): Promise<void> {
     return
   }
 
+  // 显示确认弹窗
+  app.dialog.confirm({
+    title: '确认仿真优化计算',
+    content: '是否开始执行仿真优化计算？这可能需要较长时间。',
+    okText: '确定',
+    cancelText: '取消',
+    onOk: async () => {
+      await executeOptimization()
+    },
+  })
+}
+
+/**
+ * 执行仿真优化计算
+ */
+async function executeOptimization(): Promise<void> {
   isOptimizing.value = true
 
   await window.electron.ipcRenderer.invoke('file:delete-out-folder')
 
-  const hideLoading = app.message.loading('正在进行仿真优化计算...', 0)
+  // 打开 loading 弹窗，并监听用户主动关闭操作
+  const loadingWindowPromise = app.window.loading.open({
+    data: {
+      title: '正在进行仿真优化计算...',
+    },
+  }) as Promise<{ cancelled?: boolean } | undefined>
+
+  const CANCELLED_ERROR = 'OPTIMIZATION_CANCELLED'
+  let isCancelled = false
+
+  const unsubscribeLoadingClose = app.eventBus.on('loading:close', () => {
+    isCancelled = true
+    logStore.warning('用户主动关闭了仿真优化加载窗口，将尝试取消任务')
+  })
+
+  loadingWindowPromise?.then((result) => {
+    if (result && typeof result === 'object' && (result as any).cancelled) {
+      isCancelled = true
+    }
+  })
+
+  const ensureNotCancelled = () => {
+    if (isCancelled) {
+      throw new Error(CANCELLED_ERROR)
+    }
+  }
 
   try {
+    ensureNotCancelled()
     logStore.info('开始仿真优化计算（多进程模式）')
     logStore.info(`算法=${optimizationAlgorithm.value}, 样本点数=${samplePointCountforRes.value}, 样本空间数据=${sampleSpaceData.value.length}`)
 
+    ensureNotCancelled()
     const baseDir = await getWorkBaseDir()
     const exeName = 'ns-linear.exe'
 
     // 第一步：查找 exe 文件路径
     const exeSourcePath = await app.file.findExe(exeName)
     if (!exeSourcePath) {
-      hideLoading()
+      app.window.loading.close()
       app.message.error(`找不到 ${exeName} 文件`)
       logStore.error(`找不到 ${exeName} 文件`)
       return
@@ -295,6 +336,7 @@ async function performOptimization(): Promise<void> {
 
     // 第一步：创建所有文件夹
     for (let i = 0; i < samplePointCountforRes.value; i++) {
+      ensureNotCancelled()
       const sampleIndex = i % sampleSpaceData.value.length
       const sample = sampleSpaceData.value[sampleIndex]
       const sampleId = i + 1
@@ -318,6 +360,7 @@ async function performOptimization(): Promise<void> {
 
     // 第二步：写入所有 input.dat
     for (const info of sampleInfos) {
+      ensureNotCancelled()
       const sampleParams = convertSampleDataToKeys(info.sample)
       const nonFactorParams = getNonFactorParams()
       const combinedParams = {
@@ -343,6 +386,7 @@ async function performOptimization(): Promise<void> {
 
     // 第三步：复制所有 exe 文件
     for (const info of sampleInfos) {
+      ensureNotCancelled()
       try {
         // 使用路径分隔符构建目标路径
         const targetExePath = info.workDir.includes('\\')
@@ -366,6 +410,7 @@ async function performOptimization(): Promise<void> {
     // 第四步：注册全局事件监听器（使用工作目录区分不同进程）
     const pendingInfos = new Map<string, SampleInfo>()
     sampleInfos.forEach((info) => {
+      ensureNotCancelled()
       // 只处理成功写入 input.dat 且成功复制 exe 的样本
       const hasResult = results.some(r => r.index === info.sampleId)
       if (!hasResult) {
@@ -375,30 +420,30 @@ async function performOptimization(): Promise<void> {
 
     if (pendingInfos.size === 0) {
       logStore.warning('没有可执行的样本')
-      hideLoading()
+      app.window.loading.close()
       app.message.warning('没有可执行的样本')
       return
     }
 
     // 注册全局事件监听器
     const globalHandler = async (_: any, receivedExeName: string, result: any) => {
-      console.info(`[事件监听器] 收到 exe-closed 事件: exeName=${receivedExeName}, workingDir=${result?.workingDir}, exitCode=${result?.exitCode}, isSuccess=${result?.isSuccess}`)
+      console.info(`[事件监听器] 收到 Fortran-closed 事件: exeName=${receivedExeName}, workingDir=${result?.workingDir}, exitCode=${result?.exitCode}, isSuccess=${result?.isSuccess}`)
 
-      // 验证 exe 名称
+      // 验证 Fortran 名称
       if (receivedExeName !== exeName) {
-        logStore.warning(`收到不匹配的exe-closed事件: ${receivedExeName}，期望: ${exeName}`)
+        logStore.warning(`收到不匹配的Fortran-closed事件: ${receivedExeName}，期望: ${exeName}`)
         return
       }
 
       // 通过工作目录匹配对应的样本
       const workingDir = result.workingDir
       if (!workingDir) {
-        logStore.warning('收到exe-closed事件，但工作目录为空')
+        logStore.warning('收到Fortran-closed事件，但工作目录为空')
         return
       }
 
       if (!pendingInfos.has(workingDir)) {
-        logStore.warning(`收到exe-closed事件，但工作目录不在待处理列表中: ${workingDir}`)
+        logStore.warning(`收到Fortran-closed事件，但工作目录不在待处理列表中: ${workingDir}`)
         logStore.info(`当前待处理样本数: ${pendingInfos.size}`)
         return
       }
@@ -407,7 +452,7 @@ async function performOptimization(): Promise<void> {
 
       // 防止重复处理
       if (info.isResolved) {
-        logStore.warning(`样本 ${info.sampleId} 收到重复的exe-closed事件，已忽略`)
+        logStore.warning(`样本 ${info.sampleId} 收到重复的Fortran-closed事件，已忽略`)
         return
       }
 
@@ -423,7 +468,7 @@ async function performOptimization(): Promise<void> {
       // logStore.info(`样本 ${info.sampleId} 收到exe-closed事件，退出码=${result.exitCode}, isSuccess=${result.isSuccess}`)
 
       if (result.isSuccess === false || result.exitCode !== 0) {
-        logStore.error(`样本 ${info.sampleId} exe执行失败: 退出码=${result.exitCode}, 工作目录=${info.workDir}, signal=${result.signal || 'none'}`)
+        logStore.error(`样本 ${info.sampleId} Fortran执行失败: 退出码=${result.exitCode}, 工作目录=${info.workDir}, signal=${result.signal || 'none'}`)
         results.push({
           index: info.sampleId,
           sampleData: info.sample,
@@ -551,13 +596,13 @@ async function performOptimization(): Promise<void> {
 
     // 分批并行启动 exe 进程
     const pendingInfosArray = Array.from(pendingInfos.values())
-    // 🔧 关键修复：降低并发数到2，减少资源竞争和访问冲突
     const batchSize = 2
     const totalBatches = Math.ceil(pendingInfosArray.length / batchSize)
 
     logStore.info(`将分批处理 ${pendingInfosArray.length} 个样本，每批 ${batchSize} 个（保守策略），共 ${totalBatches} 批`)
 
     for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+      ensureNotCancelled()
       const batch = pendingInfosArray.slice(batchIndex * batchSize, (batchIndex + 1) * batchSize)
       logStore.info(`开始处理第 ${batchIndex + 1}/${totalBatches} 批，共 ${batch.length} 个样本`)
 
@@ -566,10 +611,11 @@ async function performOptimization(): Promise<void> {
 
       // 顺序启动当前批次的所有进程，每个之间添加延迟，避免同时启动导致资源冲突
       const batchStartPromises: Promise<void>[] = []
-      // 🔧 关键修复：增加启动间隔到2秒，最大化稳定性
+      // 增加启动间隔到2秒，最大化稳定性
       const startDelay = 2000
 
       for (let i = 0; i < batch.length; i++) {
+        ensureNotCancelled()
         const info = batch[i]
 
         if (i > 0) {
@@ -578,14 +624,14 @@ async function performOptimization(): Promise<void> {
           await new Promise(resolve => setTimeout(resolve, startDelay))
         }
 
-        logStore.info(`样本 ${info.sampleId} 开始启动 exe...`)
+        logStore.info(`样本 ${info.sampleId} 开始启动 Fortran...`)
 
         const startPromise = (async () => {
           // 启动 exe（使用工作目录中的 exe），带超时和重试机制
           const exeResult = await callExeWithTimeout(exeName, info.workDir, info.sampleId)
 
           if (exeResult.status !== 'started') {
-            logStore.error(`样本 ${info.sampleId} 调用exe失败: ${exeResult.reason || '未知错误'}`)
+            logStore.error(`样本 ${info.sampleId} 调用Fortran失败: ${exeResult.reason || '未知错误'}`)
             info.isResolved = true
             pendingInfos.delete(info.workDir)
 
@@ -607,18 +653,17 @@ async function performOptimization(): Promise<void> {
             return
           }
 
-          logStore.info(`样本 ${info.sampleId} exe启动成功 (PID: ${exeResult.pid || 'unknown'})`)
+          logStore.info(`样本 ${info.sampleId} Fortran启动成功 (PID: ${exeResult.pid || 'unknown'})`)
 
           // 创建等待执行完成的 Promise
           const executionPromise = new Promise<void>((resolve) => {
             info.eventResolve = resolve
 
-            // 🔧 关键修复：增加单个样本超时到3分钟
             info.timeoutId = setTimeout(() => {
               if (!info.isResolved) {
                 info.isResolved = true
                 pendingInfos.delete(info.workDir)
-                logStore.error(`样本 ${info.sampleId} 等待exe完成超时（180秒），将标记为失败`)
+                logStore.error(`样本 ${info.sampleId} 等待Fortran完成超时（180秒），将标记为失败`)
                 results.push({
                   index: info.sampleId,
                   sampleData: info.sample,
@@ -628,7 +673,7 @@ async function performOptimization(): Promise<void> {
                 })
                 resolve()
               }
-            }, 180000) // 🔧 3分钟
+            }, 180000) // 3分钟
           })
 
           // 将执行 Promise 添加到当前批次的集合中
@@ -642,6 +687,7 @@ async function performOptimization(): Promise<void> {
       try {
         await Promise.all(batchStartPromises)
         logStore.info(`第 ${batchIndex + 1}/${totalBatches} 批启动完成，共 ${batchExecutionPromises.length} 个进程需要等待执行完成...`)
+        ensureNotCancelled()
       }
       catch (error) {
         logStore.error(`第 ${batchIndex + 1}/${totalBatches} 批启动过程中出错: ${error instanceof Error ? error.message : String(error)}`)
@@ -651,16 +697,12 @@ async function performOptimization(): Promise<void> {
       if (batchExecutionPromises.length > 0) {
         try {
           logStore.info(`第 ${batchIndex + 1}/${totalBatches} 批：开始等待 ${batchExecutionPromises.length} 个进程完成...`)
-          // logStore.info(`当前待处理的样本信息: ${Array.from(pendingInfos.keys()).map((wd) => {
-          //   const info = pendingInfos.get(wd)
-          //   return `${info?.sampleId}(${wd})`
-          // }).join(', ')}`)
 
           // 添加整体超时机制，避免批处理卡死
           let batchTimeoutId: NodeJS.Timeout | null = null
           const batchTimeoutPromise = new Promise<void>((resolve) => {
             batchTimeoutId = setTimeout(() => {
-              // 🔧 关键修复：增加批处理超时到5分钟
+              // 增加批处理超时到5分钟
               logStore.warning(`第 ${batchIndex + 1}/${totalBatches} 批等待超时（300秒），强制继续下一批`)
               // 检查哪些进程还没完成
               const unfinishedCount = batch.filter(info => !info.isResolved).length
@@ -690,7 +732,7 @@ async function performOptimization(): Promise<void> {
                 }
               }
               resolve()
-            }, 300000) // 🔧 5分钟
+            }, 300000) // 5分钟
           })
 
           // 记录等待前的状态
@@ -702,12 +744,12 @@ async function performOptimization(): Promise<void> {
             Promise.all(batchExecutionPromises).then(() => 'completed'),
             batchTimeoutPromise.then(() => 'timeout'),
           ])
+          ensureNotCancelled()
 
           // 如果批次正常完成，清除超时定时器，避免后续触发超时警告
           if (raceResult === 'completed' && batchTimeoutId) {
             clearTimeout(batchTimeoutId)
             batchTimeoutId = null
-            // logStore.info(`第 ${batchIndex + 1}/${totalBatches} 批正常完成，已清除超时定时器`)
           }
 
           // 记录等待后的状态
@@ -736,9 +778,7 @@ async function performOptimization(): Promise<void> {
     }
 
     // 清理事件监听器
-    // logStore.info('开始清理 exe-closed 事件监听器')
     window.electron.ipcRenderer.removeListener('exe-closed', globalHandler)
-    // logStore.info('exe-closed 事件监听器已清理')
 
     logStore.info(`所有批次处理完成，共处理 ${results.length} 个样本结果`)
     logStore.info(`最终剩余待处理样本数: ${pendingInfos.size}`)
@@ -902,21 +942,26 @@ async function performOptimization(): Promise<void> {
       })
 
     // 保存结果到文件（供MultiScheme读取）
-    // 这里需要将结果保存到文件系统，让MultiScheme可以读取
-    // 由于MultiScheme通过readMultiSchemes读取，我们需要更新该方法的实现
-    // 或者创建一个新的IPC方法来保存结果
 
-    hideLoading()
+    ensureNotCancelled()
     app.message.success(`仿真优化计算完成，共处理 ${results.length} 个样本，最优方案序号: ${optimalIndex >= 0 ? optimalIndex : '无'}`)
     logStore.info(`仿真优化计算完成: 算法=${optimizationAlgorithm.value}, 样本点数=${samplePointCountforRes.value}, 处理结果数=${results.length}, 最优方案序号=${optimalIndex >= 0 ? optimalIndex : '无'}`)
   }
   catch (error) {
-    hideLoading()
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    logStore.error(errorMessage, '仿真优化计算失败')
-    app.message.error(`仿真优化计算失败: ${errorMessage}`)
+    if (error instanceof Error && error.message === CANCELLED_ERROR) {
+      logStore.warning('仿真优化计算已取消')
+      app.message.info('仿真优化计算已取消')
+    }
+    else {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      logStore.error(errorMessage, '仿真优化计算失败')
+      app.message.error(`仿真优化计算失败: ${errorMessage}`)
+    }
+    app.window.loading.close()
   }
   finally {
+    unsubscribeLoadingClose?.()
+    app.window.loading.close()
     isOptimizing.value = false
   }
 }
@@ -1192,6 +1237,22 @@ async function sampleSpace() {
     return
   }
 
+  // 显示确认弹窗
+  app.dialog.confirm({
+    title: '确认样本取样',
+    content: '是否开始生成样本空间？',
+    okText: '确定',
+    cancelText: '取消',
+    onOk: async () => {
+      await executeSampleSpace(params)
+    },
+  })
+}
+
+/**
+ * 执行样本空间生成
+ */
+async function executeSampleSpace(params: any) {
   isSampling.value = true
   const hideLoading = app.message.loading('正在生成样本...', 0)
 
@@ -1280,6 +1341,12 @@ async function sampleSpace() {
     isSampling.value = false
   }
 }
+
+onMounted(() => {
+  app.eventBus.on('loading:close', () => {
+    console.log('loading:close')
+  })
+})
 </script>
 
 <template>
@@ -1311,21 +1378,21 @@ async function sampleSpace() {
                   <a-form-item label="因子数量" class="form-col">
                     <a-input
                       :value="factorCount" disabled :min="1" style="width: 100%"
-                      @update:value="(val) => { factorCount = val ?? 3; onFactorCountChange(val) }"
+                      @update:value="(val) => { factorCount = Number(val) ?? 3; onFactorCountChange(Number(val)) }"
                     />
                   </a-form-item>
 
                   <a-form-item label="样本点数" class="form-col">
                     <a-input
                       :value="samplePointCount" :min="1" style="width: 100%"
-                      @update:value="(val) => samplePointCount = val ?? 50"
+                      @update:value="(val) => samplePointCount = Number(val) ?? 50"
                     />
                   </a-form-item>
 
                   <a-form-item label="采样准则" class="form-col">
                     <a-select
                       :value="samplingCriterion" style="width: 100%"
-                      @update:value="(val) => samplingCriterion = val"
+                      @update:value="(val) => samplingCriterion = val as string"
                     >
                       <a-select-option
                         v-for="option in SAMPLING_CRITERION_OPTIONS" :key="option.value"
@@ -1375,7 +1442,7 @@ async function sampleSpace() {
                 { title: '上限', dataIndex: 'upperLimit', key: 'upperLimit', width: 150 },
                 { title: '水平数', dataIndex: 'levelCount', key: 'levelCount', width: 120 },
                 { title: '取值', dataIndex: 'values', key: 'values', width: 200 },
-              ]" :data-source="designFactors" :pagination="false" :row-selection="{
+              ]" :data-source="designFactors" :pagination="false" sticky :scroll="{ x: 'max-content', y: 240 }" :row-selection="{
                 selectedRowKeys: selectedDesignFactorIds,
                 onChange: (keys) => selectedDesignFactorIds = keys as number[],
               }" row-key="id" bordered
@@ -1401,15 +1468,15 @@ async function sampleSpace() {
 
                       if (optimizationAlgorithm === 'NSGA-II') {
                         // NSGA-II: 校验（清空时不触发必填校验）
-                        if (!validateLowerLimitNSGAII(factor, newVal, prev ?? undefined, showError, record)) {
+                        if (!validateLowerLimitNSGAII(factor, Number(newVal), prev ?? undefined, showError, record)) {
                           return
                         }
-                        factor.lowerLimit = newVal
-                        record.lowerLimit = newVal
+                        factor.lowerLimit = Number(newVal)
+                        record.lowerLimit = Number(newVal)
                       }
                       else if (optimizationAlgorithm === 'MOPSO') {
                         // MOPSO: 处理更新逻辑
-                        handleMOPSOLowerLimitUpdate(factor, record, newVal, prev ?? undefined, showError)
+                        handleMOPSOLowerLimitUpdate(factor, record, Number(newVal), prev ?? undefined, showError)
                       }
                     }"
                   />
@@ -1425,15 +1492,15 @@ async function sampleSpace() {
 
                       if (optimizationAlgorithm === 'NSGA-II') {
                         // NSGA-II: 校验（清空时不触发必填校验）
-                        if (!validateUpperLimitNSGAII(factor, newVal, prev ?? undefined, showError, record)) {
+                        if (!validateUpperLimitNSGAII(factor, Number(newVal), prev ?? undefined, showError, record)) {
                           return
                         }
-                        factor.upperLimit = newVal
-                        record.upperLimit = newVal
+                        factor.upperLimit = Number(newVal)
+                        record.upperLimit = Number(newVal)
                       }
                       else if (optimizationAlgorithm === 'MOPSO') {
                         // MOPSO: 处理更新逻辑
-                        handleMOPSOUpperLimitUpdate(factor, record, newVal, prev ?? undefined, showError)
+                        handleMOPSOUpperLimitUpdate(factor, record, Number(newVal), prev ?? undefined, showError)
                       }
                     }"
                   />
@@ -1450,11 +1517,11 @@ async function sampleSpace() {
 
                       if (optimizationAlgorithm === 'NSGA-II') {
                         // NSGA-II: 处理水平数更新
-                        handleNSGAIILevelCountUpdate(factor, record, newVal, prev ?? undefined, showError)
+                        handleNSGAIILevelCountUpdate(factor, record as DesignFactor, Number(newVal), prev ?? undefined, showError)
                       }
                       else if (optimizationAlgorithm === 'MOPSO') {
                         // MOPSO: 处理水平数更新
-                        handleMOPSOLevelCountUpdate(factor, record, newVal, prev ?? undefined, showError)
+                        handleMOPSOLevelCountUpdate(factor, record as DesignFactor, Number(newVal), prev ?? undefined, showError)
                       }
                     }"
                   />
@@ -1463,7 +1530,7 @@ async function sampleSpace() {
                   <a-input
                     :value="record.values" placeholder="示例：[10,12,33] 或 [a,2,3]"
                     :disabled="(optimizationAlgorithm === 'NSGA-II' && record.type !== '离散') || (optimizationAlgorithm === 'MOPSO' && hasBoundsOrLevels(record))"
-                    @update:value="(val) => onValuesUpdate(record.id, val)"
+                    @update:value="(val) => onValuesUpdate(record.id, val as string)"
                     @blur="onValuesBlur(record.id)"
                   />
                 </template>
@@ -1471,7 +1538,7 @@ async function sampleSpace() {
             </a-table>
           </a-card>
 
-          <div style="height: 10px;" />
+          <div style="height: 5px;" />
 
           <!-- 响应值 -->
           <a-card title="响应值">
@@ -1487,7 +1554,7 @@ async function sampleSpace() {
               :columns="[
                 { title: '序号', dataIndex: 'id', key: 'id', width: 80 },
                 { title: '名称', dataIndex: 'name', key: 'name' },
-              ]" :data-source="RESPONSE_VALUES" :pagination="false" size="small" row-key="id" bordered
+              ]" :data-source="RESPONSE_VALUES" :pagination="false" size="small" row-key="id" bordered sticky :scroll="{ y: 220 }"
             >
               <template #bodyCell="{ column, record, index }">
                 <template v-if="column.key === 'id'">
@@ -1502,8 +1569,6 @@ async function sampleSpace() {
         </div>
       </div>
 
-      <div style="height: 10px;" />
-
       <!-- 样本空间 -->
       <a-card title="样本空间">
         <a-table
@@ -1512,7 +1577,9 @@ async function sampleSpace() {
           size="small"
           row-key="id"
           bordered
-          :scroll="{ x: 'max-content' }"
+          :pagination="false"
+          sticky
+          :scroll="{ x: 'max-content', y: 310 }"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'id'">
@@ -1537,19 +1604,14 @@ async function sampleSpace() {
 
 <style scoped>
 .scheme-optimization-container {
-  padding: 10px;
-  padding-bottom: 80px;
-}
-
-.form-content {
-  margin-bottom: 10px;
+  padding: 5px;
 }
 
 .main-layout {
   display: grid;
   grid-template-columns: 1fr 3fr;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: 5px;
+  margin-bottom: 5px;
 }
 
 .left-column,
@@ -1566,7 +1628,7 @@ async function sampleSpace() {
 .form-row {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 5px;
 }
 
 .form-col {

@@ -67,6 +67,15 @@ type ChartType = '散点图' | '雷达图' | '曲线图'
 const chartTypeOptions: ChartType[] = ['散点图', '雷达图', '曲线图']
 const chartType = ref<ChartType>('散点图')
 
+// 图表实例key，用于强制重新渲染
+const chartKey = ref(0)
+
+// 设置项：强制不合并旧配置
+const chartSettings = {
+  notMerge: true,
+  replaceMerge: ['series', 'xAxis', 'yAxis', 'grid', 'radar'],
+} as const
+
 /**
  * 从列定义中提取字段选项
  */
@@ -261,44 +270,60 @@ function getFieldUnit(value: string): string {
  * 更新图表配置
  */
 function updateChart() {
-  if (!hasValidData.value) {
-    chartOption.value = {}
-    return
-  }
+  // 切换图表类型时强制重新渲染
+  chartKey.value++
 
-  // 过滤有效数据
-  const validData = props.data.filter((item) => {
-    const x = item[xAxisField.value as keyof SchemeData] as number
-    const y = item[yAxisField.value as keyof SchemeData] as number | null
-    return x !== null && x !== undefined && y !== null && y !== undefined
+  // 先清空旧配置，确保完全清除
+  chartOption.value = {}
+
+  // 使用 nextTick 确保DOM更新后再设置新配置
+  nextTick(() => {
+    if (!hasValidData.value) {
+      chartOption.value = {}
+      return
+    }
+
+    // 过滤有效数据
+    const validData = props.data.filter((item) => {
+      const x = item[xAxisField.value as keyof SchemeData] as number
+      const y = item[yAxisField.value as keyof SchemeData] as number | null
+      return x !== null && x !== undefined && y !== null && y !== undefined
+    })
+
+    if (validData.length === 0) {
+      chartOption.value = {}
+      return
+    }
+
+    // 提取X轴和Y轴数据
+    const xData = validData.map(item => item[xAxisField.value as keyof SchemeData] as number)
+    const yData = validData.map(item => item[yAxisField.value as keyof SchemeData] as number)
+
+    // 计算Y轴平均值
+    const yAverage = yData.reduce((sum, val) => sum + val, 0) / yData.length
+    const yAverageData = xData.map(() => yAverage)
+
+    // 找到Y轴最大值对应的索引
+    const maxYIndex = yData.reduce((maxIdx, val, idx) => (val > yData[maxIdx] ? idx : maxIdx), 0)
+    const maxX = xData[maxYIndex]
+    const maxY = yData[maxYIndex]
+
+    const xAxisLabel = getFieldLabel(xAxisField.value)
+    const yAxisLabel = getFieldLabel(yAxisField.value)
+    const xAxisUnit = getFieldUnit(xAxisField.value)
+    const yAxisUnit = getFieldUnit(yAxisField.value)
+
+    // 通用字体样式配置
+    const fontFamily = chartFont.value
+
+    generateChartConfig(validData, xData, yData, yAverage, yAverageData, maxX, maxY, xAxisLabel, yAxisLabel, xAxisUnit, yAxisUnit, fontFamily)
   })
+}
 
-  if (validData.length === 0) {
-    chartOption.value = {}
-    return
-  }
-
-  // 提取X轴和Y轴数据
-  const xData = validData.map(item => item[xAxisField.value as keyof SchemeData] as number)
-  const yData = validData.map(item => item[yAxisField.value as keyof SchemeData] as number)
-
-  // 计算Y轴平均值
-  const yAverage = yData.reduce((sum, val) => sum + val, 0) / yData.length
-  const yAverageData = xData.map(() => yAverage)
-
-  // 找到Y轴最大值对应的索引
-  const maxYIndex = yData.reduce((maxIdx, val, idx) => (val > yData[maxIdx] ? idx : maxIdx), 0)
-  const maxX = xData[maxYIndex]
-  const maxY = yData[maxYIndex]
-
-  const xAxisLabel = getFieldLabel(xAxisField.value)
-  const yAxisLabel = getFieldLabel(yAxisField.value)
-  const xAxisUnit = getFieldUnit(xAxisField.value)
-  const yAxisUnit = getFieldUnit(yAxisField.value)
-
-  // 通用字体样式配置
-  const fontFamily = chartFont.value
-
+/**
+ * 生成图表配置
+ */
+function generateChartConfig(validData: any[], xData: number[], yData: number[], yAverage: number, yAverageData: number[], maxX: number, maxY: number, xAxisLabel: string, yAxisLabel: string, xAxisUnit: string, yAxisUnit: string, fontFamily: string) {
   // 根据图表类型生成不同的配置
   if (chartType.value === '散点图') {
     // 散点图配置
@@ -376,6 +401,7 @@ function updateChart() {
           },
         },
       },
+      radar: undefined,
       series: [
         {
           name: '方案数据',
@@ -492,6 +518,7 @@ function updateChart() {
           },
         },
       },
+      radar: undefined,
       series: [
         {
           name: '方案数据',
@@ -534,8 +561,10 @@ function updateChart() {
         },
       ],
     }
+    return
   }
-  else if (chartType.value === '雷达图') {
+
+  if (chartType.value === '雷达图') {
     // 雷达图配置 - 用于对比两个方案的所有数值字段
     // 只取前两个方案进行对比
     const schemesToCompare = validData
@@ -687,7 +716,14 @@ onMounted(() => {
     <div class="chart-layout">
       <!-- 图表区域 -->
       <div class="chart-area">
-        <VChart v-if="hasValidData" class="chart" :option="chartOption" autoresize />
+        <VChart
+          v-if="hasValidData"
+          :key="chartKey"
+          class="chart"
+          :option="chartOption"
+          :settings="chartSettings"
+          autoresize
+        />
         <a-empty v-else description="请选择X轴和Y轴字段，并确保有有效数据" />
       </div>
 

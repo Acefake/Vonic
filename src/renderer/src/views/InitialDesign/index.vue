@@ -354,9 +354,23 @@ async function simulateCalculation(): Promise<void> {
     return
   }
 
-  isLoading.value = true
+  // 显示确认弹窗
+  app.dialog.confirm({
+    title: '确认仿真计算',
+    content: '是否开始执行仿真计算？这可能需要较长时间。',
+    okText: '确定',
+    cancelText: '取消',
+    onOk: async () => {
+      await executeSimulateCalculation()
+    },
+  })
+}
 
-  message.loading({ content: '正在仿真计算...' })
+/**
+ * 执行仿真计算
+ */
+async function executeSimulateCalculation(): Promise<void> {
+  isLoading.value = true
 
   logStore.info('开始仿真计算')
 
@@ -535,12 +549,12 @@ async function parseDatContent(content: string): Promise<void> {
   syncFormFromStore()
 }
 
-// exe关闭事件监听器
+// Fortran关闭事件监听器
 async function handleExeClose(_: Electron.IpcRendererEvent, exeName: string, result: any) {
   const fileName = 'Sep_power.dat'
 
   if (result.isSuccess === false) {
-    app.message.error(`${exeName} 程序异常退出，退出码: ${result.exitCode}`)
+    app.message.error(`Fortran 程序异常退出，退出码: ${result.exitCode}`)
     isLoading.value = false
     completeProgress(false)
   }
@@ -625,7 +639,10 @@ onUnmounted(() => {
 </script>validateDesignFactors
 
 <template>
-  <div class="initial-design-container">
+  <div
+    :class="{ 'initial-design-container': props.showButton }"
+    style="margin-bottom: 80px;"
+  >
     <div class="form-content">
       <!-- 顶部按钮 -->
       <div v-if="props.showButton" class="top-actions">
@@ -644,7 +661,7 @@ onUnmounted(() => {
         </a-checkbox>
       </a-card>
 
-      <div style="height: 10px" />
+      <div style="height: 5px" />
 
       <a-card :title="getFieldLabel('operatingParams', fieldLabelMode)">
         <a-form ref="formRef" layout="vertical" :model="formModel" :rules="rules">
@@ -1033,12 +1050,11 @@ onUnmounted(() => {
 
 <style scoped>
 .initial-design-container {
-  padding: 10px;
-  margin-bottom: 60px;
+  padding: 5px;
 }
 
 .top-actions {
-  margin-bottom: 10px;
+  margin-bottom: 5px;
 }
 
 .section-content {

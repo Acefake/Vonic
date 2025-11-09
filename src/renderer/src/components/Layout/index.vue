@@ -119,9 +119,12 @@ function getIconComponent(iconName?: string): Component | undefined {
 .main-layout {
   flex: 1;
   overflow: hidden;
+  display: flex;
+  flex-direction: row;
 }
 
 .content-area {
+  flex: 1;
   overflow: auto;
 }
 </style>

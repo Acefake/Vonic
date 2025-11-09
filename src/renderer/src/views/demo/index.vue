@@ -226,7 +226,11 @@ function reloadApp(): void {
 }
 
 function openLoadingWindow(): void {
-  app.window.loading.open()
+  app.window.loading.open({
+    data: {
+      title: '加载中...',
+    },
+  })
   setTimeout(() => {
     app.window.loading.close()
   }, 2000)

@@ -9,10 +9,10 @@ export function getThemeConfig(): ThemeConfig {
   return {
     token: {
       colorPrimary: app.productConfig.themeColor,
-      borderRadius: 4,
-      borderRadiusLG: 4,
-      borderRadiusSM: 4,
-      borderRadiusXS: 4,
+      borderRadius: 0,
+      borderRadiusLG: 0,
+      borderRadiusSM: 0,
+      borderRadiusXS: 0,
     },
     components: {
       Button: {

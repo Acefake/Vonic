@@ -1,7 +1,6 @@
 import { resolve } from 'node:path'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
-import { visualizer } from 'rollup-plugin-visualizer'
 import { AntDesignVueResolver } from 'unplugin-vue-components/resolvers'
 import Components from 'unplugin-vue-components/vite'
 
@@ -61,33 +60,9 @@ export default defineConfig(({ command }) => {
               importStyle: false,
             }),
           ],
-          // 自动导入组件目录
-          dirs: ['src/renderer/src/components'],
-          // 类型声明文件路径
-          dts: 'src/renderer/components.d.ts',
         }),
-        // visualizer 只在生产构建时启用，且不自动打开
-        ...(isProduction
-          ? [
-              visualizer({
-                open: false,
-                gzipSize: true,
-                brotliSize: true,
-                filename: 'dist/stats.html',
-                template: 'treemap', // 使用树状图模板，更清晰
-              }),
-            ]
-          : []),
+
       ],
-      // 开发服务器配置
-      server: {
-        port: 5173,
-        strictPort: false,
-        // 启用 HMR
-        hmr: {
-          overlay: true,
-        },
-      },
       build: {
         minify: isProduction ? 'esbuild' : false,
         sourcemap: !isProduction,

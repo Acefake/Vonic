@@ -33,10 +33,18 @@ export const useSchemeOptimizationStore = defineStore('schemeOptimization', () =
   /** 设置算法并做必要的状态重置 */
   function setAlgorithm(algo: 'NSGA-II' | 'MOPSO'): void {
     optimizationAlgorithm.value = algo
-    // 切换算法后，清空设计因子，避免不同算法的参数互相污染
-    designFactors.value = []
+    // 切换算法后，清空设计因子表单数据，避免不同算法的参数互相污染
+    designFactors.value = designFactors.value.map((factor: DesignFactor, idx) => ({
+      ...factor,
+      id: idx + 1,
+      values: undefined,
+      lowerLimit: undefined,
+      upperLimit: undefined,
+      levelCount: undefined,
+    }))
     // 同时清空样本空间，避免残留旧数据与新算法/新因子不一致
     sampleSpaceData.value = []
+    samplePointCountforRes.value = 0
     // 切换到 MOPSO 时，样本点数使用默认 50
     if (algo === 'MOPSO') {
       samplePointCount.value = 50
