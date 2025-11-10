@@ -15,6 +15,7 @@ import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { computed, watch } from 'vue'
 import VChart from 'vue-echarts'
+import { useLogStore } from '../../store/logStore'
 
 /**
  * 字段选项类型
@@ -33,6 +34,8 @@ interface Props {
   showSimulationColor?: boolean
   // 是否隐藏雷达图选项（数据对比页面隐藏）
   hideRadarChart?: boolean
+  // 是否显示折线图选项（仅在数据对比页面显示）
+  showPolylineChart?: boolean
 }
 
 interface Emits {
@@ -44,9 +47,12 @@ const props = withDefaults(defineProps<Props>(), {
   chartData: null,
   showSimulationColor: false,
   hideRadarChart: false,
+  showPolylineChart: false,
 })
 
 const emit = defineEmits<Emits>()
+
+const logStore = useLogStore()
 
 // 监控 chartData 变化（调试用）
 watch(() => props.chartData, (newData) => {
@@ -68,13 +74,21 @@ use([
 
 /**
  * 图表类型选项
- * 根据 hideRadarChart 参数决定是否显示雷达图选项
+ * 根据 hideRadarChart 和 showPolylineChart 参数决定显示哪些选项
  */
 const chartTypeOptions = computed(() => {
-  const options = ['散点图', '雷达图', '曲线图']
+  let options = ['散点图', '雷达图', '曲线图']
+
+  // 如果隐藏雷达图
   if (props.hideRadarChart) {
-    return options.filter(opt => opt !== '雷达图')
+    options = options.filter(opt => opt !== '雷达图')
   }
+
+  // 如果显示折线图（仅在数据对比页面）
+  if (props.showPolylineChart) {
+    options.push('折线图')
+  }
+
   return options
 })
 
@@ -104,6 +118,22 @@ const headerOptions = computed(() => {
  */
 function updateChartConfig(key: keyof ChartConfig, value: string | number): void {
   console.log(`[DataChart] 更新配置: ${key} = ${value}`)
+
+  // 记录关键配置变化到日志
+  const logMessages: Record<string, string> = {
+    chartType: '图表类型',
+    xAxis: 'X轴',
+    yAxis: 'Y轴',
+    lineColor: '试验曲线颜色',
+    simulationLineColor: '仿真曲线颜色',
+    titleText: '标题文本',
+    titleColor: '标题颜色',
+    titleFont: '标题字体',
+  }
+
+  const logMsg = logMessages[key] || key
+  logStore.info(`更新图表配置`, `${logMsg}: ${value}`)
+
   const newConfig = {
     ...props.chartConfig,
     [key]: value,
@@ -252,7 +282,11 @@ const chartOption = computed<EChartsOption>(() => {
   // ===== 多系列数据模式（数据对比）=====
   if (props.chartData.series && props.chartData.series.length > 0) {
     const seriesType: 'line' | 'scatter' = props.chartData.type === 'line' ? 'line' : 'scatter'
-    console.log(props.chartData.series, 'props.chartData.series--曲线图')
+    // 判断是否为折线图（不平滑）或曲线图（平滑）
+    const isPolyline = props.chartConfig.chartType === '折线图'
+    const isSmoothLine = props.chartConfig.chartType === '曲线图'
+
+    console.log(props.chartData.series, 'props.chartData.series--曲线/折线图')
     // 根据传入的 series 数据构建图表系列
     const series = props.chartData.series.map(s => ({
       name: s.name,
@@ -267,7 +301,7 @@ const chartOption = computed<EChartsOption>(() => {
             width: 2,
           }
         : undefined,
-      smooth: seriesType === 'line',
+      smooth: seriesType === 'line' && isSmoothLine, // 只有曲线图才平滑
       symbolSize: seriesType === 'scatter' ? 8 : 6,
     }))
     console.log(series, 'series--曲线图')

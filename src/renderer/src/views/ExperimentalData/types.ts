@@ -10,7 +10,7 @@ export type StatisticalMethod = '均方差' | '最大偏差'
 /**
  * 曲线类型
  */
-export type ChartType = '散点图' | '雷达图' | '曲线图'
+export type ChartType = '散点图' | '雷达图' | '曲线图' | '折线图'
 
 /**
  * 表格列定义
