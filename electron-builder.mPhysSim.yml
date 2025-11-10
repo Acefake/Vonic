@@ -56,7 +56,7 @@ win:
   # icon: build/icons/logo.ico
   executableName: mPhysSim
   target:
-    - dir
+    - zip
 
 appImage:
   artifactName: ${name}-mPhysSim.${ext}

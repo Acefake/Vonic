@@ -661,12 +661,6 @@ onUnmounted(() => {
         </a-checkbox>
       </a-card>
 
-      <a-card :title="getFieldLabel('designType', fieldLabelMode)">
-        <a-form ref="formRef" layout="vertical" :model="formModel" :rules="rules">
-          <a-input />
-        </a-form>
-      </a-card>
-
       <div style="height: 5px" />
 
       <a-card :title="getFieldLabel('operatingParams', fieldLabelMode)">

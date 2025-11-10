@@ -1406,7 +1406,9 @@ onMounted(() => {
               </a-form>
             </a-card>
 
-            <a-empty v-else description="算法不需要设置参数" />
+            <div v-else class="empty-params">
+              <a-empty description="算法不需要设置参数" />
+            </div>
           </a-card>
         </div>
 
@@ -1442,7 +1444,7 @@ onMounted(() => {
                 { title: '上限', dataIndex: 'upperLimit', key: 'upperLimit', width: 150 },
                 { title: '水平数', dataIndex: 'levelCount', key: 'levelCount', width: 120 },
                 { title: '取值', dataIndex: 'values', key: 'values', width: 200 },
-              ]" :data-source="designFactors" :pagination="false" sticky :scroll="{ x: 'max-content', y: 240 }" :row-selection="{
+              ]" :data-source="designFactors" :pagination="false" sticky :scroll="{ x: true, y: 240 }" :row-selection="{
                 selectedRowKeys: selectedDesignFactorIds,
                 onChange: (keys) => selectedDesignFactorIds = keys as number[],
               }" row-key="id" bordered
@@ -1618,11 +1620,34 @@ onMounted(() => {
 .right-column {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
 }
 
-.algorithm-card,
+.algorithm-card {
+  width: 100%;
+  min-height: 200px;
+  overflow: hidden;
+}
+
 .params-card {
   width: 100%;
+  overflow: hidden;
+}
+
+.right-column :deep(.ant-card) {
+  overflow: hidden;
+}
+
+.right-column :deep(.ant-card-body) {
+  overflow: hidden;
+}
+
+.empty-params {
+  min-height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .form-row {
