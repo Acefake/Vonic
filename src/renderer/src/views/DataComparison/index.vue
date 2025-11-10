@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { ChartConfig, ProcessedChartData, SeriesData, TableColumn, TableDataRow } from '../ExperimentalData/types'
-import { SearchOutlined } from '@ant-design/icons-vue'
-import { computed, ref, toRefs, watch } from 'vue'
+import { FilterOutlined } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
+import { computed, onMounted, ref, toRefs, watch } from 'vue'
+import app from '../../app/index'
 import { useDesignStore, useExperimentalDataStore, useLogStore, useSchemeOptimizationStore } from '../../store'
 import { getFieldLabel } from '../../utils/field-labels'
 
@@ -10,7 +12,7 @@ import DataChart from '../ExperimentalData/DataChart.vue'
 const experimentalDataStore = useExperimentalDataStore()
 const { tableColumns, tableData } = toRefs(experimentalDataStore)
 const designStore = useDesignStore()
-const { drivingParams, operatingParams, separationComponents, topLevelParams, isMultiScheme } = toRefs(designStore)
+const { drivingParams, operatingParams, separationComponents, topLevelParams, isMultiScheme, outputResults } = toRefs(designStore)
 const schemeOptimizationStore = useSchemeOptimizationStore()
 const { sampleSpaceData } = toRefs(schemeOptimizationStore)
 console.log(sampleSpaceData.value, 'sampleSpaceData---------------')
@@ -39,35 +41,68 @@ const experimentalTableData = computed(() => {
   })
 })
 
+// 存储多方案的结果数据（分离功率和分离系数）
+const multiSchemeResultsData = ref<Array<{ sepPower: number | null, sepFactor: number | null }>>([])
+
 /**
- * 多方案仿真数据的表格列配置（基于样本空间数据）
+ * 多方案仿真数据的表格列配置（基于样本空间数据，添加分离功率和分离系数）
  */
 const multiSchemeSimulationColumns = computed<TableColumn[]>(() => {
+  // 如果没有样本空间数据，返回空数组（不显示任何列）
+  if (!sampleSpaceData.value || sampleSpaceData.value.length === 0) {
+    return []
+  }
+
   const columns: TableColumn[] = [
     { title: '序号', dataIndex: '序号', key: '序号', width: 80 },
   ]
 
   // 从样本空间数据中提取字段作为列（去除空格）
-  if (sampleSpaceData.value.length > 0) {
-    const firstSample = sampleSpaceData.value[0]
-    Object.keys(firstSample).forEach((key) => {
-      const trimmedKey = key.trim()
-      if (trimmedKey !== 'id' && trimmedKey !== '序号') {
-        columns.push({
-          title: trimmedKey,
-          dataIndex: trimmedKey,
-          key: trimmedKey,
-          width: calculateColumnWidth(trimmedKey),
-        })
-      }
-    })
+  const firstSample = sampleSpaceData.value[0]
+  Object.keys(firstSample).forEach((key) => {
+    const trimmedKey = key.trim()
+    if (trimmedKey !== 'id' && trimmedKey !== '序号') {
+      columns.push({
+        title: trimmedKey,
+        dataIndex: trimmedKey,
+        key: trimmedKey,
+        width: calculateColumnWidth(trimmedKey),
+      })
+    }
+  })
+
+  // 添加分离功率和分离系数列（只有成功加载数据且有有效值时才添加）
+  const hasValidResults = multiSchemeResultsData.value.length > 0
+    && multiSchemeResultsData.value.some(item => item.sepPower !== null || item.sepFactor !== null)
+
+  if (hasValidResults) {
+    columns.push(
+      {
+        title: '分离功率',
+        dataIndex: '分离功率',
+        key: '分离功率',
+        width: 120,
+      },
+      {
+        title: '分离系数',
+        dataIndex: '分离系数',
+        key: '分离系数',
+        width: 120,
+      },
+    )
   }
 
   return columns
 })
 
+// 数据对比内容选择
+const selectedCompareFields = ref<string[]>([])
+
+// 保存仿真表格的筛选条件（用于多方案表格筛选）- 改为数组支持多选
+const simulationTableFilters = ref<Record<string, string[]>>({})
+
 /**
- * 多方案仿真数据的表格数据（基于样本空间数据）
+ * 多方案仿真数据的表格数据（基于样本空间数据，合并分离功率和分离系数）
  */
 const multiSchemeSimulationData = computed<TableDataRow[]>(() => {
   return sampleSpaceData.value.map((sample, index) => {
@@ -85,15 +120,75 @@ const multiSchemeSimulationData = computed<TableDataRow[]>(() => {
       }
     })
 
+    // 合并分离功率和分离系数（从 multiSchemeResultsData 中获取对应索引的数据）
+    const resultData = multiSchemeResultsData.value[index]
+    if (resultData) {
+      row['分离功率'] = resultData.sepPower !== null ? resultData.sepPower : undefined
+      row['分离系数'] = resultData.sepFactor !== null ? resultData.sepFactor : undefined
+    }
+
     return row
   })
 })
 
-// 数据对比内容选择
-const selectedCompareFields = ref<string[]>([])
+/**
+ * 加载多方案结果数据（分离功率和分离系数）
+ */
+async function loadMultiSchemeResults() {
+  // 非多方案模式时，清空结果数据
+  if (!isMultiScheme.value) {
+    multiSchemeResultsData.value = []
+    return
+  }
 
-// 保存仿真表格的筛选条件（用于多方案表格筛选）
-const simulationTableFilters = ref<Record<string, string>>({})
+  // 如果没有样本空间数据，清空结果数据
+  if (!sampleSpaceData.value || sampleSpaceData.value.length === 0) {
+    multiSchemeResultsData.value = []
+    return
+  }
+
+  try {
+    const data = await app.file.readMultiSchemes()
+    // 提取分离功率和分离系数，去掉最优方案行（index === -1）
+    multiSchemeResultsData.value = data
+      .filter(item => item.index !== -1)
+      .map(item => ({
+        sepPower: item.sepPower,
+        sepFactor: item.sepFactor,
+      }))
+    console.log('多方案结果数据加载成功:', multiSchemeResultsData.value)
+  }
+  catch (error) {
+    console.error('加载多方案结果数据失败:', error)
+    multiSchemeResultsData.value = []
+  }
+}
+
+/**
+ * 获取每列的唯一值（用于多方案仿真数据表格的筛选）
+ */
+function getColumnUniqueValues(columnKey: string): string[] {
+  if (!isMultiScheme.value || !multiSchemeSimulationData.value || multiSchemeSimulationData.value.length === 0) {
+    return []
+  }
+
+  // 提取该列的所有值
+  const values = multiSchemeSimulationData.value
+    .map(row => row[columnKey])
+    .filter(val => val !== undefined && val !== null && val !== '')
+    .map(val => String(val))
+
+  // 去重并排序
+  return [...new Set(values)].sort((a, b) => {
+    // 尝试转为数字比较，如果不是数字则按字符串比较
+    const numA = Number(a)
+    const numB = Number(b)
+    if (!Number.isNaN(numA) && !Number.isNaN(numB)) {
+      return numA - numB
+    }
+    return a.localeCompare(b)
+  })
+}
 
 /**
  * 图表配置
@@ -106,7 +201,7 @@ const chartConfig = ref<ChartConfig>({
   lineColor: '#1890ff', // 试验曲线颜色（默认蓝色）
   simulationLineColor: '#00ff00', // 仿真曲线颜色（默认绿色）
   titleText: '试验仿真数据对比曲线',
-  titleColor: '#2c3e50', // 标题颜色（默认深灰蓝色，视觉接近黑色）
+  titleColor: '#000000', //
   titleFont: '宋体',
 })
 
@@ -114,7 +209,30 @@ const chartConfig = ref<ChartConfig>({
 watch(isMultiScheme, (newValue) => {
   const schemeType = newValue ? '多方案' : '单方案'
   logStore.info('切换方案类型', `当前方案类型: ${schemeType}`)
+
+  // 如果切换到多方案，加载结果数据
+  if (newValue) {
+    loadMultiSchemeResults()
+  }
+  else {
+    // 切换到单方案时，清空多方案结果数据
+    multiSchemeResultsData.value = []
+  }
 })
+
+// 监听样本空间数据变化
+watch(() => sampleSpaceData.value, (newData) => {
+  if (isMultiScheme.value) {
+    // 如果样本空间数据被清空，也清空结果数据
+    if (!newData || newData.length === 0) {
+      multiSchemeResultsData.value = []
+    }
+    else {
+      // 有新数据时，重新加载结果数据
+      loadMultiSchemeResults()
+    }
+  }
+}, { deep: true })
 
 // 监听数据对比字段选择
 watch(selectedCompareFields, (newFields) => {
@@ -145,15 +263,16 @@ watch(() => chartConfig.value.yAxis, (newAxis) => {
 // =====================
 /**
  * 合并设计参数数据
- * 将 topLevelParams、operatingParams、drivingParams、separationComponents 合并成一个对象
+ * 将 topLevelParams、operatingParams、drivingParams、separationComponents、outputResults 合并成一个对象
  */
 const mergedDesignData = computed(() => {
-  // 合并所有参数对象
+  // 合并所有参数对象，outputResults 放在最后，确保分离功率和分离系数显示在最后两列
   return {
     ...topLevelParams.value,
     ...operatingParams.value,
     ...drivingParams.value,
     ...separationComponents.value,
+    ...outputResults.value,
   }
 })
 
@@ -180,6 +299,15 @@ function calculateColumnWidth(text: string): number {
 const singleSchemeSimulationColumns = computed<TableColumn[]>(() => {
   const data = mergedDesignData.value
   console.log(data, 'data---------------')
+
+  // 检查是否有任何有效数据
+  const hasValidData = Object.values(data).some(value => value !== undefined && value !== null)
+
+  // 如果没有有效数据，返回空数组（不显示任何列，包括序号列）
+  if (!hasValidData) {
+    return []
+  }
+
   const columns: TableColumn[] = [
     { title: '序号', dataIndex: '序号', key: '序号', width: 80 },
   ]
@@ -205,6 +333,14 @@ const singleSchemeSimulationColumns = computed<TableColumn[]>(() => {
 const singleSchemeSimulationData = computed<TableDataRow[]>(() => {
   const data = mergedDesignData.value
 
+  // 检查是否有任何有效数据（非 undefined 的值）
+  const hasValidData = Object.values(data).some(value => value !== undefined && value !== null)
+
+  // 如果没有任何有效数据，返回空数组
+  if (!hasValidData) {
+    return []
+  }
+
   // 创建一条数据行，包含所有参数
   const row: TableDataRow = {
     key: 'design-params-row-1',
@@ -218,7 +354,7 @@ const singleSchemeSimulationData = computed<TableDataRow[]>(() => {
 // 数据对比内容选项
 const compareFieldOptions = computed(() => {
   if (isMultiScheme.value) {
-    // 多方案：样本空间表头 + 试验数据表头，去重
+    // 多方案：样本空间表头 + 试验数据表头 + 分离功率 + 分离系数，去重
     // 从样本空间数据中提取字段名（排除 id，并去除空格）
     const sampleFields: string[] = []
     if (sampleSpaceData.value.length > 0) {
@@ -238,6 +374,20 @@ const compareFieldOptions = computed(() => {
 
     // 合并去重（都已经去除空格）
     const allFields = [...new Set([...sampleFields, ...experimentalFields])]
+
+    // 添加分离功率和分离系数（只有成功加载数据且有有效值时才添加）
+    const hasValidResults = multiSchemeResultsData.value.length > 0
+      && multiSchemeResultsData.value.some(item => item.sepPower !== null || item.sepFactor !== null)
+
+    console.log('多方案结果数据检查:', {
+      length: multiSchemeResultsData.value.length,
+      data: multiSchemeResultsData.value,
+      hasValidResults,
+    })
+
+    if (hasValidResults) {
+      allFields.push('分离功率', '分离系数')
+    }
 
     return allFields.map(field => ({
       label: field,
@@ -300,7 +450,7 @@ const filteredSimulationColumns = computed<TableColumn[]>(() => {
         ),
       ]
 
-  // 多方案时，为非序号列添加搜索功能
+  // 多方案时，为非序号列添加筛选功能（复选框列表）
   return baseColumns.map((col) => {
     if (col.dataIndex === '序号') {
       return col
@@ -311,10 +461,10 @@ const filteredSimulationColumns = computed<TableColumn[]>(() => {
     return {
       ...col,
       customFilterDropdown: true,
-      filteredValue: simulationTableFilters.value[dataIndex] ? [simulationTableFilters.value[dataIndex]] : null,
+      filteredValue: simulationTableFilters.value[dataIndex] || null,
       onFilter: (value: string, record: TableDataRow) => {
         const recordValue = String(record[dataIndex] || '')
-        return recordValue.toLowerCase().includes(value.toLowerCase())
+        return recordValue === value
       },
     }
   })
@@ -348,7 +498,7 @@ const filteredSimulationData = computed(() => {
 })
 console.log(filteredSimulationData.value, '仿真数据表格数据---------------')
 
-// 保存仿真表格实际显示的数据（应用了搜索筛选后的数据）
+// 保存仿真表格实际显示的数据（应用了复选框筛选后的数据）
 const actualSimulationTableData = computed<TableDataRow[]>(() => {
   // 单方案：直接返回 filteredSimulationData
   if (!isMultiScheme.value) {
@@ -357,24 +507,24 @@ const actualSimulationTableData = computed<TableDataRow[]>(() => {
 
   // 多方案：根据筛选条件过滤数据
   const filters = simulationTableFilters.value
-  const hasFilters = Object.keys(filters).some(key => filters[key])
+  const hasFilters = Object.keys(filters).some(key => filters[key] && filters[key].length > 0)
 
   if (!hasFilters) {
     // 没有筛选条件，返回所有数据
     return filteredSimulationData.value
   }
 
-  // 应用筛选条件
+  // 应用筛选条件（多选复选框）
   return filteredSimulationData.value.filter((row) => {
     // 检查每个筛选条件
-    for (const [columnKey, filterValue] of Object.entries(filters)) {
-      if (!filterValue)
+    for (const [columnKey, filterValues] of Object.entries(filters)) {
+      if (!filterValues || filterValues.length === 0)
         continue // 跳过空筛选值
 
-      const cellValue = String(row[columnKey] || '').toLowerCase()
-      const searchValue = filterValue.toLowerCase()
+      const cellValue = String(row[columnKey] || '')
 
-      if (!cellValue.includes(searchValue)) {
+      // 该列的值必须在选中的筛选值列表中
+      if (!filterValues.includes(cellValue)) {
         return false // 不匹配，过滤掉这一行
       }
     }
@@ -384,6 +534,11 @@ const actualSimulationTableData = computed<TableDataRow[]>(() => {
 
 // 过滤后的试验数据表格列
 const filteredExperimentalColumns = computed(() => {
+  // 如果没有试验数据，返回空数组（不显示任何列）
+  if (!experimentalTableData.value || experimentalTableData.value.length === 0) {
+    return []
+  }
+
   const addWidth = (cols: TableColumn[]) => {
     return cols.map(col => ({
       ...col,
@@ -550,6 +705,49 @@ const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
 // =====================
 // 事件处理函数
 // =====================
+
+// =====================
+// 数据检查
+// =====================
+/**
+ * 检查数据完整性并给出提示
+ */
+function checkDataCompleteness() {
+  const hasExperimentalData = experimentalTableData.value && experimentalTableData.value.length > 0
+  const hasSimulationData = isMultiScheme.value
+    ? (multiSchemeSimulationData.value && multiSchemeSimulationData.value.length > 0)
+    : (singleSchemeSimulationData.value && singleSchemeSimulationData.value.length > 0)
+
+  if (!hasExperimentalData && !hasSimulationData) {
+    message.warning('请先导入试验数据并设置方案参数')
+  }
+  else if (!hasExperimentalData) {
+    message.warning('请先导入试验数据文件')
+  }
+  else if (!hasSimulationData) {
+    if (isMultiScheme.value) {
+      message.warning('请先在方案优化模块生成样本空间数据')
+    }
+    else {
+      message.warning('请先在方案设计模块填写设计参数')
+    }
+  }
+}
+
+// =====================
+// 生命周期钩子
+// =====================
+onMounted(() => {
+  // 如果初始状态是多方案，加载结果数据
+  if (isMultiScheme.value) {
+    loadMultiSchemeResults()
+  }
+
+  // 进入页面时检查数据完整性并提示
+  setTimeout(() => {
+    checkDataCompleteness()
+  }, 500)
+})
 </script>
 
 <template>
@@ -591,45 +789,20 @@ const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
             size="small"
             row-key="key"
           >
-            <!-- 自定义列搜索框 -->
+            <!-- 自定义列筛选（复选框列表） -->
             <template
               v-if="isMultiScheme"
               #customFilterDropdown="{ setSelectedKeys, selectedKeys, confirm, clearFilters, column }"
             >
               <div class="custom-filter-dropdown">
-                <a-input
-                  :value="selectedKeys[0]"
-                  placeholder="请输入搜索内容"
-                  class="search-input"
-                  @change="(e: any) => setSelectedKeys(e.target.value ? [e.target.value] : [])"
-                  @press-enter="() => {
-                    const columnKey = (column as any)?.dataIndex as string
-                    if (columnKey) {
-                      simulationTableFilters[columnKey] = selectedKeys[0] as string || ''
-                    }
-                    confirm()
-                  }"
-                />
                 <div class="filter-buttons">
                   <a-button
-                    type="primary"
                     size="small"
+                    block
                     @click="() => {
                       const columnKey = (column as any)?.dataIndex as string
                       if (columnKey) {
-                        simulationTableFilters[columnKey] = selectedKeys[0] as string || ''
-                      }
-                      confirm()
-                    }"
-                  >
-                    搜索
-                  </a-button>
-                  <a-button
-                    size="small"
-                    @click="() => {
-                      const columnKey = (column as any)?.dataIndex as string
-                      if (columnKey) {
-                        simulationTableFilters[columnKey] = ''
+                        simulationTableFilters[columnKey] = []
                       }
                       clearFilters()
                       confirm()
@@ -638,12 +811,41 @@ const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
                     重置
                   </a-button>
                 </div>
+                <div class="filter-checkbox-list">
+                  <a-checkbox-group
+                    :value="selectedKeys"
+                    @change="(checkedValues: any) => {
+                      setSelectedKeys(checkedValues)
+                      const columnKey = (column as any)?.dataIndex as string
+                      if (columnKey) {
+                        simulationTableFilters[columnKey] = checkedValues as string[]
+                      }
+                      confirm()
+                    }"
+                  >
+                    <div
+                      v-for="value in getColumnUniqueValues((column as any)?.dataIndex)"
+                      :key="value"
+                      class="filter-checkbox-item"
+                    >
+                      <a-checkbox :value="value">
+                        {{ value }}
+                      </a-checkbox>
+                    </div>
+                  </a-checkbox-group>
+                </div>
               </div>
             </template>
 
-            <!-- 自定义列搜索图标 -->
+            <!-- 自定义列筛选图标 -->
             <template v-if="isMultiScheme" #customFilterIcon="{ filtered }">
-              <SearchOutlined :class="{ 'search-icon-active': filtered }" />
+              <FilterOutlined :class="{ 'filter-icon-active': filtered }" />
+            </template>
+
+            <template #emptyText>
+              <div class="empty-state">
+                <a-empty description="暂无数据，请选择方案或上传数据文件" />
+              </div>
             </template>
           </a-table>
         </div>
@@ -693,15 +895,15 @@ const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
 .data-comparison-container {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 24px;
+  gap: 5px;
+  padding: 5px;
   height: calc(100vh - 60px);
   overflow-y: auto;
 }
 
 .config-section {
   background: #fff;
-  padding: 16px;
+  padding: 5px;
   border-radius: 4px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
@@ -709,14 +911,14 @@ const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
 .config-row {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 5px;
   flex-wrap: wrap;
 }
 
 .config-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
 }
 
 .label {
@@ -729,13 +931,13 @@ const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
 .tables-and-chart-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 5px;
   width: 100%;
 }
 
 .tables-section {
   display: flex;
-  gap: 20px;
+  gap: 5px;
   width: 100%;
 }
 
@@ -743,7 +945,7 @@ const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
   flex: 1;
   min-width: 0;
   background: #fff;
-  padding: 16px;
+  padding: 5px;
   border-radius: 4px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   display: flex;
@@ -771,10 +973,10 @@ const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
 }
 
 .table-header {
-  margin-bottom: 12px;
+  margin-bottom: 5px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
 }
 
 .table-title {
@@ -794,7 +996,7 @@ const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
 
 .chart-section {
   background: #fff;
-  padding: 16px;
+  padding: 5px;
   border-radius: 4px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   min-height: 600px;
@@ -805,28 +1007,46 @@ const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
   font-size: 16px;
   font-weight: 600;
   color: rgba(0, 0, 0, 0.85);
-  margin-bottom: 16px;
+  margin-bottom: 5px;
 }
 
-/* 自定义列搜索样式 */
+/* 自定义列筛选样式（复选框列表） */
 .custom-filter-dropdown {
   padding: 8px;
   background: #fff;
   border-radius: 4px;
-}
-
-.search-input {
-  width: 200px;
-  margin-bottom: 8px;
-  display: block;
+  min-width: 150px;
+  max-width: 250px;
 }
 
 .filter-buttons {
-  display: flex;
-  gap: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #f0f0f0;
 }
 
-.search-icon-active {
+.filter-checkbox-list {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.filter-checkbox-item {
+  padding: 4px 8px;
+  transition: background-color 0.2s;
+}
+
+.filter-checkbox-item:hover {
+  background-color: #f5f5f5;
+}
+
+.filter-checkbox-item :deep(.ant-checkbox-wrapper) {
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.filter-icon-active {
   color: #1890ff;
 }
 </style>

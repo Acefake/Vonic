@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { ProcessedChartData } from './types'
 
-import { UploadOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { computed, nextTick, ref } from 'vue'
 
@@ -204,7 +203,7 @@ function handleFileSelect(): void {
         />
         <a-button type="primary" @click="handleFileSelect">
           <template #icon>
-            <UploadOutlined />
+            <!-- <UploadOutlined /> -->
           </template>
           导入文件
         </a-button>
@@ -236,16 +235,16 @@ function handleFileSelect(): void {
 <style scoped>
 .experimental-data-container {
   height: calc(100vh - 40px);
-  padding: 24px;
+  padding: 5px;
   background-color: #f0f2f5;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 5px;
 }
 
 .file-selector-section {
   background: #fff;
-  padding: 16px;
+  padding: 5px;
   border-radius: 4px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
@@ -253,9 +252,8 @@ function handleFileSelect(): void {
 .file-input-group {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 5px;
   justify-content: space-between;
-  padding: 0 16px 0 0;
 }
 
 .label {
@@ -272,7 +270,7 @@ function handleFileSelect(): void {
 .main-tabs {
   flex: 1;
   background: #fff;
-  padding: 16px;
+  padding: 5px;
   padding-top: 0;
   border-radius: 4px;
   overflow: hidden;
