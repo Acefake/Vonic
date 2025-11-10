@@ -3,7 +3,7 @@ import type { DesignFactor, SampleData, SampleSpaceData } from './type'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { debounce } from 'lodash'
 import { storeToRefs } from 'pinia'
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { getProductConfig } from '../../../../config/product.config'
 import app from '../../app/index'
 import { useLogStore, useSchemeOptimizationStore } from '../../store'
@@ -1343,9 +1343,6 @@ async function executeSampleSpace(params: any) {
     isSampling.value = false
   }
 }
-
-
-
 </script>
 
 <template>

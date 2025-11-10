@@ -282,8 +282,7 @@ const chartOption = computed<EChartsOption>(() => {
   // ===== 多系列数据模式（数据对比）=====
   if (props.chartData.series && props.chartData.series.length > 0) {
     const seriesType: 'line' | 'scatter' = props.chartData.type === 'line' ? 'line' : 'scatter'
-    // 判断是否为折线图（不平滑）或曲线图（平滑）
-    const isPolyline = props.chartConfig.chartType === '折线图'
+    // 判断是否为曲线图（平滑）
     const isSmoothLine = props.chartConfig.chartType === '曲线图'
 
     console.log(props.chartData.series, 'props.chartData.series--曲线/折线图')
@@ -301,7 +300,7 @@ const chartOption = computed<EChartsOption>(() => {
             width: 2,
           }
         : undefined,
-      smooth: seriesType === 'line' && isSmoothLine, // 只有曲线图才平滑
+      smooth: seriesType === 'line' && isSmoothLine, // 只有曲线图才平滑，折线图不平滑
       symbolSize: seriesType === 'scatter' ? 8 : 6,
     }))
     console.log(series, 'series--曲线图')
