@@ -25,7 +25,7 @@ const browserWindowDefaultOptions: BrowserWindowConstructorOptions = {
     // 网络安全
     webSecurity: false,
     // 缩放因子
-    zoomFactor: 0.9,
+    zoomFactor: 1,
   },
 }
 
@@ -71,19 +71,18 @@ export const windowConfig: WindowConfig[] = [
   {
     windowName: WindowName.MAIN,
     title: '多物理场数值模拟仿真计算',
-    width: 1600,
-    height: 900,
     modal: false,
     lazy: false,
     resizable: true,
     moveCenter: true,
     singleton: true,
     maxInstances: 1,
+    width: 1920,
+    height: 1080,
     options: {
       ...mainWindowOptions,
       frame: false,
-      minWidth: 1600,
-      minHeight: 900,
+      fullscreen: true
     },
   },
   {

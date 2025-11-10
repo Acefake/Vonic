@@ -3,7 +3,7 @@ import type { DesignFactor, SampleData, SampleSpaceData } from './type'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { debounce } from 'lodash'
 import { storeToRefs } from 'pinia'
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { getProductConfig } from '../../../../config/product.config'
 import app from '../../app/index'
 import { useLogStore, useSchemeOptimizationStore } from '../../store'
@@ -36,6 +36,8 @@ const { designFactors, sampleSpaceData, optimizationAlgorithm, samplePointCount,
 const isSampling = ref(false)
 // 选中的设计因子行
 const selectedDesignFactorIds = ref<number[]>([])
+// 样本空间表格高度
+const sampleSpaceTableHeight = ref(560)
 
 /**
  * 样本空间表格列
@@ -1342,11 +1344,8 @@ async function executeSampleSpace(params: any) {
   }
 }
 
-onMounted(() => {
-  app.eventBus.on('loading:close', () => {
-    console.log('loading:close')
-  })
-})
+
+
 </script>
 
 <template>
@@ -1462,7 +1461,7 @@ onMounted(() => {
                 <template v-else-if="column.key === 'lowerLimit'">
                   <a-input-number
                     :value="record.lowerLimit" style="width: 100%" :min="0"
-                    :disabled="optimizationAlgorithm === 'MOPSO' && hasValues(record)" @update:value="(val) => {
+                    :disabled="optimizationAlgorithm === 'MOPSO' && hasValues(record as DesignFactor)" @update:value="(val) => {
                       const factor = designFactors.find(f => f.id === record.id)
                       if (!factor) return
                       const prev = factor.lowerLimit
@@ -1470,7 +1469,7 @@ onMounted(() => {
 
                       if (optimizationAlgorithm === 'NSGA-II') {
                         // NSGA-II: 校验（清空时不触发必填校验）
-                        if (!validateLowerLimitNSGAII(factor, Number(newVal), prev ?? undefined, showError, record)) {
+                        if (!validateLowerLimitNSGAII(factor, Number(newVal), prev ?? undefined, showError, record as DesignFactor)) {
                           return
                         }
                         factor.lowerLimit = Number(newVal)
@@ -1478,7 +1477,7 @@ onMounted(() => {
                       }
                       else if (optimizationAlgorithm === 'MOPSO') {
                         // MOPSO: 处理更新逻辑
-                        handleMOPSOLowerLimitUpdate(factor, record, Number(newVal), prev ?? undefined, showError)
+                        handleMOPSOLowerLimitUpdate(factor, record as DesignFactor, Number(newVal), prev ?? undefined, showError)
                       }
                     }"
                   />
@@ -1486,7 +1485,7 @@ onMounted(() => {
                 <template v-else-if="column.key === 'upperLimit'">
                   <a-input-number
                     :value="record.upperLimit" style="width: 100%" :min="0"
-                    :disabled="optimizationAlgorithm === 'MOPSO' && hasValues(record)" @update:value="(val) => {
+                    :disabled="optimizationAlgorithm === 'MOPSO' && hasValues(record as DesignFactor)" @update:value="(val) => {
                       const factor = designFactors.find(f => f.id === record.id)
                       if (!factor) return
                       const prev = factor.upperLimit
@@ -1494,7 +1493,7 @@ onMounted(() => {
 
                       if (optimizationAlgorithm === 'NSGA-II') {
                         // NSGA-II: 校验（清空时不触发必填校验）
-                        if (!validateUpperLimitNSGAII(factor, Number(newVal), prev ?? undefined, showError, record)) {
+                        if (!validateUpperLimitNSGAII(factor, Number(newVal), prev ?? undefined, showError, record as DesignFactor)) {
                           return
                         }
                         factor.upperLimit = Number(newVal)
@@ -1502,7 +1501,7 @@ onMounted(() => {
                       }
                       else if (optimizationAlgorithm === 'MOPSO') {
                         // MOPSO: 处理更新逻辑
-                        handleMOPSOUpperLimitUpdate(factor, record, Number(newVal), prev ?? undefined, showError)
+                        handleMOPSOUpperLimitUpdate(factor, record as DesignFactor, Number(newVal), prev ?? undefined, showError)
                       }
                     }"
                   />
@@ -1510,7 +1509,7 @@ onMounted(() => {
                 <template v-else-if="column.key === 'levelCount'">
                   <a-input-number
                     :value="record.levelCount" style="width: 100%"
-                    :disabled="(optimizationAlgorithm === 'NSGA-II' && record.type !== '离散') || (optimizationAlgorithm === 'MOPSO' && hasValues(record))"
+                    :disabled="(optimizationAlgorithm === 'NSGA-II' && record.type !== '离散') || (optimizationAlgorithm === 'MOPSO' && hasValues(record as DesignFactor))"
                     @update:value="(val) => {
                       const factor = designFactors.find(f => f.id === record.id)
                       if (!factor) return
@@ -1530,10 +1529,10 @@ onMounted(() => {
                 </template>
                 <template v-else-if="column.key === 'values'">
                   <a-input
-                    :value="record.values" placeholder="示例：[10,12,33] 或 [a,2,3]"
-                    :disabled="(optimizationAlgorithm === 'NSGA-II' && record.type !== '离散') || (optimizationAlgorithm === 'MOPSO' && hasBoundsOrLevels(record))"
-                    @update:value="(val) => onValuesUpdate(record.id, val as string)"
-                    @blur="onValuesBlur(record.id)"
+                    :value="record.values" placeholder="示例：[10,12,33] "
+                    :disabled="(optimizationAlgorithm === 'NSGA-II' && record.type !== '离散') || (optimizationAlgorithm === 'MOPSO' && hasBoundsOrLevels(record as DesignFactor))"
+                    @update:value="(val) => onValuesUpdate(record.id as number, val as string)"
+                    @blur="onValuesBlur(record.id as number)"
                   />
                 </template>
               </template>
@@ -1581,7 +1580,7 @@ onMounted(() => {
           bordered
           :pagination="false"
           sticky
-          :scroll="{ x: 'max-content', y: 310 }"
+          :scroll="{ x: 'max-content', y: sampleSpaceTableHeight }"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'id'">
