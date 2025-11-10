@@ -5,7 +5,17 @@ import type { StatisticalMethod, TableColumn, TableDataRow } from './types'
 import { message } from 'ant-design-vue'
 import { computed, nextTick, ref, watch } from 'vue'
 
+import { useLogStore } from '../../store/logStore'
 import { calculateStatistics } from './utils'
+
+const props = withDefaults(defineProps<Props>(), {
+  tableColumns: () => [],
+  tableData: () => [],
+})
+
+const emit = defineEmits<Emits>()
+
+const logStore = useLogStore()
 
 interface Props {
   tableColumns?: TableColumn[]
@@ -15,13 +25,6 @@ interface Props {
 interface Emits {
   (e: 'update:tableData', value: TableDataRow[]): void
 }
-
-const props = withDefaults(defineProps<Props>(), {
-  tableColumns: () => [],
-  tableData: () => [],
-})
-
-const emit = defineEmits<Emits>()
 
 // 统计方法
 const statisticalMethod = ref<StatisticalMethod>('均方差')
@@ -51,9 +54,12 @@ const scrollConfig = computed(() => {
 // 统计计算
 async function handleStatisticsCalculate(): Promise<void> {
   if (props.tableData.length === 0) {
+    logStore.warning('统计计算失败', '请先导入试验数据文件')
     message.warning('请先导入试验数据文件')
     return
   }
+
+  logStore.info('开始统计计算', `方法: ${statisticalMethod.value}`)
 
   // 过滤掉已有的统计行（统计行的序号是字符串类型，如 '均方差'）
   const dataRows = props.tableData.filter((row) => {
@@ -73,6 +79,7 @@ async function handleStatisticsCalculate(): Promise<void> {
   // 添加到表格末尾
   emit('update:tableData', [...dataRows, statisticsRow])
 
+  logStore.success('统计计算完成', `方法: ${statisticalMethod.value}, 数据行数: ${dataRows.length}`)
   message.success('统计计算完成！')
 
   // 滚动到底部显示新添加的统计行

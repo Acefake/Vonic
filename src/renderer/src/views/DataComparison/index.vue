@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import type { TableColumnType } from 'ant-design-vue'
 import type { ChartConfig, ProcessedChartData, SeriesData, TableColumn, TableDataRow } from '../ExperimentalData/types'
 import { SearchOutlined } from '@ant-design/icons-vue'
-import { computed, ref, toRefs } from 'vue'
-import { useDesignStore, useExperimentalDataStore } from '../../store'
+import { computed, ref, toRefs, watch } from 'vue'
+import { useDesignStore, useExperimentalDataStore, useLogStore, useSchemeOptimizationStore } from '../../store'
 import { getFieldLabel } from '../../utils/field-labels'
 
 import DataChart from '../ExperimentalData/DataChart.vue'
@@ -12,6 +11,10 @@ const experimentalDataStore = useExperimentalDataStore()
 const { tableColumns, tableData } = toRefs(experimentalDataStore)
 const designStore = useDesignStore()
 const { drivingParams, operatingParams, separationComponents, topLevelParams, isMultiScheme } = toRefs(designStore)
+const schemeOptimizationStore = useSchemeOptimizationStore()
+const { sampleSpaceData } = toRefs(schemeOptimizationStore)
+console.log(sampleSpaceData.value, 'sampleSpaceData---------------')
+const logStore = useLogStore()
 console.log(tableColumns.value, 'tableColumns')
 console.log(tableData.value, 'tableData')
 console.log(drivingParams.value, 'drivingParams')
@@ -36,26 +39,61 @@ const experimentalTableData = computed(() => {
   })
 })
 
-// 仿真数据（假数据）
-const simulationTableColumns = ref<TableColumn[]>([
-  { title: '序号', dataIndex: '序号', key: '序号', width: 80 },
-  { title: '角度度', dataIndex: '角度度', key: '角度度', width: 100 },
-  { title: '供料后退', dataIndex: '供料后退', key: '供料后退', width: 110 },
-  { title: '两端条', dataIndex: '两端条', key: '两端条', width: 100 },
-  { title: '端盖温度', dataIndex: '端盖温度', key: '端盖温度', width: 110 },
-  { title: '分离功率', dataIndex: '分离功率', key: '分离功率', width: 110 },
-  { title: '分离系数', dataIndex: '分离系数', key: '分离系数', width: 110 },
-])
-// 仿真数据
-const simulationTableData = ref<TableDataRow[]>([
-  { key: 'sim-1', 序号: 1, 角度度: 10, 供料后退: 10, 两端条: 10, 端盖温度: 10, 分离功率: 10, 分离系数: 10 },
-  { key: 'sim-2', 序号: 2, 角度度: 20, 供料后退: 20, 两端条: 20, 端盖温度: 20, 分离功率: 20, 分离系数: 20 },
-  { key: 'sim-3', 序号: 3, 角度度: 30, 供料后退: 30, 两端条: 30, 端盖温度: 30, 分离功率: 30, 分离系数: 30 },
-  { key: 'sim-4', 序号: 4, 角度度: 40, 供料后退: 40, 两端条: 40, 端盖温度: 40, 分离功率: 40, 分离系数: 40 },
-])
+/**
+ * 多方案仿真数据的表格列配置（基于样本空间数据）
+ */
+const multiSchemeSimulationColumns = computed<TableColumn[]>(() => {
+  const columns: TableColumn[] = [
+    { title: '序号', dataIndex: '序号', key: '序号', width: 80 },
+  ]
+
+  // 从样本空间数据中提取字段作为列（去除空格）
+  if (sampleSpaceData.value.length > 0) {
+    const firstSample = sampleSpaceData.value[0]
+    Object.keys(firstSample).forEach((key) => {
+      const trimmedKey = key.trim()
+      if (trimmedKey !== 'id' && trimmedKey !== '序号') {
+        columns.push({
+          title: trimmedKey,
+          dataIndex: trimmedKey,
+          key: trimmedKey,
+          width: calculateColumnWidth(trimmedKey),
+        })
+      }
+    })
+  }
+
+  return columns
+})
+
+/**
+ * 多方案仿真数据的表格数据（基于样本空间数据）
+ */
+const multiSchemeSimulationData = computed<TableDataRow[]>(() => {
+  return sampleSpaceData.value.map((sample, index) => {
+    // 创建新对象，字段名去除空格
+    const row: TableDataRow = {
+      key: `sample-${sample.id}`,
+      序号: index + 1,
+    }
+
+    // 将原始数据的字段名去除空格后添加
+    Object.keys(sample).forEach((key) => {
+      const trimmedKey = key.trim()
+      if (trimmedKey !== 'id') {
+        row[trimmedKey] = sample[key]
+      }
+    })
+
+    return row
+  })
+})
 
 // 数据对比内容选择
 const selectedCompareFields = ref<string[]>([])
+
+// 保存仿真表格的筛选条件（用于多方案表格筛选）
+const simulationTableFilters = ref<Record<string, string>>({})
 
 /**
  * 图表配置
@@ -70,6 +108,36 @@ const chartConfig = ref<ChartConfig>({
   titleText: '试验仿真数据对比曲线',
   titleColor: '#2c3e50', // 标题颜色（默认深灰蓝色，视觉接近黑色）
   titleFont: '宋体',
+})
+
+// 监听方案类型切换
+watch(isMultiScheme, (newValue) => {
+  const schemeType = newValue ? '多方案' : '单方案'
+  logStore.info('切换方案类型', `当前方案类型: ${schemeType}`)
+})
+
+// 监听数据对比字段选择
+watch(selectedCompareFields, (newFields) => {
+  if (newFields.length > 0) {
+    logStore.info('选择对比字段', `字段: ${newFields.join(', ')}`)
+  }
+})
+
+// 监听图表配置变化
+watch(() => chartConfig.value.chartType, (newType) => {
+  logStore.info('切换图表类型', `类型: ${newType}`)
+})
+
+watch(() => chartConfig.value.xAxis, (newAxis) => {
+  if (newAxis) {
+    logStore.info('选择X轴', `X轴: ${newAxis}`)
+  }
+})
+
+watch(() => chartConfig.value.yAxis, (newAxis) => {
+  if (newAxis) {
+    logStore.info('选择Y轴', `Y轴: ${newAxis}`)
+  }
 })
 
 // =====================
@@ -101,7 +169,6 @@ function calculateColumnWidth(text: string): number {
   const padding = 32 // 列的内边距
 
   const calculatedWidth = text.length * charWidth + padding
-
   // 限制在最小和最大宽度之间
   return Math.min(Math.max(calculatedWidth, minWidth), maxWidth)
 }
@@ -151,16 +218,26 @@ const singleSchemeSimulationData = computed<TableDataRow[]>(() => {
 // 数据对比内容选项
 const compareFieldOptions = computed(() => {
   if (isMultiScheme.value) {
-    // 多方案：仿真数据表头 + 试验数据表头，去重
-    const simulationFields = simulationTableColumns.value
-      .filter(col => col.dataIndex !== '序号')
-      .map(col => col.dataIndex)
-    // 试验数据表头
+    // 多方案：样本空间表头 + 试验数据表头，去重
+    // 从样本空间数据中提取字段名（排除 id，并去除空格）
+    const sampleFields: string[] = []
+    if (sampleSpaceData.value.length > 0) {
+      const firstSample = sampleSpaceData.value[0]
+      Object.keys(firstSample).forEach((key) => {
+        const trimmedKey = key.trim()
+        if (trimmedKey !== 'id' && trimmedKey !== '序号') {
+          sampleFields.push(trimmedKey)
+        }
+      })
+    }
+
+    // 试验数据表头（去除空格）
     const experimentalFields = experimentalTableColumns.value
       .filter(col => col.dataIndex !== '序号')
-      .map(col => col.dataIndex)
+      .map(col => (typeof col.dataIndex === 'string' ? col.dataIndex.trim() : col.dataIndex))
 
-    const allFields = [...new Set([...simulationFields, ...experimentalFields])]
+    // 合并去重（都已经去除空格）
+    const allFields = [...new Set([...sampleFields, ...experimentalFields])]
 
     return allFields.map(field => ({
       label: field,
@@ -183,7 +260,7 @@ const compareFieldOptions = computed(() => {
  * 单方案时：根据选中的字段过滤设计参数列（通过中文标签匹配）
  * 多方案时：根据选中的字段过滤仿真数据列，并支持搜索
  */
-const filteredSimulationColumns = computed<TableColumnType[]>(() => {
+const filteredSimulationColumns = computed<TableColumn[]>(() => {
   // ===== 处理仿真数据表格的列过滤逻辑 =====
   // 单方案：使用设计参数的列配置，并根据选中字段过滤
   if (!isMultiScheme.value) {
@@ -213,12 +290,12 @@ const filteredSimulationColumns = computed<TableColumnType[]>(() => {
     ]
   }
 
-  // 多方案：使用原有的列配置和过滤逻辑
+  // 多方案：使用样本空间数据的列配置和过滤逻辑
   const baseColumns = selectedCompareFields.value.length === 0
-    ? simulationTableColumns.value
+    ? multiSchemeSimulationColumns.value
     : [
-        simulationTableColumns.value[0], // 序号列
-        ...simulationTableColumns.value.filter(col =>
+        multiSchemeSimulationColumns.value[0], // 序号列
+        ...multiSchemeSimulationColumns.value.filter(col =>
           selectedCompareFields.value.includes(col.dataIndex),
         ),
       ]
@@ -234,6 +311,7 @@ const filteredSimulationColumns = computed<TableColumnType[]>(() => {
     return {
       ...col,
       customFilterDropdown: true,
+      filteredValue: simulationTableFilters.value[dataIndex] ? [simulationTableFilters.value[dataIndex]] : null,
       onFilter: (value: string, record: TableDataRow) => {
         const recordValue = String(record[dataIndex] || '')
         return recordValue.toLowerCase().includes(value.toLowerCase())
@@ -245,7 +323,7 @@ const filteredSimulationColumns = computed<TableColumnType[]>(() => {
 /**
  * 过滤后的仿真数据表格数据
  * 单方案时：显示合并的设计参数数据
- * 多方案时：显示原有的多方案数据
+ * 多方案时：显示样本空间数据
  */
 const filteredSimulationData = computed(() => {
   // 单方案：使用设计参数数据
@@ -253,12 +331,12 @@ const filteredSimulationData = computed(() => {
     return singleSchemeSimulationData.value
   }
 
-  // 多方案：使用原有的数据和过滤逻辑
+  // 多方案：使用样本空间数据和过滤逻辑
   if (selectedCompareFields.value.length === 0) {
-    return simulationTableData.value
+    return multiSchemeSimulationData.value
   }
 
-  return simulationTableData.value.map((row) => {
+  return multiSchemeSimulationData.value.map((row) => {
     const filteredRow: TableDataRow = { key: row.key, 序号: row.序号 }
 
     selectedCompareFields.value.forEach((field) => {
@@ -269,6 +347,41 @@ const filteredSimulationData = computed(() => {
   })
 })
 console.log(filteredSimulationData.value, '仿真数据表格数据---------------')
+
+// 保存仿真表格实际显示的数据（应用了搜索筛选后的数据）
+const actualSimulationTableData = computed<TableDataRow[]>(() => {
+  // 单方案：直接返回 filteredSimulationData
+  if (!isMultiScheme.value) {
+    return filteredSimulationData.value
+  }
+
+  // 多方案：根据筛选条件过滤数据
+  const filters = simulationTableFilters.value
+  const hasFilters = Object.keys(filters).some(key => filters[key])
+
+  if (!hasFilters) {
+    // 没有筛选条件，返回所有数据
+    return filteredSimulationData.value
+  }
+
+  // 应用筛选条件
+  return filteredSimulationData.value.filter((row) => {
+    // 检查每个筛选条件
+    for (const [columnKey, filterValue] of Object.entries(filters)) {
+      if (!filterValue)
+        continue // 跳过空筛选值
+
+      const cellValue = String(row[columnKey] || '').toLowerCase()
+      const searchValue = filterValue.toLowerCase()
+
+      if (!cellValue.includes(searchValue)) {
+        return false // 不匹配，过滤掉这一行
+      }
+    }
+    return true // 所有筛选条件都匹配
+  })
+})
+
 // 过滤后的试验数据表格列
 const filteredExperimentalColumns = computed(() => {
   const addWidth = (cols: TableColumn[]) => {
@@ -282,11 +395,16 @@ const filteredExperimentalColumns = computed(() => {
     return addWidth(experimentalTableColumns.value)
   }
 
-  // 序号列 + 选中的字段列
+  // 序号列 + 选中的字段列（匹配时去除空格）
   const sequenceCol = experimentalTableColumns.value.find(col => col.dataIndex === '序号')
-  const selectedCols = experimentalTableColumns.value.filter(col =>
-    selectedCompareFields.value.includes(col.dataIndex),
+  // 对选中的字段也去除空格，确保匹配准确
+  const trimmedSelectedFields = selectedCompareFields.value.map(field =>
+    typeof field === 'string' ? field.trim() : field,
   )
+  const selectedCols = experimentalTableColumns.value.filter((col) => {
+    const colDataIndex = typeof col.dataIndex === 'string' ? col.dataIndex.trim() : col.dataIndex
+    return trimmedSelectedFields.includes(colDataIndex)
+  })
 
   const cols = sequenceCol ? [sequenceCol, ...selectedCols] : selectedCols
   return addWidth(cols)
@@ -298,6 +416,11 @@ const filteredExperimentalData = computed(() => {
     return experimentalTableData.value
   }
 
+  // 将选中的字段去除空格
+  const trimmedSelectedFields = selectedCompareFields.value.map(field =>
+    typeof field === 'string' ? field.trim() : field,
+  )
+
   return experimentalTableData.value.map((row) => {
     const filteredRow: TableDataRow = { key: row.key }
 
@@ -305,8 +428,17 @@ const filteredExperimentalData = computed(() => {
       filteredRow.序号 = row.序号
     }
 
-    selectedCompareFields.value.forEach((field) => {
-      filteredRow[field] = row[field] !== undefined ? row[field] : ''
+    // 遍历选中的字段，从 row 中查找匹配的数据
+    trimmedSelectedFields.forEach((trimmedField) => {
+      // 遍历 row 的所有键，找到去除空格后匹配的键
+      const matchedKey = Object.keys(row).find(key =>
+        typeof key === 'string' && key.trim() === trimmedField,
+      )
+
+      if (matchedKey) {
+        // 使用匹配到的原始键名作为 filteredRow 的键
+        filteredRow[matchedKey] = row[matchedKey]
+      }
     })
 
     return filteredRow
@@ -329,11 +461,27 @@ const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
 
   const series: SeriesData[] = []
 
-  const simulationData = filteredSimulationData.value
+  // 使用实际表格显示的数据（包含搜索筛选后的结果）
+  const simulationData = actualSimulationTableData.value
   const simulationColumns = filteredSimulationColumns.value
 
-  const simXCol = simulationColumns.find(col => typeof col.title === 'string' && col.title.trim() === xAxis.trim())
-  const simYCol = simulationColumns.find(col => typeof col.title === 'string' && col.title.trim() === yAxis.trim())
+  console.log('[图表数据] 使用的数据源:', {
+    isMultiScheme: isMultiScheme.value,
+    filters: simulationTableFilters.value,
+    simulationDataLength: simulationData.length,
+    data: simulationData,
+  })
+
+  const simXCol = simulationColumns.find((col) => {
+    const dataIndex = typeof col.dataIndex === 'string' ? col.dataIndex.trim() : col.dataIndex
+    const title = typeof col.title === 'string' ? col.title.trim() : col.title
+    return dataIndex === xAxis.trim() || title === xAxis.trim()
+  })
+  const simYCol = simulationColumns.find((col) => {
+    const dataIndex = typeof col.dataIndex === 'string' ? col.dataIndex.trim() : col.dataIndex
+    const title = typeof col.title === 'string' ? col.title.trim() : col.title
+    return dataIndex === yAxis.trim() || title === yAxis.trim()
+  })
 
   if (simXCol && simYCol && simulationData.length > 0) {
     const points: [number, number][] = []
@@ -358,8 +506,14 @@ const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
   const experimentalData = filteredExperimentalData.value
   const experimentalColumns = filteredExperimentalColumns.value
 
-  const expXCol = experimentalColumns.find(col => col.dataIndex === xAxis || col.title?.trim() === xAxis.trim())
-  const expYCol = experimentalColumns.find(col => col.dataIndex === yAxis || col.title?.trim() === yAxis.trim())
+  const expXCol = experimentalColumns.find((col) => {
+    const dataIndex = typeof col.dataIndex === 'string' ? col.dataIndex.trim() : col.dataIndex
+    return dataIndex === xAxis.trim() || col.title?.trim() === xAxis.trim()
+  })
+  const expYCol = experimentalColumns.find((col) => {
+    const dataIndex = typeof col.dataIndex === 'string' ? col.dataIndex.trim() : col.dataIndex
+    return dataIndex === yAxis.trim() || col.title?.trim() === yAxis.trim()
+  })
 
   if (expXCol && expYCol && experimentalData.length > 0) {
     const points: [number, number][] = []
@@ -386,7 +540,7 @@ const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
   }
 
   return {
-    type: chartConfig.value.chartType === '曲线图' ? 'line' : 'scatter',
+    type: chartConfig.value.chartType === '曲线图' || chartConfig.value.chartType === '折线图' ? 'line' : 'scatter',
     series,
     xAxisName: xAxis,
     yAxisName: yAxis,
@@ -400,21 +554,6 @@ const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
 
 <template>
   <div class="data-comparison-container">
-    <!-- 方案类型切换（临时调试用，固定定位，删除时不影响布局） -->
-    <div class="debug-panel">
-      <div class="config-item">
-        <span class="label">方案类型：</span>
-        <a-radio-group v-model:value="isMultiScheme">
-          <a-radio :value="false">
-            单方案
-          </a-radio>
-          <a-radio :value="true">
-            多方案
-          </a-radio>
-        </a-radio-group>
-      </div>
-    </div>
-
     <!-- 顶部配置区域 -->
     <div class="config-section">
       <div class="config-row">
@@ -455,7 +594,7 @@ const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
             <!-- 自定义列搜索框 -->
             <template
               v-if="isMultiScheme"
-              #customFilterDropdown="{ setSelectedKeys, selectedKeys, confirm, clearFilters }"
+              #customFilterDropdown="{ setSelectedKeys, selectedKeys, confirm, clearFilters, column }"
             >
               <div class="custom-filter-dropdown">
                 <a-input
@@ -463,19 +602,38 @@ const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
                   placeholder="请输入搜索内容"
                   class="search-input"
                   @change="(e: any) => setSelectedKeys(e.target.value ? [e.target.value] : [])"
-                  @press-enter="confirm()"
+                  @press-enter="() => {
+                    const columnKey = (column as any)?.dataIndex as string
+                    if (columnKey) {
+                      simulationTableFilters[columnKey] = selectedKeys[0] as string || ''
+                    }
+                    confirm()
+                  }"
                 />
                 <div class="filter-buttons">
                   <a-button
                     type="primary"
                     size="small"
-                    @click="confirm()"
+                    @click="() => {
+                      const columnKey = (column as any)?.dataIndex as string
+                      if (columnKey) {
+                        simulationTableFilters[columnKey] = selectedKeys[0] as string || ''
+                      }
+                      confirm()
+                    }"
                   >
                     搜索
                   </a-button>
                   <a-button
                     size="small"
-                    @click="() => { clearFilters(); confirm() }"
+                    @click="() => {
+                      const columnKey = (column as any)?.dataIndex as string
+                      if (columnKey) {
+                        simulationTableFilters[columnKey] = ''
+                      }
+                      clearFilters()
+                      confirm()
+                    }"
                   >
                     重置
                   </a-button>
@@ -524,6 +682,7 @@ const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
           :chart-data="processedComparisonChartData"
           :show-simulation-color="true"
           :hide-radar-chart="true"
+          :show-polyline-chart="true"
         />
       </div>
     </div>
@@ -538,19 +697,6 @@ const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
   padding: 24px;
   height: calc(100vh - 60px);
   overflow-y: auto;
-}
-
-/* 临时调试面板 - 固定定位，删除时不影响布局 */
-.debug-panel {
-  position: fixed;
-  top: 60px;
-  right: 24px;
-  z-index: 1000;
-  background: #fff3cd;
-  padding: 12px 16px;
-  border-radius: 4px;
-  border: 1px solid #ffc107;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .config-section {

@@ -5,13 +5,14 @@ import { UploadOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { computed, nextTick, ref } from 'vue'
 
-import { useExperimentalDataStore } from '../../store'
+import { useExperimentalDataStore, useLogStore } from '../../store'
 import DataChart from './DataChart.vue'
 import DataStatistics from './DataStatistics.vue'
 import { getColumnValues, parseExcelFile } from './utils'
 
 // 使用 store（直接使用 store 属性，确保响应式）
 const experimentalDataStore = useExperimentalDataStore()
+const logStore = useLogStore()
 
 // 当前激活的页签
 const activeTab = ref<'statistics' | 'chart'>('statistics')
@@ -96,7 +97,7 @@ const processedChartData = computed<ProcessedChartData | null>(() => {
   // 散点图和曲线图数据处理
   const chartDataPoints = xData.map((x, i) => [x, yData[i]] as [number, number])
 
-  const result = {
+  const result: ProcessedChartData = {
     type: experimentalDataStore.chartConfig.chartType === '曲线图' ? 'line' : 'scatter',
     scatterData: chartDataPoints,
     xAxisName: experimentalDataStore.chartConfig.xAxis,
@@ -116,6 +117,7 @@ function handleFileUpload(event: Event): void {
   if (!file)
     return
 
+  logStore.info('开始上传试验数据文件', `文件名: ${file.name}`)
   const hideLoading = app.message.loading('正在读取文件...', 0)
 
   const reader = new FileReader()
@@ -135,6 +137,7 @@ function handleFileUpload(event: Event): void {
         columnsCount: columns.length,
         dataCount: tableDataRows.length,
       })
+      logStore.success('文件解析成功', `列数: ${columns.length}, 数据行数: ${tableDataRows.length}`)
 
       // 保存到 store（持久化存储）
       experimentalDataStore.setFileData(file.name, columns, tableDataRows)
@@ -147,13 +150,16 @@ function handleFileUpload(event: Event): void {
         storeColumnsCount: experimentalDataStore.tableColumns.length,
         storeDataCount: experimentalDataStore.tableData.length,
       })
+      logStore.success('试验数据已保存', `文件: ${file.name}`)
 
       hideLoading()
       message.success(`成功加载 ${tableDataRows.length} 条数据`)
     }
     catch (error) {
       hideLoading()
-      message.error(`解析文件失败: ${error instanceof Error ? error.message : String(error)}`)
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      logStore.error('文件解析失败', errorMsg)
+      message.error(`解析文件失败: ${errorMsg}`)
     }
     finally {
       // 清空 input，允许重复选择同一文件
@@ -163,6 +169,7 @@ function handleFileUpload(event: Event): void {
 
   reader.onerror = () => {
     hideLoading()
+    logStore.error('文件读取失败', '无法读取文件内容')
     message.error('文件读取失败')
     input.value = ''
   }
