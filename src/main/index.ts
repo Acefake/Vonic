@@ -1,6 +1,7 @@
 import type { DoeServiceManager } from './services/runService'
+import path from 'node:path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, session } from 'electron'
 import { getProductConfig } from '../config/product.config'
 import { AppManager } from './app'
 import { Logger } from './app/handlers/LogerManager'
@@ -9,6 +10,8 @@ import getWindowManager, { WindowName } from './app/handlers/window'
 import { createDoeServiceManager } from './services/runService'
 import { deleteOutFolder } from './utils/cleanup'
 import { runExe } from './utils/exeRunner'
+import { killProcessesOnPorts } from './utils/portCleanup'
+import { SystemMonitor } from './utils/systemMonitor'
 
 const storeManage = new StoreManage()
 const appManager = new AppManager()
@@ -16,8 +19,6 @@ const appManager = new AppManager()
 let logger: Logger
 let serviceManager: DoeServiceManager
 let isQuitting = false
-
-// 删除 out 目录的实现已迁移至 utils/cleanup.ts
 
 // 单实例锁：只允许启动一个应用实例
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
@@ -39,16 +40,47 @@ else {
   })
 }
 
+const vueDevToolsPath = path.resolve(__dirname, '../../extension/nhdogjmejiglipccpnnnanhbledajbpd/7.7.7_0')
+
 ipcMain.handle('call-exe', async (_, exeName, workingDir) => {
   console.log('主进程接收到调用请求，exe名称：', exeName, '工作目录：', workingDir)
   const result = await runExe(exeName, workingDir) // 调用exe并等待结果
   return result
 })
 
+// 系统资源监控 IPC 处理器
+ipcMain.handle('system:get-cpu-cores', () => {
+  return SystemMonitor.getCPUCores()
+})
+
+ipcMain.handle('system:get-memory-info', async () => {
+  return await SystemMonitor.getWindowsMemoryInfo()
+})
+
+ipcMain.handle('system:get-optimal-concurrency', async (_, baseConcurrency?: number, memoryThreshold?: number) => {
+  return await SystemMonitor.getOptimalConcurrency(baseConcurrency, memoryThreshold)
+})
+
+ipcMain.handle('system:check-resource', async (_, minFreeMemoryMB?: number, maxMemoryUsagePercent?: number) => {
+  return await SystemMonitor.isResourceSufficient(minFreeMemoryMB, maxMemoryUsagePercent)
+})
+
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.electron')
   const productConfig = getProductConfig()
   logger = new Logger()
+
+  // 加载 Vue DevTools 扩展（仅在开发环境或非打包环境）
+  if (!app.isPackaged) {
+    try {
+      await session.defaultSession.loadExtension(vueDevToolsPath)
+      await logger.log('info', 'Vue DevTools 扩展加载成功')
+    }
+    catch (error) {
+      await logger.log('warn', `Vue DevTools 扩展加载失败: ${error}`)
+      console.warn('Failed to load Vue DevTools extension:', error)
+    }
+  }
 
   storeManage.init()
   await logger.log('info', 'Store 初始化成功')
@@ -140,6 +172,31 @@ app.on('before-quit', async (event) => {
     await logger.log('info', '应用退出中，停止 DOE 服务...')
     await serviceManager.stop()
     await logger.log('info', 'DOE 服务已停止')
+
+    // 清理所有占用的端口（Java 和前端）
+    if (logger) {
+      await logger.log('info', '应用退出中，清理所有占用的端口...')
+    }
+    const productConfig = getProductConfig()
+    const portsToClean: number[] = []
+
+    // 添加 Java DOE 服务端口
+    if (productConfig.doe?.port) {
+      portsToClean.push(productConfig.doe.port)
+    }
+
+    // 添加前端 API 端口
+    if (productConfig.api?.port) {
+      portsToClean.push(productConfig.api.port)
+    }
+
+    // 清理端口
+    if (portsToClean.length > 0) {
+      await killProcessesOnPorts(portsToClean, logger)
+    }
+    else if (logger) {
+      await logger.log('info', '没有需要清理的端口')
+    }
 
     // 删除 out 输出目录
     await logger.log('info', '应用退出中，删除输出目录 out...')

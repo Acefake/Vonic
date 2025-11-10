@@ -14,11 +14,18 @@ export { WindowName }
 const browserWindowDefaultOptions: BrowserWindowConstructorOptions = {
   autoHideMenuBar: true,
   webPreferences: {
+    // 隔离上下文
     contextIsolation: true,
+    // 禁用 Node.js 集成
     nodeIntegration: false,
+    // 预加载脚本
     preload: join(__dirname, '../preload/index.js'),
+    // 开发工具
     devTools: true,
+    // 网络安全
     webSecurity: false,
+    // 缩放因子
+    zoomFactor: 0.9,
   },
 }
 

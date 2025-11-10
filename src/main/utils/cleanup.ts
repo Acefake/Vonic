@@ -9,7 +9,7 @@ import { app } from 'electron'
  * - 打包环境：删除 exe 同目录下的 out
  * - 开发环境：删除 testFile/out
  */
-export async function deleteOutFolder(logger: Logger): Promise<void> {
+export async function deleteOutFolder(logger?: Logger): Promise<void> {
   try {
     const outDirs: string[] = []
 
@@ -25,7 +25,7 @@ export async function deleteOutFolder(logger: Logger): Promise<void> {
     for (const dir of outDirs) {
       if (existsSync(dir)) {
         await rm(dir, { recursive: true, force: true })
-        await logger.log('info', `已删除输出目录: ${dir}`)
+        await logger?.log?.('info', `已删除输出目录: ${dir}`)
       }
     }
   }

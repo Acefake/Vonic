@@ -46,4 +46,40 @@ export const systemAPI: SystemAPI = {
   quit(): void {
     window.electron.ipcRenderer.send('app:quit')
   },
+
+  /**
+   * 获取 CPU 核心数
+   * @returns CPU 核心数
+   */
+  async getCPUCores(): Promise<number> {
+    return window.electron.ipcRenderer.invoke('system:get-cpu-cores')
+  },
+
+  /**
+   * 获取内存信息
+   * @returns 内存信息对象
+   */
+  async getMemoryInfo(): Promise<{ freePhysicalMemoryMB: number, totalVisibleMemoryMB: number, usagePercent: number }> {
+    return window.electron.ipcRenderer.invoke('system:get-memory-info')
+  },
+
+  /**
+   * 获取最优并发数
+   * @param baseConcurrency 基础并发数
+   * @param memoryThreshold 内存阈值
+   * @returns 最优并发数
+   */
+  async getOptimalConcurrency(baseConcurrency?: number, memoryThreshold?: number): Promise<number> {
+    return window.electron.ipcRenderer.invoke('system:get-optimal-concurrency', baseConcurrency, memoryThreshold)
+  },
+
+  /**
+   * 检查资源是否充足
+   * @param minFreeMemoryMB 最小可用内存
+   * @param maxMemoryUsagePercent 最大内存使用率
+   * @returns 资源是否充足
+   */
+  async checkResource(minFreeMemoryMB?: number, maxMemoryUsagePercent?: number): Promise<{ sufficient: boolean, freeMemoryMB: number, usagePercent: number }> {
+    return window.electron.ipcRenderer.invoke('system:check-resource', minFreeMemoryMB, maxMemoryUsagePercent)
+  },
 }

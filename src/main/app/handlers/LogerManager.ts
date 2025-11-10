@@ -1,4 +1,5 @@
 import { appendFile, mkdir, readdir, stat, unlink } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain } from 'electron'
 
@@ -29,9 +30,12 @@ export class Logger {
    */
   private async init(): Promise<void> {
     try {
-      // 创建日志目录
-      await mkdir(this.logDir, { recursive: true })
-      console.log(`[INFO] 日志目录已创建: ${this.logDir}`)
+      // 创建日志目录（如果不存在）
+      const dirExists = existsSync(this.logDir)
+      if (!dirExists) {
+        await mkdir(this.logDir, { recursive: true })
+        console.log(`[INFO] 日志目录已创建: ${this.logDir}`)
+      }
 
       // 清理旧日志（保留最近 7 天）
       await this.clearOldLogs(7)

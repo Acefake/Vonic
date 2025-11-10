@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TableProps } from 'ant-design-vue'
-import { ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue'
+import { SearchOutlined } from '@ant-design/icons-vue'
 import { Button, InputNumber, message, Space } from 'ant-design-vue'
 import { storeToRefs } from 'pinia'
 
@@ -12,8 +12,10 @@ import { FIELD_LABELS, getFieldLabel } from '../../utils/field-labels'
 import InitialDesign from '../InitialDesign/index.vue'
 
 interface SchemeData {
-  index: number // -1 表示最优方案，显示为 '*'
+  index: number // -1 表示最优方案（第一行），显示为 '*'；其他为原始序号
+  originalIndex?: number // 最优方案的原始序号（当 index === -1 时使用）
   fileName: string
+  isOptimalCopy?: boolean // 标记是否为最优方案的副本（第一行）
   // 第1行：网格数
   radialGridCount: number
   axialGridCount: number
@@ -64,9 +66,29 @@ const activeKey = ref('1')
 // 分页配置
 const paginationConfig = reactive({
   current: 1,
-  pageSize: 10,
+  pageSize: 20,
   showSizeChanger: true,
   showTotal: (total: number) => `共 ${total} 条`,
+})
+
+// 行选择相关
+const selectedRowKeys = ref<(string | number)[]>([])
+const selectedRows = ref<SchemeData[]>([])
+
+// 方案对比：多选数据（用于雷达图）
+const comparisonSelectedData = computed(() => {
+  if (activeKey.value === '1') {
+    return selectedRows.value
+  }
+  return []
+})
+
+// 方案修正：单选数据（用于数据修正）
+const correctionSelectedData = computed(() => {
+  if (activeKey.value === '2') {
+    return selectedRows.value.length > 0 ? selectedRows.value[0] : null
+  }
+  return null
 })
 
 // 筛选状态
@@ -306,14 +328,10 @@ const yColumns = [
   },
 ]
 
-// 确保最优方案行始终在顶部
-function ensureOptimalRowFirst(data: SchemeData[]): SchemeData[] {
-  const optimalRow = data.find(row => row.index === -1)
-  const otherRows = data.filter(row => row.index !== -1)
-
-  if (optimalRow) {
-    return [optimalRow, ...otherRows]
-  }
+// 保持数据原有顺序（最优方案保持在原位置）
+function maintainOriginalOrder(data: SchemeData[]): SchemeData[] {
+  // 按 index 排序，但 -1（最优方案）保持在其原始位置
+  // 由于后端已经保持了顺序，这里直接返回即可
   return data
 }
 
@@ -327,8 +345,8 @@ async function loadSchemes() {
 
     console.log(data, 'data')
 
-    // 确保最优方案行在顶部
-    const sortedData = ensureOptimalRowFirst(data)
+    // 保持原有顺序（最优方案保持在原位置）
+    const sortedData = maintainOriginalOrder(data)
 
     schemes.value = sortedData
     filteredData.value = sortedData
@@ -414,8 +432,8 @@ const handleTableChange: TableProps['onChange'] = (pagination, filters) => {
     }
   })
 
-  // 确保最优方案行始终在顶部
-  data = ensureOptimalRowFirst(data)
+  // 保持原有顺序（最优方案保持在原位置）
+  data = maintainOriginalOrder(data)
 
   filteredData.value = data
 
@@ -446,6 +464,93 @@ function isMaxSepPowerRow(record: SchemeData): boolean {
 
 function handleTabChange(key: string) {
   activeKey.value = key
+  // 切换标签页时清空选择
+  selectedRowKeys.value = []
+  selectedRows.value = []
+}
+
+// 处理行选择变化
+function handleRowSelectionChange(selectedKeys: (string | number)[], selectedRowsData: SchemeData[]) {
+  selectedRowKeys.value = selectedKeys
+  selectedRows.value = selectedRowsData
+}
+
+// 计算行选择配置
+const rowSelection = computed(() => {
+  // 方案对比（tab 1）不显示选择框，方案修正（tab 2）显示单选
+  if (activeKey.value === '1') {
+    return undefined
+  }
+  return {
+    type: 'radio',
+    selectedRowKeys: selectedRowKeys.value,
+    onChange: handleRowSelectionChange,
+  }
+})
+
+/**
+ * 提交方案
+ */
+async function handleSubmitScheme() {
+  if (!correctionSelectedData.value) {
+    message.warning('请先选择一个方案')
+    return
+  }
+
+  try {
+    const scheme = correctionSelectedData.value
+
+    // 构建设计表单数据
+    const designForm = {
+      angularVelocity: scheme.angularVelocity,
+      rotorRadius: scheme.rotorRadius,
+      rotorShoulderLength: scheme.rotorShoulderLength,
+      rotorSidewallPressure: scheme.rotorSidewallPressure,
+      gasDiffusionCoefficient: scheme.gasDiffusionCoefficient,
+      feedFlowRate: scheme.feedFlowRate,
+      splitRatio: scheme.splitRatio,
+      feedingMethod: scheme.feedingMethod,
+      depletedEndCapTemperature: scheme.depletedEndCapTemperature,
+      enrichedEndCapTemperature: scheme.enrichedEndCapTemperature,
+      feedAxialDisturbance: scheme.feedAxialDisturbance,
+      feedAngularDisturbance: scheme.feedAngularDisturbance,
+      depletedMechanicalDriveAmount: scheme.depletedMechanicalDriveAmount,
+      extractionChamberHeight: scheme.extractionChamberHeight,
+      enrichedBaffleHoleDiameter: scheme.enrichedBaffleHoleDiameter,
+      feedBoxShockDiskHeight: scheme.feedBoxShockDiskHeight,
+      depletedExtractionArmRadius: scheme.depletedExtractionArmRadius,
+      depletedExtractionPortInnerDiameter: scheme.depletedExtractionPortInnerDiameter,
+      depletedBaffleInnerHoleOuterDiameter: scheme.depletedBaffleInnerHoleOuterDiameter,
+      enrichedBaffleHoleDistributionCircleDiameter: scheme.enrichedBaffleHoleDistributionCircleDiameter,
+      depletedExtractionPortOuterDiameter: scheme.depletedExtractionPortOuterDiameter,
+      depletedBaffleOuterHoleInnerDiameter: scheme.depletedBaffleOuterHoleInnerDiameter,
+      minAxialDistance: scheme.minAxialDistance,
+      depletedBaffleAxialPosition: scheme.depletedBaffleAxialPosition,
+      depletedBaffleOuterHoleOuterDiameter: scheme.depletedBaffleOuterHoleOuterDiameter,
+      innerBoundaryMirrorPosition: scheme.innerBoundaryMirrorPosition,
+      gridGenerationMethod: scheme.gridGenerationMethod,
+      bwgRadialProtrusionHeight: scheme.bwgRadialProtrusionHeight,
+      bwgAxialHeight: scheme.bwgAxialHeight,
+      bwgAxialPosition: scheme.bwgAxialPosition,
+      radialGridRatio: scheme.radialGridRatio,
+      compensationCoefficient: scheme.compensationCoefficient,
+      streamlineData: scheme.streamlineData,
+      separationPower: scheme.sepPower,
+      separationFactor: scheme.sepFactor,
+    }
+
+    const res = await app.file.writeDatFile('input.dat', designForm)
+    if (res?.code === 0) {
+      message.success('提交方案成功，已生成输入文件')
+    }
+    else {
+      message.error(res?.message ?? '生成输入文件失败')
+    }
+  }
+  catch (error) {
+    console.error('提交方案失败:', error)
+    message.error(`提交方案失败: ${error instanceof Error ? error.message : String(error)}`)
+  }
 }
 
 onMounted(() => {
@@ -459,30 +564,24 @@ onMounted(() => {
       <template #title>
         <a-space>
           <span>多方案对比</span>
-          <a-button type="link" size="small" :loading="loading" @click="loadSchemes">
-            <template #icon>
-              <ReloadOutlined />
-            </template>
-            刷新
-          </a-button>
         </a-space>
       </template>
 
       <a-table
         :columns="columns" :data-source="filteredData" :loading="loading" :pagination="paginationConfig"
-        :row-class-name="(record) => isMaxSepPowerRow(record) ? 'optimal-row' : ''" row-key="index" size="small"
-        :scroll="{ x: 'max-content' }" @change="handleTableChange"
+        :row-class-name="(record) => isMaxSepPowerRow(record) ? 'optimal-row' : ''" :row-key="(record) => `${record.index}_${record.fileName}`" size="small"
+        :scroll="{ x: 'max-content' }" :row-selection="rowSelection" @change="handleTableChange"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'index'">
             {{ record.index === -1 ? '*' : record.index + 1 }}
           </template>
           <template v-else-if="column.key === 'fileName'">
-            {{ record.fileName }}
+            {{ record.fileName }}{{ fieldConfigs }}
           </template>
           <template v-else-if="column.key === 'sepPower'">
             <span :class="{ 'max-power': isOptimalSchemeRow(record) }">
-              {{ formatNumber(record.sepPower) }} W
+              {{ formatNumber(record.sepPower) }}
             </span>
           </template>
           <template v-else-if="column.key === 'sepFactor'">
@@ -507,13 +606,22 @@ onMounted(() => {
           <template #title>
             <span>方案对比图表</span>
           </template>
-          <SchemeChart :data="filteredData" :x-columns="xColumns" :y-columns="yColumns" />
+          <SchemeChart :data="comparisonSelectedData.length > 0 ? comparisonSelectedData : filteredData" :x-columns="xColumns" :y-columns="yColumns" />
         </a-card>
       </a-tab-pane>
       <a-tab-pane key="2" tab="方案修正">
-        <InitialDesign />
+        <InitialDesign :selected-scheme="correctionSelectedData" :show-button="false" />
       </a-tab-pane>
     </a-tabs>
+
+    <!-- 底部提交方案按钮 -->
+    <div v-if="activeKey === '2'" class="bottom-actions">
+      <div class="action-row">
+        <a-button type="primary" size="large" @click="handleSubmitScheme">
+          提交方案
+        </a-button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -525,30 +633,25 @@ onMounted(() => {
   gap: 10px;
 }
 
-.max-power {
-  font-weight: 600;
-  color: #ff4d4f;
-}
-
-:deep(.ant-table-tbody > tr) {
-  transition: background-color 0.2s;
-}
-
-:deep(.ant-table-tbody > tr:hover) {
-  background-color: #f5f5f5;
-}
-
-:deep(.ant-table-tbody > tr.optimal-row) {
-  background-color: #f6ffed !important;
-}
-
-:deep(.ant-table-tbody > tr.optimal-row:hover) {
-  background-color: #d9f7be !important;
-}
-
 .unit {
   margin-left: 4px;
   color: #999;
   font-size: 12px;
+}
+
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.optimal-row {
+  background-color: #fff7e6;
+  font-weight: 600;
+}
+
+.max-power {
+  color: #ff4d4f;
+  font-weight: 600;
 }
 </style>

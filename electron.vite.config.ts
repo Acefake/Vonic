@@ -1,6 +1,7 @@
 import { resolve } from 'node:path'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
+import { visualizer } from 'rollup-plugin-visualizer'
 import { AntDesignVueResolver } from 'unplugin-vue-components/resolvers'
 import Components from 'unplugin-vue-components/vite'
 
@@ -15,6 +16,10 @@ export default defineConfig({
         '@/config': resolve('src/config'),
       },
     },
+    build: {
+      minify: 'esbuild',
+      sourcemap: false,
+    },
   },
   preload: {
     plugins: [externalizeDepsPlugin({
@@ -27,6 +32,10 @@ export default defineConfig({
         '@/renderer': resolve('src/renderer/src'),
         '@/config': resolve('src/config'),
       },
+    },
+    build: {
+      minify: 'esbuild',
+      sourcemap: false,
     },
   },
   renderer: {
@@ -47,6 +56,16 @@ export default defineConfig({
           }),
         ],
       }),
+      visualizer({
+        open: true,
+        gzipSize: true,
+        brotliSize: true,
+        filename: 'stats.html',
+      }),
     ],
+    build: {
+      minify: 'esbuild',
+      sourcemap: false,
+    },
   },
 })

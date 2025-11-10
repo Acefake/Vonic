@@ -1,25 +1,29 @@
 import type { EventBusAPI } from '../types'
+import { EventBus } from 'event-bus-common'
 
 /**
  * 事件总线实现
+ * 对 event-bus-common 的简单封装
  */
-class EventBus implements EventBusAPI {
-  private events = new Map<string, Set<(data: unknown) => void>>()
+class EventBusImpl implements EventBusAPI {
+  private eventBus = new EventBus()
 
   /**
    * 订阅事件
    * @param event 事件名称
    * @param callback 回调函数
-   * @returns 取消订阅函数
+   * @returns 取消订阅的函数
    */
   on<T = unknown>(event: string, callback: (data: T) => void): () => void {
-    if (!this.events.has(event)) {
-      this.events.set(event, new Set())
-    }
-    this.events.get(event)!.add(callback as (data: unknown) => void)
-
-    // 返回取消订阅函数
-    return () => this.off(event, callback as (data: unknown) => void)
+    const subscription = this.eventBus.on(event, callback)
+    // event-bus-common 的 on 方法返回 EventSubscription 对象，包含 unsubscribe 方法
+    return typeof subscription === 'function'
+      ? subscription
+      : () => {
+          if (subscription && typeof subscription.unsubscribe === 'function') {
+            subscription.unsubscribe()
+          }
+        }
   }
 
   /**
@@ -28,11 +32,7 @@ class EventBus implements EventBusAPI {
    * @param callback 回调函数
    */
   once<T = unknown>(event: string, callback: (data: T) => void): void {
-    const wrappedCallback = (data: T): void => {
-      callback(data)
-      this.off(event, wrappedCallback as (data: unknown) => void)
-    }
-    this.on(event, wrappedCallback)
+    this.eventBus.once(event, callback)
   }
 
   /**
@@ -41,50 +41,28 @@ class EventBus implements EventBusAPI {
    * @param data 事件数据
    */
   emit<T = unknown>(event: string, data?: T): void {
-    const callbacks = this.events.get(event)
-    if (callbacks) {
-      callbacks.forEach((callback) => {
-        try {
-          callback(data)
-        }
-        catch (error) {
-          console.error(`EventBus: 事件 "${event}" 的回调执行失败:`, error)
-        }
-      })
-    }
+    this.eventBus.emit(event, data)
   }
 
   /**
    * 取消订阅
    * @param event 事件名称
-   * @param callback 回调函数，如果不提供则取消该事件的所有订阅
+   * @param _callback 可选的回调函数（event-bus-common 的 off 方法只支持按事件名取消，此参数暂未使用）
    */
-  off(event: string, callback?: (data: unknown) => void): void {
-    if (!callback) {
-      // 取消该事件的所有订阅
-      this.events.delete(event)
-      return
-    }
-
-    const callbacks = this.events.get(event)
-    if (callbacks) {
-      callbacks.delete(callback)
-      // 如果该事件没有订阅者了，删除该事件
-      if (callbacks.size === 0) {
-        this.events.delete(event)
-      }
-    }
+  off(event: string, _callback?: (data: unknown) => void): void {
+    // event-bus-common 的 off 方法只接受 event 参数，会取消该事件的所有监听
+    this.eventBus.off(event)
   }
 
   /**
    * 清除所有事件监听
    */
   clear(): void {
-    this.events.clear()
+    this.eventBus.clear()
   }
 }
 
 /**
  * 事件总线 API 实例
  */
-export const eventBusAPI = new EventBus()
+export const eventBusAPI = new EventBusImpl()

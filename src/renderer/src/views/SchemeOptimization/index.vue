@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DesignFactor, SampleData, SampleSpaceData } from './type'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue'
+import { debounce } from 'lodash'
 import { storeToRefs } from 'pinia'
 import { computed, ref } from 'vue'
 import { getProductConfig } from '../../../../config/product.config'
@@ -12,6 +13,19 @@ import { parseSepPower } from '../../utils/parseSepPower'
 
 import { ALGORITHM_OPTIONS, RESPONSE_VALUES, SAMPLING_CRITERION_OPTIONS } from './constants'
 import { AlgorithmType, ParameterType } from './type'
+import {
+  handleMOPSOLevelCountUpdate,
+  handleMOPSOLowerLimitUpdate,
+  handleMOPSOUpperLimitUpdate,
+  handleNSGAIILevelCountUpdate,
+  hasBoundsOrLevels,
+  hasValues,
+  tryParseDiscreteValuesText,
+  validateLowerLimitNSGAII,
+  validateMOPSOFactors,
+  validateNSGAIIFactors,
+  validateUpperLimitNSGAII,
+} from './validation'
 
 const logStore = useLogStore()
 const designStore = useDesignStore()
@@ -84,8 +98,8 @@ async function addDesignFactor(): Promise<void> {
           id: idx + 1,
           name: s.label, // 中文显示
           type: prev?.type ?? '实数',
-          lowerLimit: prev?.lowerLimit ?? (optimizationAlgorithm.value === 'MOPSO' ? undefined : 0),
-          upperLimit: prev?.upperLimit ?? (optimizationAlgorithm.value === 'MOPSO' ? undefined : 1),
+          lowerLimit: prev?.lowerLimit ?? undefined,
+          upperLimit: prev?.upperLimit ?? undefined,
           levelCount: prev?.levelCount,
           values: prev?.values,
         }
@@ -217,6 +231,13 @@ async function getWorkBaseDir(): Promise<string> {
 const isOptimizing = ref(false)
 
 async function performOptimization(): Promise<void> {
+  console.log('designStore.isFormValid()', designStore.isFormValid())
+
+  // if (!designStore.isFormValid()) {
+  //   app.message.error('方案设计因子未填写完整，请检查输入！')
+  //   return
+  // }
+
   if (designFactors.value.length === 0) {
     app.message.warning('请先添加设计因子')
     return
@@ -228,6 +249,8 @@ async function performOptimization(): Promise<void> {
   }
 
   isOptimizing.value = true
+
+  await window.electron.ipcRenderer.invoke('file:delete-out-folder')
 
   const hideLoading = app.message.loading('正在进行仿真优化计算...', 0)
 
@@ -247,7 +270,7 @@ async function performOptimization(): Promise<void> {
       return
     }
 
-    logStore.info(`开启启动exe进程...`)
+    logStore.info(`开始启动Fortran进程...`)
 
     // 存储每个样本的信息
     interface SampleInfo {
@@ -526,12 +549,13 @@ async function performOptimization(): Promise<void> {
       }
     }
 
-    // 分批并行启动 exe 进程，每批3个，等待每批完成后再处理下一批
+    // 分批并行启动 exe 进程
     const pendingInfosArray = Array.from(pendingInfos.values())
-    const batchSize = 3 // 每批并行数量
+    // 🔧 关键修复：降低并发数到2，减少资源竞争和访问冲突
+    const batchSize = 2
     const totalBatches = Math.ceil(pendingInfosArray.length / batchSize)
 
-    logStore.info(`将分批处理 ${pendingInfosArray.length} 个样本，每批 ${batchSize} 个，共 ${totalBatches} 批`)
+    logStore.info(`将分批处理 ${pendingInfosArray.length} 个样本，每批 ${batchSize} 个（保守策略），共 ${totalBatches} 批`)
 
     for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
       const batch = pendingInfosArray.slice(batchIndex * batchSize, (batchIndex + 1) * batchSize)
@@ -542,8 +566,8 @@ async function performOptimization(): Promise<void> {
 
       // 顺序启动当前批次的所有进程，每个之间添加延迟，避免同时启动导致资源冲突
       const batchStartPromises: Promise<void>[] = []
-      // 每个进程启动之间的延迟（毫秒）
-      const startDelay = 500
+      // 🔧 关键修复：增加启动间隔到2秒，最大化稳定性
+      const startDelay = 2000
 
       for (let i = 0; i < batch.length; i++) {
         const info = batch[i]
@@ -589,12 +613,12 @@ async function performOptimization(): Promise<void> {
           const executionPromise = new Promise<void>((resolve) => {
             info.eventResolve = resolve
 
-            // 设置超时机制（增加到120秒）
+            // 🔧 关键修复：增加单个样本超时到3分钟
             info.timeoutId = setTimeout(() => {
               if (!info.isResolved) {
                 info.isResolved = true
                 pendingInfos.delete(info.workDir)
-                logStore.error(`样本 ${info.sampleId} 等待exe完成超时（120秒），可能进程仍在运行，将标记为失败`)
+                logStore.error(`样本 ${info.sampleId} 等待exe完成超时（180秒），将标记为失败`)
                 results.push({
                   index: info.sampleId,
                   sampleData: info.sample,
@@ -604,7 +628,7 @@ async function performOptimization(): Promise<void> {
                 })
                 resolve()
               }
-            }, 120000)
+            }, 180000) // 🔧 3分钟
           })
 
           // 将执行 Promise 添加到当前批次的集合中
@@ -636,7 +660,8 @@ async function performOptimization(): Promise<void> {
           let batchTimeoutId: NodeJS.Timeout | null = null
           const batchTimeoutPromise = new Promise<void>((resolve) => {
             batchTimeoutId = setTimeout(() => {
-              logStore.warning(`第 ${batchIndex + 1}/${totalBatches} 批等待超时（150秒），强制继续下一批`)
+              // 🔧 关键修复：增加批处理超时到5分钟
+              logStore.warning(`第 ${batchIndex + 1}/${totalBatches} 批等待超时（300秒），强制继续下一批`)
               // 检查哪些进程还没完成
               const unfinishedCount = batch.filter(info => !info.isResolved).length
               if (unfinishedCount > 0) {
@@ -665,7 +690,7 @@ async function performOptimization(): Promise<void> {
                 }
               }
               resolve()
-            }, 150000)
+            }, 300000) // 🔧 5分钟
           })
 
           // 记录等待前的状态
@@ -896,51 +921,8 @@ async function performOptimization(): Promise<void> {
   }
 }
 
-// 互斥逻辑判断：是否存在“取值”
-function hasValues(factor: DesignFactor): boolean {
-  const v = (factor.values ?? '').toString().trim()
-  return v.length > 0
-}
-
-// 互斥逻辑判断：是否设置了下限/上限/水平数中的任一项
-function hasBoundsOrLevels(factor: DesignFactor): boolean {
-  const hasLower = factor.lowerLimit !== undefined && factor.lowerLimit !== null
-  const hasUpper = factor.upperLimit !== undefined && factor.upperLimit !== null
-  const hasLevel = factor.levelCount !== undefined && factor.levelCount !== null
-  return hasLower || hasUpper || hasLevel
-}
-
-/**
- * 解析离散取值输入文本，支持严格JSON和简化格式 [a,2,3]
- */
-function tryParseDiscreteValuesText(text: string): { arr: Array<string | number>, isJson: boolean } | null {
-  const trimmed = text.trim()
-  // 必须是数组格式
-  if (!trimmed.startsWith('[') || !trimmed.endsWith(']'))
-    return null
-
-  // 优先尝试严格的 JSON
-  try {
-    const arr = JSON.parse(trimmed)
-    const valid = Array.isArray(arr) && arr.length > 0 && arr.every(v => typeof v === 'string' || typeof v === 'number')
-    if (valid)
-      return { arr, isJson: true }
-  }
-  catch { }
-
-  // 退化为简化解析：用逗号分割，去除两端引号，数字字符串转为数字
-  const inner = trimmed.slice(1, -1).trim()
-  const tokens = inner.length === 0 ? [] : inner.split(',').map(t => t.trim()).filter(t => t.length > 0)
-  const arr = tokens.map((t) => {
-    const unquoted = t.replace(/^['"]|['"]$/g, '')
-    const num = Number(unquoted)
-    return Number.isFinite(num) && unquoted === String(num) ? num : unquoted
-  })
-  const valid = Array.isArray(arr) && arr.length > 0 && arr.every(v => typeof v === 'string' || typeof v === 'number')
-  if (!valid)
-    return null
-  return { arr, isJson: false }
-}
+// 错误提示回调函数（使用防抖减少频繁提示）
+const showError = debounce((message: string) => app.message.error(message), 500)
 
 /**
  * values 列的更新处理，抽离到脚本中避免模板内含复杂正则导致编译报错
@@ -949,8 +931,76 @@ function onValuesUpdate(recordId: number, val: any): void {
   const factor = designFactors.value.find(f => f.id === recordId)
   if (!factor)
     return
-  const prev = factor.values
   const text = (val ?? '').toString().trim()
+
+  // 实时更新值，不进行校验，允许用户自由输入
+  if (text.length === 0) {
+    factor.values = undefined
+  }
+  else {
+    // 保存原始文本，失焦时再校验
+    factor.values = text
+  }
+}
+
+function onValuesBlur(recordId: number): void {
+  const factor = designFactors.value.find(f => f.id === recordId)
+  if (!factor)
+    return
+  const prev = factor.values
+  const text = (factor.values ?? '').toString().trim()
+
+  if (optimizationAlgorithm.value === 'MOPSO') {
+    // MOPSO: 如果取值有值，则只校验取值不能为空
+    if (text.length === 0) {
+      // 如果清空取值，允许清空
+      factor.values = undefined
+      return
+    }
+
+    // 校验取值格式
+    const parsed = tryParseDiscreteValuesText(text)
+    if (!parsed) {
+      app.message.error(`${factor.name}取值格式错误，应为数组，如：[10,12,33]`)
+      factor.values = prev
+      return
+    }
+
+    let { arr } = parsed
+    if (arr.length === 0) {
+      app.message.error(`${factor.name}取值不能为空`)
+      factor.values = prev
+      return
+    }
+
+    // 过滤掉0值（数字0或字符串"0"）
+    arr = arr.filter((v) => {
+      if (typeof v === 'number') {
+        return v !== 0
+      }
+      if (typeof v === 'string') {
+        const num = Number(v)
+        return !(Number.isFinite(num) && num === 0)
+      }
+      return true
+    })
+
+    if (arr.length === 0) {
+      app.message.error(`${factor.name}取值不能全为0，已自动过滤`)
+      factor.values = prev
+      return
+    }
+
+    // 如果过滤了0值，需要重新生成JSON字符串
+    const filteredText = JSON.stringify(arr)
+    factor.values = filteredText
+    factor.lowerLimit = undefined
+    factor.upperLimit = undefined
+    factor.levelCount = undefined
+    return
+  }
+
+  // NSGA-II 或其他算法
   if (text.length === 0) {
     factor.values = undefined
     return
@@ -958,27 +1008,42 @@ function onValuesUpdate(recordId: number, val: any): void {
 
   const parsed = tryParseDiscreteValuesText(text)
   if (!parsed) {
-    app.message.error(`【 ${factor.name} 】取值格式错误，应为数组，如：[10,12,33] 或 [a,2,3]`)
+    app.message.error(`【${factor.name}】取值格式错误，应为数组，如：[10,12,33] 或 [a,2,3]`)
     factor.values = prev
     return
   }
 
-  const { arr, isJson } = parsed
-  factor.values = isJson ? text : JSON.stringify(arr)
+  let { arr } = parsed
 
-  // NSGA-II 下，如果填写了“取值”，则把“水平数”统一为取值数量
+  // 过滤掉0值（数字0或字符串"0"）
+  arr = arr.filter((v) => {
+    if (typeof v === 'number') {
+      return v !== 0
+    }
+    if (typeof v === 'string') {
+      const num = Number(v)
+      return !(Number.isFinite(num) && num === 0)
+    }
+    return true
+  })
+
+  if (arr.length === 0) {
+    app.message.error(`【${factor.name}】取值不能全为0，已自动过滤`)
+    factor.values = prev
+    return
+  }
+
+  // 如果过滤了0值，需要重新生成JSON字符串
+  const filteredText = JSON.stringify(arr)
+  factor.values = filteredText
+
+  // NSGA-II 下，如果填写了"取值"，则把"水平数"统一为取值数量
   if (optimizationAlgorithm.value === 'NSGA-II') {
     const n = arr.length
     if (factor.levelCount !== n) {
       factor.levelCount = n
-      app.message.info(`【 ${factor.name} 】水平数已自动统一为取值数量：${n}`)
+      app.message.info(`【${factor.name}】水平数已自动统一为取值数量：${n}`)
     }
-  }
-
-  if (optimizationAlgorithm.value === 'MOPSO') {
-    factor.lowerLimit = undefined
-    factor.upperLimit = undefined
-    factor.levelCount = undefined
   }
 }
 
@@ -1001,7 +1066,7 @@ function onFactorCountChange(value: number | null): void {
         id: newId,
         name: `因子${newId}`,
         type: '实数',
-        lowerLimit: optimizationAlgorithm.value === 'MOPSO' ? undefined : 0,
+        lowerLimit: optimizationAlgorithm.value === 'MOPSO' ? undefined : 1,
         upperLimit: optimizationAlgorithm.value === 'MOPSO' ? undefined : 10,
         levelCount: undefined,
         values: undefined,
@@ -1018,23 +1083,17 @@ function onFactorCountChange(value: number | null): void {
  * 组装NSGA-II参数
  */
 function assembleNSGAIIParams() {
+  // 批量校验所有因子
+  const errors = validateNSGAIIFactors(designFactors.value)
+  if (errors.length > 0) {
+    throw new Error(errors.join('；'))
+  }
+
+  // 校验通过，组装参数
   const tableParams: Array<{ name: string, type: string, values: number[], level?: number }> = []
-  const errors: string[] = []
   for (const factor of designFactors.value) {
-    const lower = factor.lowerLimit
-    const upper = factor.upperLimit
-    if (lower === undefined || upper === undefined) {
-      errors.push(`【${factor.name}】缺少下限或上限`)
-      continue
-    }
-    if (!Number.isFinite(lower) || !Number.isFinite(upper)) {
-      errors.push(`【${factor.name}】下限/上限必须为有效数值`)
-      continue
-    }
-    if (upper <= lower) {
-      errors.push(`【${factor.name}】上限应大于下限`)
-      continue
-    }
+    const lower = factor.lowerLimit!
+    const upper = factor.upperLimit!
     tableParams.push({ name: factor.name, type: ParameterType.CONTINUOUS_FACTOR, values: [lower, upper], level: 3 })
   }
 
@@ -1057,24 +1116,22 @@ function assembleNSGAIIParams() {
  * 组装MOPSO参数
  */
 function assembleMOPSOParams() {
-  const errors: string[] = []
+  // 批量校验所有因子
+  const errors = validateMOPSOFactors(designFactors.value)
+  if (errors.length > 0) {
+    throw new Error(errors.join('；'))
+  }
+
+  // 校验通过，组装参数
   const paramsPayload: Array<{ name: string, type: 'continuousFactor' | 'discreteFactor', values: any[], level?: number }> = []
 
   for (const factor of designFactors.value) {
-    const name = factor.name?.trim()
-    if (!name) {
-      errors.push('存在未命名的设计因子')
-      continue
-    }
+    const name = factor.name!.trim()
 
     const valuesText = (factor.values ?? '').toString().trim()
     if (valuesText.length > 0) {
-      // 有“取值” -> 离散
-      const parsed = tryParseDiscreteValuesText(valuesText)
-      if (!parsed) {
-        errors.push(`【${name}】取值格式错误，应为非空数组，元素为字符串或数字，如：[a,2,3] 或 [10,12,33]`)
-        continue
-      }
+      // 有"取值" -> 离散
+      const parsed = tryParseDiscreteValuesText(valuesText)!
       const arr = parsed.arr
       const levelCount = arr.length
       if (factor.levelCount !== levelCount) {
@@ -1084,23 +1141,12 @@ function assembleMOPSOParams() {
       continue
     }
 
-    // 无“取值”，看是否设置了范围/水平数 -> 连续
-    const lower = factor.lowerLimit
-    const upper = factor.upperLimit
-    if (lower === undefined || upper === undefined) {
-      errors.push(`【${name}】缺少下限或上限`)
-      continue
-    }
-    if (!Number.isFinite(lower) || !Number.isFinite(upper)) {
-      errors.push(`【${name}】下限/上限必须为有效数值`)
-      continue
-    }
-    if (upper <= lower) {
-      errors.push(`【${name}】上限应大于下限`)
-      continue
-    }
-    const levelCount = factor.levelCount ?? 3
-    paramsPayload.push({ name, type: ParameterType.CONTINUOUS_FACTOR, values: [lower, upper], level: levelCount })
+    // 无"取值"，看是否设置了范围/水平数 -> 连续
+    const lower = factor.lowerLimit!
+    const upper = factor.upperLimit!
+    const level = factor.levelCount!
+
+    paramsPayload.push({ name, type: ParameterType.CONTINUOUS_FACTOR, values: [lower, upper], level })
   }
 
   const params = {
@@ -1126,31 +1172,42 @@ async function sampleSpace() {
     return
   }
 
+  // 先进行参数组装和校验，如果校验失败则不继续
+  let params: any
+  try {
+    if (optimizationAlgorithm.value === 'NSGA-II') {
+      params = assembleNSGAIIParams()
+    }
+    else if (optimizationAlgorithm.value === 'MOPSO') {
+      params = assembleMOPSOParams()
+    }
+    else {
+      app.message.error('未知的优化算法')
+      return
+    }
+  }
+  catch (error: any) {
+    const msg = error?.message || '参数校验失败'
+    app.message.error(msg)
+    return
+  }
+
   isSampling.value = true
   const hideLoading = app.message.loading('正在生成样本...', 0)
 
-  const params = ref<any>()
-  if (optimizationAlgorithm.value === 'NSGA-II') {
-    params.value = assembleNSGAIIParams()
-  }
-  else if (optimizationAlgorithm.value === 'MOPSO') {
-    params.value = assembleMOPSOParams()
-  }
-
   try {
-    const numSamplesLogged = (params.value as any)?.numSamples ?? (params.value as any)?.numFactors
-    logStore.info(`开始样本取样：算法=${optimizationAlgorithm.value}，准则=${params.value.criterion}，样本数=${numSamplesLogged}，变量数=${params.value.numVars}，因子数=${params.value.params.length}`)
-    logStore.info(`取样参数：${JSON.stringify(params.value)}`)
-    // 使用配置中的 DOE 端口构建 URL
+    const numSamplesLogged = (params as any)?.numSamples ?? (params as any)?.numFactors
+    logStore.info(`开始样本取样：算法=${optimizationAlgorithm.value}，准则=${params.criterion}，样本数=${numSamplesLogged}，变量数=${params.numVars}，因子数=${params.params.length}`)
+    logStore.info(`取样参数：${JSON.stringify(params)}`)
     const productConfig = getProductConfig()
     const doePort = productConfig.doe?.port || 25504
     const url = `http://localhost:${doePort}/api/v1/integ/doe/generate`
-    const res: SampleSpaceData = await app.http.post(url, params.value)
+    const res: SampleSpaceData = await app.http.post(url, params)
 
     // 更新样本数量
     samplePointCountforRes.value = res.experimentCount
 
-    // 兼容多种返回结构：优先使用 { factorNames, sampleMatrix }
+    // 兼容多种返回结构，优先使用 { factorNames, sampleMatrix }
     const uiFactorNames = designFactors.value.map(f => f.name)
     let mapped: SampleData[] | null = null
 
@@ -1166,7 +1223,6 @@ async function sampleSpace() {
       })
     }
     else {
-      // 尝试从 res 或 res.data.samples 或 res.samples 提取数组
       let samples: any[] = []
       const anyRes: any = res as any
       if (Array.isArray(anyRes))
@@ -1241,7 +1297,7 @@ async function sampleSpace() {
                   :value="optimizationAlgorithm" style="width: 100%"
                   @update:value="(val) => schemeOptimizationStore.setAlgorithm(val as 'NSGA-II' | 'MOPSO')"
                 >
-                  <a-select-option v-for="option in ALGORITHM_OPTIONS" :key="option.value" :value="option.value">
+                  <a-select-option v-for="option in ALGORITHM_OPTIONS" :key="option.value" :value="option.value" :disabled="option.isDisabled">
                     {{ option.label }}
                   </a-select-option>
                 </a-select>
@@ -1253,14 +1309,14 @@ async function sampleSpace() {
               <a-form layout="vertical" :model="{}">
                 <div class="form-row">
                   <a-form-item label="因子数量" class="form-col">
-                    <a-input-number
+                    <a-input
                       :value="factorCount" disabled :min="1" style="width: 100%"
                       @update:value="(val) => { factorCount = val ?? 3; onFactorCountChange(val) }"
                     />
                   </a-form-item>
 
                   <a-form-item label="样本点数" class="form-col">
-                    <a-input-number
+                    <a-input
                       :value="samplePointCount" :min="1" style="width: 100%"
                       @update:value="(val) => samplePointCount = val ?? 50"
                     />
@@ -1322,7 +1378,7 @@ async function sampleSpace() {
               ]" :data-source="designFactors" :pagination="false" :row-selection="{
                 selectedRowKeys: selectedDesignFactorIds,
                 onChange: (keys) => selectedDesignFactorIds = keys as number[],
-              }" row-key="id"
+              }" row-key="id" bordered
             >
               <template #bodyCell="{ column, record, index }">
                 <template v-if="column.key === 'id'">
@@ -1341,12 +1397,20 @@ async function sampleSpace() {
                       const factor = designFactors.find(f => f.id === record.id)
                       if (!factor) return
                       const prev = factor.lowerLimit
-                      const newVal = val ?? undefined
-                      if (newVal === undefined) { factor.lowerLimit = undefined; return }
-                      if (newVal < 0) { app.message.error(`【 ${factor.name} 】下限应大于等于零`); factor.lowerLimit = prev; return }
-                      if (factor.upperLimit !== undefined && newVal >= factor.upperLimit) { app.message.error(`【 ${factor.name} 】下限应小于上限`); factor.lowerLimit = prev; return }
-                      factor.lowerLimit = newVal
-                      if (optimizationAlgorithm === 'MOPSO') { factor.values = undefined }
+                      let newVal = val ?? undefined
+
+                      if (optimizationAlgorithm === 'NSGA-II') {
+                        // NSGA-II: 校验（清空时不触发必填校验）
+                        if (!validateLowerLimitNSGAII(factor, newVal, prev ?? undefined, showError, record)) {
+                          return
+                        }
+                        factor.lowerLimit = newVal
+                        record.lowerLimit = newVal
+                      }
+                      else if (optimizationAlgorithm === 'MOPSO') {
+                        // MOPSO: 处理更新逻辑
+                        handleMOPSOLowerLimitUpdate(factor, record, newVal, prev ?? undefined, showError)
+                      }
                     }"
                   />
                 </template>
@@ -1357,28 +1421,41 @@ async function sampleSpace() {
                       const factor = designFactors.find(f => f.id === record.id)
                       if (!factor) return
                       const prev = factor.upperLimit
-                      const newVal = val ?? undefined
-                      if (newVal === undefined) { factor.upperLimit = undefined; return }
-                      if (newVal < 0) { app.message.error(`【 ${factor.name} 】上限应大于等于零`); factor.upperLimit = prev; return }
-                      if (factor.lowerLimit !== undefined && newVal <= factor.lowerLimit) { app.message.error(`【 ${factor.name} 】上限应大于下限`); factor.upperLimit = prev; return }
-                      factor.upperLimit = newVal
-                      if (optimizationAlgorithm === 'MOPSO') { factor.values = undefined }
+                      let newVal = val ?? undefined
+
+                      if (optimizationAlgorithm === 'NSGA-II') {
+                        // NSGA-II: 校验（清空时不触发必填校验）
+                        if (!validateUpperLimitNSGAII(factor, newVal, prev ?? undefined, showError, record)) {
+                          return
+                        }
+                        factor.upperLimit = newVal
+                        record.upperLimit = newVal
+                      }
+                      else if (optimizationAlgorithm === 'MOPSO') {
+                        // MOPSO: 处理更新逻辑
+                        handleMOPSOUpperLimitUpdate(factor, record, newVal, prev ?? undefined, showError)
+                      }
                     }"
                   />
                 </template>
                 <template v-else-if="column.key === 'levelCount'">
                   <a-input-number
-                    :value="record.levelCount" :min="3" style="width: 100%"
+                    :value="record.levelCount" style="width: 100%"
                     :disabled="(optimizationAlgorithm === 'NSGA-II' && record.type !== '离散') || (optimizationAlgorithm === 'MOPSO' && hasValues(record))"
                     @update:value="(val) => {
                       const factor = designFactors.find(f => f.id === record.id)
                       if (!factor) return
                       const prev = factor.levelCount
-                      const newVal = val ?? undefined
-                      if (newVal === undefined) { factor.levelCount = undefined; return }
-                      if (!Number.isInteger(newVal) || newVal <= 2) { app.message.error(`【 ${factor.name} 】水平数应为大于2的正整数`); factor.levelCount = prev; return }
-                      factor.levelCount = newVal
-                      if (optimizationAlgorithm === 'MOPSO') { factor.values = undefined }
+                      let newVal = val ?? undefined
+
+                      if (optimizationAlgorithm === 'NSGA-II') {
+                        // NSGA-II: 处理水平数更新
+                        handleNSGAIILevelCountUpdate(factor, record, newVal, prev ?? undefined, showError)
+                      }
+                      else if (optimizationAlgorithm === 'MOPSO') {
+                        // MOPSO: 处理水平数更新
+                        handleMOPSOLevelCountUpdate(factor, record, newVal, prev ?? undefined, showError)
+                      }
                     }"
                   />
                 </template>
@@ -1387,6 +1464,7 @@ async function sampleSpace() {
                     :value="record.values" placeholder="示例：[10,12,33] 或 [a,2,3]"
                     :disabled="(optimizationAlgorithm === 'NSGA-II' && record.type !== '离散') || (optimizationAlgorithm === 'MOPSO' && hasBoundsOrLevels(record))"
                     @update:value="(val) => onValuesUpdate(record.id, val)"
+                    @blur="onValuesBlur(record.id)"
                   />
                 </template>
               </template>
@@ -1399,7 +1477,7 @@ async function sampleSpace() {
           <a-card title="响应值">
             <template #extra>
               <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
-                <a-button type="primary" @click="sampleSpace">
+                <a-button :loading="isSampling" type="primary" @click="sampleSpace">
                   样本取样
                 </a-button>
               </div>
@@ -1409,7 +1487,7 @@ async function sampleSpace() {
               :columns="[
                 { title: '序号', dataIndex: 'id', key: 'id', width: 80 },
                 { title: '名称', dataIndex: 'name', key: 'name' },
-              ]" :data-source="RESPONSE_VALUES" :pagination="false" size="small" row-key="id"
+              ]" :data-source="RESPONSE_VALUES" :pagination="false" size="small" row-key="id" bordered
             >
               <template #bodyCell="{ column, record, index }">
                 <template v-if="column.key === 'id'">
@@ -1429,8 +1507,12 @@ async function sampleSpace() {
       <!-- 样本空间 -->
       <a-card title="样本空间">
         <a-table
-          :columns="sampleSpaceColumns" :data-source="sampleSpaceData" :pagination="{ pageSize: 10 }"
-          size="small" row-key="id"
+          :columns="sampleSpaceColumns"
+          :data-source="sampleSpaceData"
+          size="small"
+          row-key="id"
+          bordered
+          :scroll="{ x: 'max-content' }"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'id'">

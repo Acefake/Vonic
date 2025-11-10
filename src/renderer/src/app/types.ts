@@ -541,6 +541,19 @@ export interface AppAPI {
   callExe: (exeName: string, workingDir?: string) => Promise<callExeRes>
   /** 产品配置 */
   productConfig: ProductConfig
+  /** 系统资源监控 API */
+  system: SystemAPI
+}
+
+export interface SystemAPI {
+  /** 获取 CPU 核心数 */
+  getCPUCores: () => Promise<number>
+  /** 获取内存信息 */
+  getMemoryInfo: () => Promise<{ freePhysicalMemoryMB: number, totalVisibleMemoryMB: number, usagePercent: number }>
+  /** 获取最优并发数 */
+  getOptimalConcurrency: (baseConcurrency?: number, memoryThreshold?: number) => Promise<number>
+  /** 检查资源是否充足 */
+  checkResource: (minFreeMemoryMB?: number, maxMemoryUsagePercent?: number) => Promise<{ sufficient: boolean, freeMemoryMB: number, usagePercent: number }>
 }
 
 export interface callExeRes {

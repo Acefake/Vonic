@@ -12,6 +12,12 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!**/*.map'
+  - '!**/__pycache__/**'
+  - '!**/*.pyc'
+  - '!**/*.pyo'
+  - '!**/{README.md,README.txt,RELEASES.md}'
+  # 排除extension文件
 asarUnpack:
   - resources/**
 
@@ -24,6 +30,7 @@ extraResources:
       - '**/*.bat'
       - '**/*.exe'
       - 'Python/**/*'
+      # 注意：filter 不支持排除语法，排除规则需要在 files 中配置
 
 # win:
 #   executableName: mPhysSim
@@ -46,6 +53,7 @@ extraResources:
 #   target: portable
 
 win:
+  # icon: build/icons/logo.ico
   executableName: mPhysSim
   target:
     - dir

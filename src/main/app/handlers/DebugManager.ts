@@ -4,9 +4,6 @@ import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 
 export class DebugManager {
-  /**
-   * 注册 IPC 处理器
-   */
   registerHandlers(): void {
     ipcMain.on('debug:reload', this.reload.bind(this))
     ipcMain.on('debug:force-reload', this.forceReload.bind(this))
