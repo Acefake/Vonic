@@ -34,7 +34,7 @@ export const useStore = defineStore('main', {
   },
 })
 
-export type { DesignScheme, DrivingParams, FeedingMethod, OperatingParams, OutputResults, SeparationComponents, TopLevelParams } from './designStore'
+export type { DesignFormData, DesignScheme, FeedingMethod, OutputResults } from './designStore'
 
 // 导出设计相关的 store 和类型
 export { useDesignStore } from './designStore'
@@ -46,10 +46,8 @@ export { useExperimentalDataStore } from './experimentalDataStore'
 export { useLogStore } from './logStore'
 export type {
   PowerAnalysisDesignScheme,
-  PowerAnalysisFluidParams,
+  PowerAnalysisFormData,
   PowerAnalysisOutputResults,
-  PowerAnalysisSeparationComponents,
-  PowerAnalysisTopLevelParams,
 } from './powerAnalysisDesignStore'
 export { usePowerAnalysisDesignStore } from './powerAnalysisDesignStore'
 export { useSchemeOptimizationStore } from './schemeOptimizationStore'

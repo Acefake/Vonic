@@ -26,6 +26,28 @@ const powerAnalysisConfig: ProductConfig = {
     startupMode: 'parallel',
     errorStrategy: 'stop-all',
   },
+  file: {
+    /** 可执行文件名称 */
+    exeName: 'PowerLoss.exe',
+    /** Fortran读取输入文件名称 */
+    inputFileName: 'input_p.txt',
+    /** Fortran运行后生成结果文件名称 */
+    outputFileName: 'output.dat',
+    /** 提交任务文件名称 */
+    submitFileName: 'output.txt',
+  },
+  resultFields: [
+    {
+      field: 'PoorTackPower',
+      fileKey: 'W_waccele',
+      label: '贫料功率',
+    },
+    {
+      field: 'TackPower',
+      fileKey: 'total_accele',
+      label: '富料功率',
+    },
+  ],
 }
 
 export default powerAnalysisConfig

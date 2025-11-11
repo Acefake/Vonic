@@ -3,41 +3,58 @@ import * as path from 'node:path'
 import { app } from 'electron'
 
 /**
- * 根据传入的参数和值生成input.dat
+ * 根据传入的参数和值生成输入文件
  * @param designData 设计数据对象，将被序列化写入文件
- * @param customDir 可选的自定义目录路径，如果提供则使用该目录，否则使用默认目录
- * 生产环境：在同级目录生成 input.dat 文件
- * 开发环境：在项目根目录的testFile文件夹生成 input.dat 文件
- * @returns res 写入成功返回 true，失败返回 false
+ * @param customDirOrOptions 可选：字符串表示自定义目录；或对象 { customDir?, fileName? }
+ *  - customDir: 自定义目录路径；若不提供则自动选择（开发：testFile，生产：exe同级/资源目录）
+ *  - fileName: 目标文件名，默认 'input.dat'；例如 powerAnalysis 需要 'input2.txt'
+ * 生产环境：在同级目录生成文件
+ * 开发环境：在项目根目录的 testFile 文件夹生成文件
+ * @returns 写入结果
  */
-export function writeDatFile(designData: any, customDir?: string): { code: number, message: string, filePath: string } {
+export function writeDatFile(
+  designData: any,
+  customDirOrOptions?: string | { customDir?: string, fileName?: string },
+): { code: number, message: string, filePath: string } {
   try {
     let targetDir: string
+    let fileName = 'input.dat'
 
-    if (customDir) {
+    if (typeof customDirOrOptions === 'string') {
       // 如果提供了自定义目录，直接使用
-      targetDir = customDir
+      targetDir = customDirOrOptions
     }
     else {
-      // 与 readFileData 保持一致的开发环境判断：以项目根目录是否存在 testFile 目录为准
-      const isDev = fs.existsSync(path.join(process.cwd(), 'testFile'))
+      const customDir = customDirOrOptions?.customDir
+      const specifiedName = customDirOrOptions?.fileName
+      if (specifiedName && typeof specifiedName === 'string') {
+        fileName = specifiedName
+      }
 
-      if (isDev) {
-        // 开发环境：写到项目根目录的 testFile 目录
-        targetDir = path.join(process.cwd(), 'testFile')
+      if (customDir) {
+        targetDir = customDir
       }
       else {
+      // 与 readFileData 保持一致的开发环境判断：以项目根目录是否存在 testFile 目录为准
+        const isDev = fs.existsSync(path.join(process.cwd(), 'testFile'))
+
+        if (isDev) {
+        // 开发环境：写到项目根目录的 testFile 目录
+          targetDir = path.join(process.cwd(), 'testFile')
+        }
+        else {
         // 生产环境：写到外部程序所在目录（常见：exe 同级 / resources / resources/unpacked）
         // 注意：app.getAppPath() 在打包后会指向 asar 包，不适合写入；应使用 exe 路径或资源目录
-        const exeDir = path.dirname(app.getPath('exe'))
-        const candidateDirs = [
-          exeDir,
-          path.join(exeDir, 'resources'),
-          path.join(exeDir, 'resources', 'unpacked'),
-        ]
-        // 优先选择存在 ns-linear.exe 的目录，以确保 Fortran 程序能读取到 input.dat
-        const preferredDir = candidateDirs.find(dir => fs.existsSync(path.join(dir, 'ns-linear.exe')))
-        targetDir = preferredDir || exeDir
+          const exeDir = path.dirname(app.getPath('exe'))
+          const candidateDirs = [
+            exeDir,
+            path.join(exeDir, 'resources'),
+            path.join(exeDir, 'resources', 'unpacked'),
+          ]
+          // 优先选择存在 ns-linear.exe 的目录，以确保 Fortran 程序能读取到 input.dat
+          const preferredDir = candidateDirs.find(dir => fs.existsSync(path.join(dir, 'ns-linear.exe')))
+          targetDir = preferredDir || exeDir
+        }
       }
     }
 
@@ -46,23 +63,36 @@ export function writeDatFile(designData: any, customDir?: string): { code: numbe
       fs.mkdirSync(targetDir, { recursive: true })
     }
 
-    const filePath = path.join(targetDir, 'input.dat')
+    const filePath = path.join(targetDir, fileName)
 
-    // 构建符合 Fortran 程序要求的 input.dat 内容
-    const content = buildInputDatContent(designData)
+    // 根据目标文件名构建内容：
+    // - input2.txt 使用 key=value 行（功耗分析导出）
+    // - input_p.txt 使用 1-28 数字+注释行（功耗分析程序 PowerLoss.exe 读取）
+    // - 其他（如 input.dat）使用分离计算数值行
+    const lowerName = fileName.toLowerCase()
+    let content: string
+    if (lowerName === 'input2.txt') {
+      content = buildInput2TxtContent(designData)
+    }
+    else if (lowerName === 'input_p.txt') {
+      content = buildInputPTxtContent(designData)
+    }
+    else {
+      content = buildInputDatContent(designData)
+    }
 
     fs.writeFileSync(filePath, content, 'utf8')
 
     return {
       code: 200,
-      message: 'input.dat文件写入成功',
+      message: '方案提交成功',
       filePath,
     }
   }
   catch (error) {
     return {
       code: 500,
-      message: `input.dat文件写入失败:${error}`,
+      message: `方案提交失败:${error}`,
       filePath: '',
     }
   }
@@ -188,4 +218,171 @@ function buildInputDatContent(designData: any): string {
     l28,
     l29,
   ].join('\n')
+}
+
+/**
+ * 构建 powerAnalysis 的 input2.txt 内容（key=value，每行一个参数）
+ * 对于缺省值输出为空值，以便与示例格式一致（例如 PoorTackInnerRadius=）
+ */
+function buildInput2TxtContent(designData: any): string {
+  const keysInOrder = [
+    'DegSpeed',
+    'RotorRadius',
+    'Temperature',
+    'RichBaffleTemp',
+    'RotorPressure',
+    'PowerFlow',
+    'PoorTackInnerRadius',
+    'PoorTackOuterRadius',
+    'PoorTackRootOuterRadius',
+    'PoorTackDistance',
+    'RichTackDistance',
+    'EvenSectionPipeLength',
+    'ChangeSectionPipeLength',
+    'PipeRadius',
+    'TackSurfaceRoughness',
+    'TackAttkAngle',
+    'TackChamferAngle',
+    'TackTaperAngle',
+    'TackHeight',
+    'RichBaffleHoleDiam',
+    'RichBaffleArrayHoleDiam',
+  ]
+
+  // 将 input2.txt 所需键映射到前端表单字段名
+  const srcFieldByKey: Record<string, string> = {
+    DegSpeed: 'angularVelocity',
+    RotorRadius: 'rotorRadius',
+    Temperature: 'averageTemperature',
+    RichBaffleTemp: 'enrichedBaffleTemperature',
+    RotorPressure: 'rotorSidewallPressure',
+    PowerFlow: 'feedFlowRate',
+    PoorTackInnerRadius: 'depletedExtractionPortInnerDiameter',
+    PoorTackOuterRadius: 'depletedExtractionPortOuterDiameter',
+    PoorTackRootOuterRadius: 'depletedExtractionRootOuterDiameter',
+    PoorTackDistance: 'depletedExtractionCenterDistance',
+    RichTackDistance: 'enrichedExtractionCenterDistance',
+    EvenSectionPipeLength: 'constantSectionStraightPipeLength',
+    ChangeSectionPipeLength: 'variableSectionStraightPipeLength',
+    PipeRadius: 'bendRadiusOfCurvature',
+    TackSurfaceRoughness: 'extractorSurfaceRoughness',
+    TackAttkAngle: 'extractorAngleOfAttack',
+    TackChamferAngle: 'extractorCuttingAngle',
+    TackTaperAngle: 'extractorTaperAngle',
+    TackHeight: 'extractionChamberHeight',
+    RichBaffleHoleDiam: 'enrichedBaffleHoleDiameter',
+    RichBaffleArrayHoleDiam: 'enrichedBaffleHoleDistributionCircleDiameter',
+  }
+
+  const getOptional = (obj: any, key: string): string => {
+    if (!obj)
+      return ''
+    // 1) 优先：直接同名键（兼容已是目标键名的输入）
+    const direct = obj[key]
+    if (direct !== undefined && direct !== null && direct !== '')
+      return String(direct)
+
+    // 2) 其次：映射到前端字段名再取值
+    const mappedField = srcFieldByKey[key]
+    if (mappedField) {
+      const mappedVal = obj[mappedField]
+      if (mappedVal !== undefined && mappedVal !== null && mappedVal !== '')
+        return String(mappedVal)
+    }
+
+    // 3) 再次：支持分组对象（如 topLevelParams/operatingParams/...）
+    const groups = ['topLevelParams', 'operatingParams', 'drivingParams', 'separationComponents']
+    for (const g of groups) {
+      const groupObj = obj[g]
+      if (!groupObj)
+        continue
+      // 3.1 组内同名键
+      if (groupObj[key] !== undefined && groupObj[key] !== null && groupObj[key] !== '') {
+        return String(groupObj[key])
+      }
+      // 3.2 组内映射后的字段名
+      if (mappedField && groupObj[mappedField] !== undefined && groupObj[mappedField] !== null && groupObj[mappedField] !== '') {
+        return String(groupObj[mappedField])
+      }
+    }
+    return ''
+  }
+
+  const lines = keysInOrder.map(k => `${k}=${getOptional(designData, k)}`)
+  return lines.join('\n')
+}
+
+/**
+ * 构建功耗分析程序所需的 input_p.txt 内容（28 行：数值 + 中文注释）
+ * 字段来源与前端 PowerAnalysisDesign 中的 buildInputTxtContent 对齐
+ */
+function buildInputPTxtContent(designData: any): string {
+  const val = (key: string, dft = 0): number => {
+    const raw = getVal(designData, key, dft)
+    const n = Number(raw as any)
+    return Number.isFinite(n) ? n : dft
+  }
+
+  const lines: string[] = []
+  // 1. 半径
+  lines.push(`${val('rotorRadius')}    !半径`)
+  // 2. 转速
+  lines.push(`${val('angularVelocity')}    !转速`)
+  // 3. T0
+  lines.push(`${val('averageTemperature')}    !T0`)
+  // 4. 精料挡板温度
+  lines.push(`${val('enrichedBaffleTemperature')}    !精料挡板温度`)
+  // 5. Pw_w
+  lines.push(`${val('rotorSidewallPressure')}    !Pw_w`)
+  // 6. 供料流量
+  lines.push(`${val('feedFlowRate')}    !供料流量`)
+  // 7. 贫料流量（无此字段，置 0）
+  lines.push(`0    !贫料流量`)
+  // 8. ds
+  lines.push(`${val('depletedExtractionPortInnerDiameter')}    !ds`)
+  // 9. ds1
+  lines.push(`${val('depletedExtractionPortOuterDiameter')}    !ds1`)
+  // 10. ds0
+  lines.push(`${val('depletedExtractionRootOuterDiameter')}    !ds0`)
+  // 11. rw
+  lines.push(`${val('depletedExtractionCenterDistance')}    !rw`)
+  // 12. rp
+  lines.push(`${val('enrichedExtractionCenterDistance')}    !rp`)
+  // 13. Ls
+  lines.push(`${val('constantSectionStraightPipeLength')}    !Ls`)
+  // 14. Lss
+  lines.push(`${val('variableSectionStraightPipeLength')}    !Lss`)
+  // 15. rss
+  lines.push(`${val('bendRadiusOfCurvature')}    !rss`)
+  // 16. Hr_Scoop=roughness 取料器镀镍后的表面粗糙度
+  lines.push(`${val('extractorSurfaceRoughness')}    !Hr_Scoop=roughness 取料器镀镍后的表面粗糙度`)
+  // 17. angle_angle(1)
+  lines.push(`${val('extractorAngleOfAttack')}    !angle_angle(1)`)
+  // 18. angle_angle(2)
+  lines.push(`${val('extractorCuttingAngle')}    !angle_angle(2)`)
+  // 19. angle_angle(3)
+  lines.push(`${val('extractorTaperAngle')}    !angle_angle(3)`)
+  // 20. hs 取料腔高度的一半
+  const fullHeight = val('extractionChamberHeight')
+  lines.push(`${fullHeight / 2}    !hs取料腔高度的一半`)
+  // 21. holedia_p
+  const holeDia = val('enrichedBaffleHoleDiameter')
+  lines.push(`${holeDia}    !holedia_p`)
+  // 22. sigma_p 单孔面积
+  const sigmaP = holeDia > 0 ? Math.PI * (holeDia / 2) ** 2 : 0
+  lines.push(`${sigmaP}    !sigma_p精料挡板孔的面积(单个)`)
+  // 23. ka 参数k（未知，置 0）
+  lines.push(`0    !ka最大流量公式对应的值域与气体料类有关的参数k`)
+  // 24. rk_p 精料挡板孔的中心距
+  lines.push(`${val('enrichedBaffleHoleDistributionCircleDiameter')}    !rk_p精料挡板空的中心距`)
+  // 25. Ma_x 孔板气体马赫数
+  lines.push(`0    !Ma_x孔板气体马赫数`)
+  // 26. w_prot
+  lines.push(`0    !w_prot`)
+  // 27. cpipe1
+  lines.push(`0    !cpipe1`)
+  // 28. pws
+  lines.push(`0    !pws`)
+
+  return lines.join('\n')
 }

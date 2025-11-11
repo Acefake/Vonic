@@ -2,62 +2,35 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 /**
- * 功率分析顶层参数接口
+ * 功率分析-扁平化设计表单数据
+ * 合并顶层参数、流体参数、分离部件为一个对象
  */
-export interface PowerAnalysisTopLevelParams {
-  /** 角速度 (Hz) */
+export interface PowerAnalysisFormData {
+  // 顶层参数
   angularVelocity?: number
-  /** 转子半径 (mm) */
   rotorRadius?: number
-}
 
-/**
- * 功率分析流体参数接口
- */
-export interface PowerAnalysisFluidParams {
-  /** 平均温度 (K) */
+  // 流体参数
   averageTemperature?: number
-  /** 精料挡板温度 (K) */
   enrichedBaffleTemperature?: number
-  /** 供料流量 (Kg/s) */
   feedFlowRate?: number
-  /** 转子侧壁压强 (Pa) */
   rotorSidewallPressure?: number
-}
 
-/**
- * 功率分析分离部件接口
- */
-export interface PowerAnalysisSeparationComponents {
-  /** 贫取料口部内径 (mm) */
+  // 分离部件
   depletedExtractionPortInnerDiameter?: number
-  /** 贫取料口部外径 (mm) */
   depletedExtractionPortOuterDiameter?: number
-  /** 贫取料根部外径 (mm) */
   depletedExtractionRootOuterDiameter?: number
-  /** 取料器攻角 (rad) */
   extractorAngleOfAttack?: number
-  /** 取料腔高度 (mm) */
   extractionChamberHeight?: number
-  /** 贫取料中心距 (mm) */
   depletedExtractionCenterDistance?: number
-  /** 精取料中心距 (mm) */
   enrichedExtractionCenterDistance?: number
-  /** 等截面直管段长度 (mm) */
   constantSectionStraightPipeLength?: number
-  /** 取料器切角 (rad) */
   extractorCuttingAngle?: number
-  /** 精挡板孔直径 (mm) */
   enrichedBaffleHoleDiameter?: number
-  /** 变截面直管段长度 (mm) */
   variableSectionStraightPipeLength?: number
-  /** 弯管弧度半径 (mm) */
   bendRadiusOfCurvature?: number
-  /** 取料器表面粗糙度 (mm) */
   extractorSurfaceRoughness?: number
-  /** 取料器锥角 (rad) */
   extractorTaperAngle?: number
-  /** 精挡板孔分布圆直径 (mm) */
   enrichedBaffleHoleDistributionCircleDiameter?: number
 }
 
@@ -66,9 +39,9 @@ export interface PowerAnalysisSeparationComponents {
  */
 export interface PowerAnalysisOutputResults {
   /** 贫取料器功耗 (W) */
-  depletedExtractorPowerConsumption?: number
+  poorTackPower?: number
   /** 取料器总功耗 (W) */
-  totalExtractorPowerConsumption?: number
+  tackPower?: number
 }
 
 /**
@@ -77,12 +50,8 @@ export interface PowerAnalysisOutputResults {
 export interface PowerAnalysisDesignScheme {
   /** 是否多方案 */
   isMultiScheme: boolean
-  /** 顶层参数 */
-  topLevelParams: PowerAnalysisTopLevelParams
-  /** 流体参数 */
-  fluidParams: PowerAnalysisFluidParams
-  /** 分离部件 */
-  separationComponents: PowerAnalysisSeparationComponents
+  /** 扁平化的表单数据 */
+  formData: PowerAnalysisFormData
   /** 输出结果 */
   outputResults: PowerAnalysisOutputResults
 }
@@ -95,22 +64,17 @@ export const usePowerAnalysisDesignStore = defineStore('powerAnalysisDesign', ()
   /** 是否多方案 */
   const isMultiScheme = ref<boolean>(false)
 
-  /** 顶层参数 */
-  const topLevelParams = ref<PowerAnalysisTopLevelParams>({
+  /** 扁平化的表单数据 */
+  const formData = ref<PowerAnalysisFormData>({
+    // 顶层参数
     angularVelocity: undefined,
     rotorRadius: undefined,
-  })
-
-  /** 流体参数 */
-  const fluidParams = ref<PowerAnalysisFluidParams>({
+    // 流体参数
     averageTemperature: undefined,
     enrichedBaffleTemperature: undefined,
     feedFlowRate: undefined,
     rotorSidewallPressure: undefined,
-  })
-
-  /** 分离部件 */
-  const separationComponents = ref<PowerAnalysisSeparationComponents>({
+    // 分离部件
     depletedExtractionPortInnerDiameter: undefined,
     depletedExtractionPortOuterDiameter: undefined,
     depletedExtractionRootOuterDiameter: undefined,
@@ -130,8 +94,8 @@ export const usePowerAnalysisDesignStore = defineStore('powerAnalysisDesign', ()
 
   /** 输出结果 */
   const outputResults = ref<PowerAnalysisOutputResults>({
-    depletedExtractorPowerConsumption: undefined,
-    totalExtractorPowerConsumption: undefined,
+    poorTackPower: undefined,
+    tackPower: undefined,
   })
 
   /**
@@ -139,9 +103,7 @@ export const usePowerAnalysisDesignStore = defineStore('powerAnalysisDesign', ()
    */
   const getDesignScheme = computed((): PowerAnalysisDesignScheme => ({
     isMultiScheme: isMultiScheme.value,
-    topLevelParams: topLevelParams.value,
-    fluidParams: fluidParams.value,
-    separationComponents: separationComponents.value,
+    formData: formData.value,
     outputResults: outputResults.value,
   }))
 
@@ -163,22 +125,11 @@ export const usePowerAnalysisDesignStore = defineStore('powerAnalysisDesign', ()
   /**
    * 更新顶层参数
    */
-  function updateTopLevelParams(params: Partial<PowerAnalysisTopLevelParams>): void {
-    topLevelParams.value = { ...topLevelParams.value, ...params }
-  }
-
   /**
-   * 更新流体参数
+   * 更新扁平化的表单字段
    */
-  function updateFluidParams(params: Partial<PowerAnalysisFluidParams>): void {
-    fluidParams.value = { ...fluidParams.value, ...params }
-  }
-
-  /**
-   * 更新分离部件
-   */
-  function updateSeparationComponents(params: Partial<PowerAnalysisSeparationComponents>): void {
-    separationComponents.value = { ...separationComponents.value, ...params }
+  function updateFormData(params: Partial<PowerAnalysisFormData>): void {
+    formData.value = { ...formData.value, ...params }
   }
 
   /**
@@ -193,9 +144,7 @@ export const usePowerAnalysisDesignStore = defineStore('powerAnalysisDesign', ()
    */
   function setDesignScheme(scheme: PowerAnalysisDesignScheme): void {
     isMultiScheme.value = scheme.isMultiScheme
-    topLevelParams.value = { ...scheme.topLevelParams }
-    fluidParams.value = { ...scheme.fluidParams }
-    separationComponents.value = { ...scheme.separationComponents }
+    formData.value = { ...scheme.formData }
     outputResults.value = { ...scheme.outputResults }
   }
 
@@ -204,17 +153,16 @@ export const usePowerAnalysisDesignStore = defineStore('powerAnalysisDesign', ()
    */
   function reset(): void {
     isMultiScheme.value = false
-    topLevelParams.value = {
+    formData.value = {
+      // 顶层参数
       angularVelocity: undefined,
       rotorRadius: undefined,
-    }
-    fluidParams.value = {
+      // 流体参数
       averageTemperature: undefined,
       enrichedBaffleTemperature: undefined,
       feedFlowRate: undefined,
       rotorSidewallPressure: undefined,
-    }
-    separationComponents.value = {
+      // 分离部件
       depletedExtractionPortInnerDiameter: undefined,
       depletedExtractionPortOuterDiameter: undefined,
       depletedExtractionRootOuterDiameter: undefined,
@@ -232,17 +180,15 @@ export const usePowerAnalysisDesignStore = defineStore('powerAnalysisDesign', ()
       enrichedBaffleHoleDistributionCircleDiameter: undefined,
     }
     outputResults.value = {
-      depletedExtractorPowerConsumption: undefined,
-      totalExtractorPowerConsumption: undefined,
+      poorTackPower: undefined,
+      tackPower: undefined,
     }
   }
 
   return {
     // 状态
     isMultiScheme,
-    topLevelParams,
-    fluidParams,
-    separationComponents,
+    formData,
     outputResults,
 
     // 计算属性
@@ -251,9 +197,7 @@ export const usePowerAnalysisDesignStore = defineStore('powerAnalysisDesign', ()
 
     // 方法
     setIsMultiScheme,
-    updateTopLevelParams,
-    updateFluidParams,
-    updateSeparationComponents,
+    updateFormData,
     updateOutputResults,
     setDesignScheme,
     reset,

@@ -70,7 +70,7 @@ const routes: RouteRecordRaw[] = [
     name: 'MultiScheme',
     component: () => import('../views/MultiScheme/index.vue'),
     meta: {
-      title: '多方案设计',
+      title: '多方案对比',
       icon: 'AppstoreOutlined',
       order: 3,
       feature: 'multiScheme',

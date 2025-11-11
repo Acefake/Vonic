@@ -53,7 +53,7 @@ extraResources:
 #   target: portable
 
 win:
-  # icon: build/icons/logo.ico
+  icon: resources/icons/logo.ico
   executableName: mPhysSim
   target:
     - zip

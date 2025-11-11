@@ -10,17 +10,14 @@ import DataChart from '../ExperimentalData/DataChart.vue'
 const experimentalDataStore = useExperimentalDataStore()
 const { tableColumns, tableData } = toRefs(experimentalDataStore)
 const designStore = useDesignStore()
-const { drivingParams, operatingParams, separationComponents, topLevelParams, isMultiScheme } = toRefs(designStore)
+const { formData, isMultiScheme } = toRefs(designStore)
 const schemeOptimizationStore = useSchemeOptimizationStore()
 const { sampleSpaceData } = toRefs(schemeOptimizationStore)
 console.log(sampleSpaceData.value, 'sampleSpaceData---------------')
 const logStore = useLogStore()
 console.log(tableColumns.value, 'tableColumns')
 console.log(tableData.value, 'tableData')
-console.log(drivingParams.value, 'drivingParams')
-console.log(operatingParams.value, 'operatingParams')
-console.log(separationComponents.value, 'separationComponents')
-console.log(topLevelParams.value, 'topLevelParams')
+console.log(formData.value, 'formData')
 // =====================
 // 数据状态
 // =====================
@@ -144,16 +141,12 @@ watch(() => chartConfig.value.yAxis, (newAxis) => {
 // 计算属性
 // =====================
 /**
- * 合并设计参数数据
- * 将 topLevelParams、operatingParams、drivingParams、separationComponents 合并成一个对象
+ * 合并设计参数数据（已扁平化）
  */
 const mergedDesignData = computed(() => {
   // 合并所有参数对象
   return {
-    ...topLevelParams.value,
-    ...operatingParams.value,
-    ...drivingParams.value,
-    ...separationComponents.value,
+    ...formData.value,
   }
 })
 

@@ -9,8 +9,8 @@ import app from '../../app/index'
 import { useLogStore, useSchemeOptimizationStore } from '../../store'
 import { useDesignStore } from '../../store/designStore'
 import { FIELD_LABELS } from '../../utils/field-labels'
+import { parseOutput } from '../../utils/parseOutinpu'
 import { parseSepPower } from '../../utils/parseSepPower'
-
 import { ALGORITHM_OPTIONS, RESPONSE_VALUES, SAMPLING_CRITERION_OPTIONS } from './constants'
 import { AlgorithmType, ParameterType } from './type'
 import {
@@ -37,7 +37,7 @@ const isSampling = ref(false)
 // 选中的设计因子行
 const selectedDesignFactorIds = ref<number[]>([])
 // 样本空间表格高度
-const sampleSpaceTableHeight = ref(560)
+const sampleSpaceTableHeight = ref(300)
 
 /**
  * 样本空间表格列
@@ -186,10 +186,7 @@ function getNonFactorParams(): Record<string, any> {
 
   // 从设计存储中获取所有参数
   const allParams = {
-    ...designStore.topLevelParams,
-    ...designStore.operatingParams,
-    ...designStore.drivingParams,
-    ...designStore.separationComponents,
+    ...designStore.formData,
   }
 
   // 过滤掉设计因子对应的参数
@@ -297,15 +294,25 @@ async function executeOptimization(): Promise<void> {
 
   try {
     ensureNotCancelled()
-    logStore.info('开始仿真优化计算（多进程模式）')
+    logStore.info('开始仿真优化计算')
     logStore.info(`算法=${optimizationAlgorithm.value}, 样本点数=${samplePointCountforRes.value}, 样本空间数据=${sampleSpaceData.value.length}`)
 
     ensureNotCancelled()
     const baseDir = await getWorkBaseDir()
-    const exeName = 'ns-linear.exe'
+    const exeName = app.productConfig.file?.exeName
+    const inputFileName = app.productConfig.file?.inputFileName
+    const outputFileName = app.productConfig.file?.outputFileName
+
+    if (!exeName || !inputFileName || !outputFileName) {
+      app.window.loading.close()
+      app.message.error('产品配置中缺少必要的文件配置')
+      logStore.error('产品配置中缺少必要的文件配置')
+      return
+    }
 
     // 第一步：查找 exe 文件路径
     const exeSourcePath = await app.file.findExe(exeName)
+
     if (!exeSourcePath) {
       app.window.loading.close()
       app.message.error(`找不到 ${exeName} 文件`)
@@ -356,11 +363,9 @@ async function executeOptimization(): Promise<void> {
         isResolved: false,
         timeoutId: null,
       })
-
-      // logStore.info(`样本 ${sampleId}/${samplePointCountforRes.value} 创建目录: ${dirName}`)
     }
 
-    // 第二步：写入所有 input.dat
+    // 第二步：写入所有input
     for (const info of sampleInfos) {
       ensureNotCancelled()
       const sampleParams = convertSampleDataToKeys(info.sample)
@@ -370,9 +375,10 @@ async function executeOptimization(): Promise<void> {
         ...sampleParams,
       }
 
-      const writeResult = await app.file.writeDatFile('input.dat', combinedParams, info.workDir)
+      const writeResult = await app.file.writeDatFile(inputFileName, combinedParams, info.workDir)
+      console.log(writeResult, 'writeResult')
       if (writeResult.code !== 200) {
-        logStore.error(`样本 ${info.sampleId} 写入input.dat失败: ${writeResult.message}`)
+        logStore.error(`样本 ${info.sampleId} 写入${inputFileName}失败: ${writeResult.message}`)
         results.push({
           index: info.sampleId,
           sampleData: info.sample,
@@ -380,9 +386,6 @@ async function executeOptimization(): Promise<void> {
           sepFactor: null,
           dirName: info.dirName,
         })
-      }
-      else {
-        // logStore.info(`样本 ${info.sampleId} input.dat写入成功`)
       }
     }
 
@@ -467,8 +470,6 @@ async function executeOptimization(): Promise<void> {
         info.timeoutId = null
       }
 
-      // logStore.info(`样本 ${info.sampleId} 收到exe-closed事件，退出码=${result.exitCode}, isSuccess=${result.isSuccess}`)
-
       if (result.isSuccess === false || result.exitCode !== 0) {
         logStore.error(`样本 ${info.sampleId} Fortran执行失败: 退出码=${result.exitCode}, 工作目录=${info.workDir}, signal=${result.signal || 'none'}`)
         results.push({
@@ -482,18 +483,26 @@ async function executeOptimization(): Promise<void> {
       else {
         try {
           // 读取 Sep_power.dat
-          const content = await app.file.readDatFile('Sep_power.dat', info.workDir)
-          const parsedData = parseSepPower(content)
+          const content = await app.file.readDatFile(outputFileName, info.workDir)
+
+          let parsedData
+
+          if (app.productConfig.id === 'powerAnalysis') {
+            parsedData = parseOutput(content)
+          }
+          else {
+            parsedData = parseSepPower(content)
+          }
 
           results.push({
             index: info.sampleId,
             sampleData: info.sample,
-            sepPower: parsedData.actualSepPower,
-            sepFactor: parsedData.actualSepFactor,
+            sepPower: parsedData.poorTackPower,
+            sepFactor: parsedData.tackPower,
             dirName: info.dirName,
           })
 
-          logStore.info(`样本 ${info.sampleId} 完成: 分离功率=${parsedData.actualSepPower}, 分离系数=${parsedData.actualSepFactor}`)
+          logStore.info(`样本 ${info.sampleId} 完成: ${app.productConfig.resultFields?.[0]?.label ?? '分离功率'}=${results[results.length - 1].sepPower ?? ''}, ${app.productConfig.resultFields?.[1]?.label ?? '分离系数'}=${results[results.length - 1].sepFactor ?? ''}`)
         }
         catch (error) {
           logStore.error(`样本 ${info.sampleId} 读取结果失败: ${error instanceof Error ? error.message : String(error)}`)
@@ -899,18 +908,10 @@ async function executeOptimization(): Promise<void> {
             }
           }
 
-          // 批量更新 store
-          if (Object.keys(topParams).length > 0) {
-            designStore.updateTopLevelParams(topParams as any)
-          }
-          if (Object.keys(opParams).length > 0) {
-            designStore.updateOperatingParams(opParams as any)
-          }
-          if (Object.keys(drvParams).length > 0) {
-            designStore.updateDrivingParams(drvParams as any)
-          }
-          if (Object.keys(sepParams).length > 0) {
-            designStore.updateSeparationComponents(sepParams as any)
+          // 统一更新扁平化的表单数据
+          const mergedParams = { ...topParams, ...opParams, ...drvParams, ...sepParams }
+          if (Object.keys(mergedParams).length > 0) {
+            designStore.updateFormData(mergedParams as any)
           }
 
           logStore.info(`已将最优方案（序号 ${optimalIndex}）的结果和参数值更新到初始设计`)
@@ -1440,7 +1441,7 @@ async function executeSampleSpace(params: any) {
                 { title: '上限', dataIndex: 'upperLimit', key: 'upperLimit', width: 150 },
                 { title: '水平数', dataIndex: 'levelCount', key: 'levelCount', width: 120 },
                 { title: '取值', dataIndex: 'values', key: 'values', width: 200 },
-              ]" :data-source="designFactors" :pagination="false" sticky :scroll="{ x: true, y: 240 }" :row-selection="{
+              ]" :data-source="designFactors" :pagination="false" sticky :scroll="{ x: true, y: 200 }" :row-selection="{
                 selectedRowKeys: selectedDesignFactorIds,
                 onChange: (keys) => selectedDesignFactorIds = keys as number[],
               }" row-key="id" bordered

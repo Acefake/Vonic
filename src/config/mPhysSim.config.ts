@@ -27,6 +27,28 @@ const mPhysSimConfig: ProductConfig = {
     startupMode: 'parallel',
     errorStrategy: 'stop-all',
   },
+  file: {
+    /** 可执行文件名称 */
+    exeName: 'ns-linear.exe',
+    /** Fortran读取输入文件名称 */
+    inputFileName: 'input.dat',
+    /** Fortran运行后生成结果文件名称 */
+    outputFileName: 'Sep_power.dat',
+    /** 提交任务后生成结果文件名称 */
+    submitFileName: 'output.txt',
+  },
+  resultFields: [
+    {
+      field: 'sepPower',
+      fileKey: 'ACTURAL SEPERATIVE POWER',
+      label: '分离功率',
+    },
+    {
+      field: 'sepFactor',
+      fileKey: 'ACTURAL SEPERATIVE FACTOR',
+      label: '分离系数',
+    },
+  ],
 }
 
 export default mPhysSimConfig

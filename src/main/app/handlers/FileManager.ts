@@ -4,6 +4,7 @@ import * as fs from 'node:fs'
 import { access, copyFile, readFile as fsReadFile, readdir, rm, unlink, writeFile } from 'node:fs/promises'
 import { dirname, extname, join } from 'node:path'
 import { app, ipcMain } from 'electron'
+import { getProductConfig } from '@/config/product.config'
 import { deleteOutFolder } from '@/main/utils/cleanup'
 import { parseSepPower } from '@/main/utils/parseSepPower'
 import { readFileData } from '@/main/utils/readFileData'
@@ -197,9 +198,11 @@ export class FileManager {
     // 1) invoke('file:write-dat', designData)
     // 2) invoke('file:write-dat', fileName, designData)
     // 3) invoke('file:write-dat', fileName, designData, customDir)
+    const fileName = (typeof arg1 === 'string') ? arg1 : undefined
     const designData = (arg2 !== undefined) ? arg2 : arg1
     const customDir = arg3
-    return await writeDatFile(designData, customDir)
+    const options = { customDir, fileName }
+    return await writeDatFile(designData, options)
   }
 
   /**
@@ -270,8 +273,18 @@ export class FileManager {
       // 读取 out 子目录（out/out_XXXXXX 格式）
       const outDir = join(targetDir, 'out')
 
-      // 收集所有 Sep_power.dat 文件路径
-      const sepPowerFiles: Array<{ filePath: string, dirName: string }> = []
+      // 读取产品配置的结果文件名与输入文件名
+      const productConfig = getProductConfig()
+      const outputFileName = productConfig.file?.outputFileName || 'Sep_power.dat'
+      const inputFileName = productConfig.file?.inputFileName || 'input.dat'
+
+      // 收集所有结果文件路径（匹配配置的文件名与常见候选名，大小写不敏感）
+      const resultFiles: Array<{ filePath: string, dirName: string }> = []
+      const candidateOutputNames = new Set<string>([
+        (outputFileName || '').toLowerCase(),
+        'sep_power.dat',
+        'output.dat',
+      ].filter(Boolean))
 
       // 检查 out 目录是否存在
       if (fs.existsSync(outDir)) {
@@ -287,9 +300,9 @@ export class FileManager {
                 const subDir = join(outDir, entry.name)
                 const subFiles = await readdir(subDir)
                 for (const subFile of subFiles) {
-                  const fileName = subFile.toLowerCase()
-                  if (fileName.includes('sep_power') && fileName.endsWith('.dat')) {
-                    sepPowerFiles.push({
+                  const fileNameLower = subFile.toLowerCase()
+                  if (candidateOutputNames.has(fileNameLower)) {
+                    resultFiles.push({
                       filePath: join(subDir, subFile),
                       dirName: entry.name,
                     })
@@ -354,19 +367,58 @@ export class FileManager {
         sepFactor: number | null
       }> = []
 
-      for (let i = 0; i < sepPowerFiles.length; i++) {
-        const { filePath, dirName } = sepPowerFiles[i]
+      // 通用的 key=value 结果解析器（兼容 D/E 科学计数法）
+      const parseKeyValueResult = (content: string): Record<string, number> => {
+        const lines = content.replace(/\r\n/g, '\n').split('\n').map(l => l.trim()).filter(Boolean)
+        const result: Record<string, number> = {}
+        // 匹配 key = value 形式，value 支持整数/小数/科学计数法(E/D)
+        const kvRegex = /([^\s=]+)\s*=\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[ed][+-]?\d+)?)/gi
+        for (const line of lines) {
+          const matches = line.matchAll(kvRegex)
+          for (const m of matches) {
+            const key = m[1]?.trim()
+            const numericRaw = m[2]?.replace(/d/i, 'E')
+            const val = Number.parseFloat(numericRaw || '')
+            if (key && Number.isFinite(val)) {
+              result[key] = val
+            }
+          }
+        }
+        return result
+      }
+
+      for (let i = 0; i < resultFiles.length; i++) {
+        const { filePath, dirName } = resultFiles[i]
         const fileName = filePath.split(/[/\\]/).pop() || ''
 
         try {
-          // 读取 Sep_power.dat 文件
-          const sepPowerContent = await fsReadFile(filePath, 'utf-8')
-          const sepPowerData = parseSepPower(sepPowerContent)
+          // 读取结果文件
+          const resultContent = await fsReadFile(filePath, 'utf-8')
+
+          // 根据“实际结果文件名”选择解析器：包含 sep_power 用原有解析，否则使用通用解析
+          const isSepPowerFormat = fileName.toLowerCase().includes('sep_power')
+          const sepPowerData = isSepPowerFormat ? parseSepPower(resultContent) : null
+          const genericResult = isSepPowerFormat ? {} : parseKeyValueResult(resultContent)
 
           const sepPowerDir = dirname(filePath)
-          const inputDatPath = join(sepPowerDir, 'input.dat')
+          // 选择实际存在的输入文件（支持多产品场景）
+          const inputCandidateNames = [
+            (inputFileName || '').toLowerCase(),
+            'input.dat',
+            'input2.txt',
+            'input_p.txt',
+          ].filter(Boolean)
+          let foundInputPath: string | null = null
+          for (const name of inputCandidateNames) {
+            const p = join(sepPowerDir, name)
+            if (fs.existsSync(p)) {
+              foundInputPath = p
+              break
+            }
+          }
+          const inputPath = foundInputPath ?? join(sepPowerDir, inputFileName)
 
-          // 从 input.dat 读取所有参数，默认值为 0
+          // 从输入文件读取参数
           const inputParams: Record<string, number> = {
             radialGridCount: 0,
             axialGridCount: 0,
@@ -405,90 +457,236 @@ export class FileManager {
             streamlineData: 0,
           }
 
+          // 仅 powerAnalysis: 解析 input2.txt 的 key=value，并映射到前端使用的字段名
+          const paParams: Record<string, number> = {
+            // 顶层参数
+            angularVelocity: 0,
+            rotorRadius: 0,
+            // 流体参数
+            averageTemperature: 0,
+            enrichedBaffleTemperature: 0,
+            feedFlowRate: 0,
+            rotorSidewallPressure: 0,
+            // 分离部件
+            depletedExtractionPortInnerDiameter: 0,
+            depletedExtractionPortOuterDiameter: 0,
+            depletedExtractionRootOuterDiameter: 0,
+            extractorAngleOfAttack: 0,
+            extractionChamberHeight: 0,
+            depletedExtractionCenterDistance: 0,
+            enrichedExtractionCenterDistance: 0,
+            constantSectionStraightPipeLength: 0,
+            extractorCuttingAngle: 0,
+            enrichedBaffleHoleDiameter: 0,
+            variableSectionStraightPipeLength: 0,
+            bendRadiusOfCurvature: 0,
+            extractorSurfaceRoughness: 0,
+            extractorTaperAngle: 0,
+            enrichedBaffleHoleDistributionCircleDiameter: 0,
+          }
+
           try {
-            if (fs.existsSync(inputDatPath)) {
-              const inputContent = await fsReadFile(inputDatPath, 'utf-8')
-              const inputLines = inputContent
-                .trim()
-                .split('\n')
-                .map(l => l.trim())
-                .filter(Boolean)
+            if (fs.existsSync(inputPath)) {
+              const inputContent = await fsReadFile(inputPath, 'utf-8')
+              const lines = inputContent.trim().split('\n').map(l => l.trim()).filter(Boolean)
 
-              // 第 1 行（索引 0）：径向与轴向网格数
-              if (inputLines[0]) {
-                const line1Values = inputLines[0]
-                  .replace(/!.*/, '')
-                  .split(',')
-                  .map(v => Number.parseFloat(v.trim()))
-                  .filter(v => !Number.isNaN(v))
-                if (line1Values.length >= 2) {
-                  inputParams.radialGridCount = line1Values[0]
-                  inputParams.axialGridCount = line1Values[1]
+              // 根据 实际找到的 input 文件名 选择解析方式
+              const actualInputName = (inputPath.split(/[/\\]/).pop() || '').toLowerCase()
+              if (actualInputName === 'input2.txt') {
+                // key=value 解析
+                const kv: Record<string, string> = {}
+                for (const line of lines) {
+                  const eqIdx = line.indexOf('=')
+                  if (eqIdx >= 0) {
+                    const k = line.slice(0, eqIdx).trim()
+                    const v = line.slice(eqIdx + 1).trim()
+                    if (k && v !== '')
+                      kv[k] = v
+                  }
+                }
+                // 映射为 powerAnalysis 前端字段
+                const toNum = (s: string | undefined): number => {
+                  if (!s)
+                    return 0
+                  const n = Number.parseFloat(s)
+                  return Number.isFinite(n) ? n : 0
+                }
+                paParams.angularVelocity = toNum(kv.DegSpeed)
+                paParams.rotorRadius = toNum(kv.RotorRadius)
+                paParams.averageTemperature = toNum(kv.Temperature)
+                paParams.enrichedBaffleTemperature = toNum(kv.RichBaffleTemp)
+                paParams.rotorSidewallPressure = toNum(kv.RotorPressure)
+                paParams.feedFlowRate = toNum(kv.PowerFlow)
+                paParams.depletedExtractionPortInnerDiameter = toNum(kv.PoorTackInnerRadius)
+                paParams.depletedExtractionPortOuterDiameter = toNum(kv.PoorTackOuterRadius)
+                paParams.depletedExtractionRootOuterDiameter = toNum(kv.PoorTackRootOuterRadius)
+                paParams.depletedExtractionCenterDistance = toNum(kv.PoorTackDistance)
+                paParams.enrichedExtractionCenterDistance = toNum(kv.RichTackDistance)
+                paParams.constantSectionStraightPipeLength = toNum(kv.EvenSectionPipeLength)
+                paParams.variableSectionStraightPipeLength = toNum(kv.ChangeSectionPipeLength)
+                paParams.bendRadiusOfCurvature = toNum(kv.PipeRadius)
+                paParams.extractorSurfaceRoughness = toNum(kv.TackSurfaceRoughness)
+                paParams.extractorAngleOfAttack = toNum(kv.TackAttkAngle)
+                paParams.extractorCuttingAngle = toNum(kv.TackChamferAngle)
+                paParams.extractorTaperAngle = toNum(kv.TackTaperAngle)
+                // 业务未给出明确映射，暂用取料腔高度
+                paParams.extractionChamberHeight = toNum(kv.TackHeight)
+                paParams.enrichedBaffleHoleDiameter = toNum(kv.RichBaffleHoleDiam)
+                paParams.enrichedBaffleHoleDistributionCircleDiameter = toNum(kv.RichBaffleArrayHoleDiam)
+
+                // 若本方案目录 input2.txt 为空（全部解析为 0），回退到工作根目录的 input2.txt
+                const allZeroPA = Object.values(paParams).every(v => v === 0)
+                if (allZeroPA) {
+                  const rootInputPath = join(targetDir, actualInputName)
+                  if (fs.existsSync(rootInputPath)) {
+                    try {
+                      const rootContent = await fsReadFile(rootInputPath, 'utf-8')
+                      const rootLines = rootContent.trim().split('\n').map(l => l.trim()).filter(Boolean)
+                      const rootKv: Record<string, string> = {}
+                      for (const line of rootLines) {
+                        const eqIdx2 = line.indexOf('=')
+                        if (eqIdx2 >= 0) {
+                          const k2 = line.slice(0, eqIdx2).trim()
+                          const v2 = line.slice(eqIdx2 + 1).trim()
+                          if (k2 && v2 !== '')
+                            rootKv[k2] = v2
+                        }
+                      }
+                      paParams.angularVelocity = toNum(rootKv.DegSpeed)
+                      paParams.rotorRadius = toNum(rootKv.RotorRadius)
+                      paParams.averageTemperature = toNum(rootKv.Temperature)
+                      paParams.enrichedBaffleTemperature = toNum(rootKv.RichBaffleTemp)
+                      paParams.rotorSidewallPressure = toNum(rootKv.RotorPressure)
+                      paParams.feedFlowRate = toNum(rootKv.PowerFlow)
+                      paParams.depletedExtractionPortInnerDiameter = toNum(rootKv.PoorTackInnerRadius)
+                      paParams.depletedExtractionPortOuterDiameter = toNum(rootKv.PoorTackOuterRadius)
+                      paParams.depletedExtractionRootOuterDiameter = toNum(rootKv.PoorTackRootOuterRadius)
+                      paParams.depletedExtractionCenterDistance = toNum(rootKv.PoorTackDistance)
+                      paParams.enrichedExtractionCenterDistance = toNum(rootKv.RichTackDistance)
+                      paParams.constantSectionStraightPipeLength = toNum(rootKv.EvenSectionPipeLength)
+                      paParams.variableSectionStraightPipeLength = toNum(rootKv.ChangeSectionPipeLength)
+                      paParams.bendRadiusOfCurvature = toNum(rootKv.PipeRadius)
+                      paParams.extractorSurfaceRoughness = toNum(rootKv.TackSurfaceRoughness)
+                      paParams.extractorAngleOfAttack = toNum(rootKv.TackAttkAngle)
+                      paParams.extractorCuttingAngle = toNum(rootKv.TackChamferAngle)
+                      paParams.extractorTaperAngle = toNum(rootKv.TackTaperAngle)
+                      paParams.extractionChamberHeight = toNum(rootKv.TackHeight)
+                      paParams.enrichedBaffleHoleDiameter = toNum(rootKv.RichBaffleHoleDiam)
+                      paParams.enrichedBaffleHoleDistributionCircleDiameter = toNum(rootKv.RichBaffleArrayHoleDiam)
+                    }
+                    catch {
+                      // 忽略回退失败
+                    }
+                  }
                 }
               }
-
-              // 第 2 行（索引 1）：角速度、半径、两肩长、取料腔高度、侧壁压力、扩散系数
-              if (inputLines[1]) {
-                const line2Values = inputLines[1]
-                  .replace(/!.*/, '')
-                  .split(',')
-                  .map(v => Number.parseFloat(v.trim()))
-                  .filter(v => !Number.isNaN(v))
-                if (line2Values.length >= 6) {
-                  inputParams.angularVelocity = line2Values[0]
-                  inputParams.rotorRadius = line2Values[1]
-                  inputParams.rotorShoulderLength = line2Values[2]
-                  inputParams.extractionChamberHeight = line2Values[3]
-                  inputParams.rotorSidewallPressure = line2Values[4]
-                  inputParams.gasDiffusionCoefficient = line2Values[5]
+              else if (actualInputName === 'input_p.txt') {
+                // powerAnalysis 的 input_p.txt 行式解析（数值 + 注释）
+                const valAt = (lineIdx: number): number => {
+                  const raw = lines[lineIdx - 1] || ''
+                  const num = Number.parseFloat(raw.replace(/!.*/, '').trim())
+                  return Number.isFinite(num) ? num : 0
                 }
+                paParams.rotorRadius = valAt(1)
+                paParams.angularVelocity = valAt(2)
+                paParams.averageTemperature = valAt(3)
+                paParams.enrichedBaffleTemperature = valAt(4)
+                paParams.rotorSidewallPressure = valAt(5)
+                paParams.feedFlowRate = valAt(6)
+                paParams.depletedExtractionPortInnerDiameter = valAt(8)
+                paParams.depletedExtractionPortOuterDiameter = valAt(9)
+                paParams.depletedExtractionRootOuterDiameter = valAt(10)
+                paParams.depletedExtractionCenterDistance = valAt(11)
+                paParams.enrichedExtractionCenterDistance = valAt(12)
+                paParams.constantSectionStraightPipeLength = valAt(13)
+                paParams.variableSectionStraightPipeLength = valAt(14)
+                paParams.bendRadiusOfCurvature = valAt(15)
+                paParams.extractorSurfaceRoughness = valAt(16)
+                paParams.extractorAngleOfAttack = valAt(17)
+                paParams.extractorCuttingAngle = valAt(18)
+                paParams.extractorTaperAngle = valAt(19)
+                // 第20行为取料腔高度的一半
+                paParams.extractionChamberHeight = valAt(20) * 2
+                paParams.enrichedBaffleHoleDiameter = valAt(21)
+                paParams.enrichedBaffleHoleDistributionCircleDiameter = valAt(24)
               }
-
-              // 第 3-29 行（索引 2-28）：其他参数
-              const paramKeys = [
-                'depletedEndCapTemperature',
-                'enrichedEndCapTemperature',
-                'depletedMechanicalDriveAmount',
-                'depletedExtractionArmRadius',
-                'innerBoundaryMirrorPosition',
-                'gridGenerationMethod',
-                'enrichedBaffleHoleDistributionCircleDiameter',
-                'enrichedBaffleHoleDiameter',
-                'depletedExtractionPortInnerDiameter',
-                'depletedExtractionPortOuterDiameter',
-                'minAxialDistance',
-                'feedBoxShockDiskHeight',
-                'feedFlowRate',
-                'splitRatio',
-                'feedAngularDisturbance',
-                'feedAxialDisturbance',
-                'depletedBaffleInnerHoleOuterDiameter',
-                'depletedBaffleOuterHoleInnerDiameter',
-                'depletedBaffleOuterHoleOuterDiameter',
-                'depletedBaffleAxialPosition',
-                'bwgRadialProtrusionHeight',
-                'bwgAxialHeight',
-                'bwgAxialPosition',
-                'radialGridRatio',
-                'feedingMethod',
-                'compensationCoefficient',
-                'streamlineData',
-              ]
-
-              for (let i = 0; i < paramKeys.length; i++) {
-                const lineIndex = i + 2 // 从第3行开始（索引2）
-                if (inputLines[lineIndex]) {
-                  const raw = inputLines[lineIndex].replace(/!.*/, '').trim()
-                  const val = Number.parseFloat(raw)
-                  if (!Number.isNaN(val)) {
-                    inputParams[paramKeys[i]] = val
+              else {
+                // mPhysSim 的 input.dat 行式解析
+                const inputLines = lines
+                // 第 1 行（索引 0）：径向与轴向网格数
+                if (inputLines[0]) {
+                  const line1Values = inputLines[0]
+                    .replace(/!.*/, '')
+                    .split(',')
+                    .map(v => Number.parseFloat(v.trim()))
+                    .filter(v => !Number.isNaN(v))
+                  if (line1Values.length >= 2) {
+                    inputParams.radialGridCount = line1Values[0]
+                    inputParams.axialGridCount = line1Values[1]
+                  }
+                }
+                // 第 2 行（索引 1）
+                if (inputLines[1]) {
+                  const line2Values = inputLines[1]
+                    .replace(/!.*/, '')
+                    .split(',')
+                    .map(v => Number.parseFloat(v.trim()))
+                    .filter(v => !Number.isNaN(v))
+                  if (line2Values.length >= 6) {
+                    inputParams.angularVelocity = line2Values[0]
+                    inputParams.rotorRadius = line2Values[1]
+                    inputParams.rotorShoulderLength = line2Values[2]
+                    inputParams.extractionChamberHeight = line2Values[3]
+                    inputParams.rotorSidewallPressure = line2Values[4]
+                    inputParams.gasDiffusionCoefficient = line2Values[5]
+                  }
+                }
+                // 第 3-29 行（索引 2-28）
+                const paramKeys = [
+                  'depletedEndCapTemperature',
+                  'enrichedEndCapTemperature',
+                  'depletedMechanicalDriveAmount',
+                  'depletedExtractionArmRadius',
+                  'innerBoundaryMirrorPosition',
+                  'gridGenerationMethod',
+                  'enrichedBaffleHoleDistributionCircleDiameter',
+                  'enrichedBaffleHoleDiameter',
+                  'depletedExtractionPortInnerDiameter',
+                  'depletedExtractionPortOuterDiameter',
+                  'minAxialDistance',
+                  'feedBoxShockDiskHeight',
+                  'feedFlowRate',
+                  'splitRatio',
+                  'feedAngularDisturbance',
+                  'feedAxialDisturbance',
+                  'depletedBaffleInnerHoleOuterDiameter',
+                  'depletedBaffleOuterHoleInnerDiameter',
+                  'depletedBaffleOuterHoleOuterDiameter',
+                  'depletedBaffleAxialPosition',
+                  'bwgRadialProtrusionHeight',
+                  'bwgAxialHeight',
+                  'bwgAxialPosition',
+                  'radialGridRatio',
+                  'feedingMethod',
+                  'compensationCoefficient',
+                  'streamlineData',
+                ]
+                for (let i = 0; i < paramKeys.length; i++) {
+                  const lineIndex = i + 2
+                  if (inputLines[lineIndex]) {
+                    const raw = inputLines[lineIndex].replace(/!.*/, '').trim()
+                    const val = Number.parseFloat(raw)
+                    if (!Number.isNaN(val)) {
+                      inputParams[paramKeys[i]] = val
+                    }
                   }
                 }
               }
             }
           }
           catch (error) {
-            console.warn(`读取 input.dat 失败 (${inputDatPath}):`, error)
+            console.warn(`读取 input.dat 失败 (${inputPath}):`, error)
+            // 忽略输入文件读取错误，保留默认参数
           }
 
           // 从目录名提取序号（如 scheme_1 -> 1 或 out_000001 -> 1）
@@ -508,7 +706,8 @@ export class FileManager {
             }
           }
 
-          schemes.push({
+          // 基础方案对象
+          const schemeBase: any = {
             index: schemeIndex,
             fileName: dirName || fileName,
             radialGridCount: inputParams.radialGridCount,
@@ -546,9 +745,42 @@ export class FileManager {
             feedingMethod: inputParams.feedingMethod,
             compensationCoefficient: inputParams.compensationCoefficient,
             streamlineData: inputParams.streamlineData,
-            sepPower: sepPowerData.actualSepPower,
-            sepFactor: sepPowerData.actualSepFactor,
-          })
+          }
+
+          // 若为 powerAnalysis，附加其表单字段，供多方案界面按字段显示
+          if (['input2.txt', 'input_p.txt'].includes(inputFileName.toLowerCase())) {
+            Object.assign(schemeBase, paParams)
+          }
+
+          // 结果字段：按产品配置 mapping 注入动态字段
+          const resultFields = productConfig.resultFields || []
+          for (const rf of resultFields) {
+            if (!rf.field)
+              continue
+            if (isSepPowerFormat) {
+              // 兼容旧 mPhysSim：保持 sepPower/sepFactor，同时也可按 fileKey 注入
+              // 映射 fileKey -> 值（若能从 parseSepPower 推断）
+              const map: Record<string, number | null> = {
+                'ACTURAL SEPERATIVE POWER': sepPowerData?.actualSepPower ?? null,
+                'ACTURAL SEPERATIVE FACTOR': sepPowerData?.actualSepFactor ?? null,
+                'ACTUAL SEPERATIVE POWER': sepPowerData?.actualSepPower ?? null,
+                'ACTUAL SEPERATIVE FACTOR': sepPowerData?.actualSepFactor ?? null,
+              }
+              const val = rf.fileKey ? (map[rf.fileKey] ?? null) : null
+              schemeBase[rf.field] = val
+            }
+            else {
+              // 通用：从通用解析结果中以 fileKey 取值
+              const key = rf.fileKey
+              schemeBase[rf.field] = key ? (genericResult[key] ?? null) : null
+            }
+          }
+
+          // 向后兼容字段（前端老类型）：仅当有 sep_power 格式时赋值
+          schemeBase.sepPower = sepPowerData?.actualSepPower ?? null
+          schemeBase.sepFactor = sepPowerData?.actualSepFactor ?? null
+
+          schemes.push(schemeBase)
         }
         catch (error) {
           console.error(`读取文件失败 (${fileName}):`, error)
@@ -561,22 +793,24 @@ export class FileManager {
       let optimalScheme: typeof schemes[0] | null = null
 
       if (schemes.length > 0) {
-        const validPowers = schemes.filter(s => s.sepPower !== null && s.sepPower !== undefined)
+        // 选择用于“最优方案”比较的字段：优先第一个结果字段，否则回退 sepPower
+        const productConfig = getProductConfig()
+        const firstResultField = productConfig.resultFields?.[0]?.field || 'sepPower'
+        const validPowers = schemes.filter((s: any) => s[firstResultField] !== null && s[firstResultField] !== undefined)
         if (validPowers.length > 0) {
-          // 找到最大分离功率的方案
-          let maxSepPower = -Infinity
+          // 找到最大值的方案
+          let maxVal = -Infinity
           for (const scheme of validPowers) {
-            const power = scheme.sepPower!
-            // 严格比较：只有分离功率更大时才更新最优方案
-            // 如果分离功率相同，选择序号更小的
-            if (power > maxSepPower || (power === maxSepPower && (optimalScheme === null || scheme.index < optimalScheme.index))) {
-              maxSepPower = power
+            const power = (scheme as any)[firstResultField] as number
+            // 严格比较：只有值更大时才更新最优方案；相等时取序号更小者
+            if (power > maxVal || (power === maxVal && (optimalScheme === null || scheme.index < optimalScheme.index))) {
+              maxVal = power
               optimalScheme = scheme
             }
           }
           if (optimalScheme) {
             optimalOriginalIndex = optimalScheme.index
-            console.log(`[FileManager] 找到最优方案: 原始序号=${optimalOriginalIndex + 1}, sepPower=${optimalScheme.sepPower}`)
+            console.log(`[FileManager] 找到最优方案: 原始序号=${optimalOriginalIndex + 1}, metric=${(optimalScheme as any)[productConfig.resultFields?.[0]?.field || 'sepPower']}`)
           }
         }
       }

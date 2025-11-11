@@ -85,8 +85,8 @@ const correctionSelectedData = computed(() => {
 })
 
 // 判断是否为最优方案行（index === -1 表示最优方案，需要高亮）
-function isOptimalSchemeRow(record: SchemeData): boolean {
-  return record.index === -1
+function isOptimalSchemeRow(record: any): boolean {
+  return record && record.index === -1
 }
 
 // 定义所有字段的配置
@@ -228,16 +228,17 @@ const columns = computed(() => {
       title: '序号',
       dataIndex: 'index',
       key: 'index',
-      width: 80,
+      width: 50,
       align: 'center' as const,
     },
   ]
 
   // 仅显示方案优化中选中的设计因子对应的列
   const activeFieldConfigs = fieldConfigs.filter(cfg => selectedDesignFactorKeys.value.includes(cfg.key))
+
   // 深拷贝避免修改原始数据和被引用
   const fieldColumns = cloneDeep(activeFieldConfigs).map(config => ({
-    title: config.label,
+    title: config.unit ? `${config.label}(${config.unit})` : config.label,
     dataIndex: config.key,
     key: config.key,
     width: config.width,
@@ -246,24 +247,26 @@ const columns = computed(() => {
     onFilter: uniqueValueFilter(config.key),
   }))
 
+  // const resultFields = app.productConfig.resultFields
+
   const resultColumns = [
     {
-      title: '分离功率',
-      dataIndex: 'sepPower',
-      key: 'sepPower',
+      title: app.productConfig.resultFields?.[0]?.label,
+      dataIndex: app.productConfig.resultFields?.[0]?.field,
+      key: app.productConfig.resultFields?.[0]?.field,
       width: 120,
       align: 'right' as const,
-      filterDropdown: createUniqueValueFilterPanel('sepPower'),
-      onFilter: uniqueValueFilter('sepPower'),
+      filterDropdown: createUniqueValueFilterPanel(app.productConfig.resultFields?.[0]?.field ?? ''),
+      onFilter: uniqueValueFilter(app.productConfig.resultFields?.[0]?.field ?? ''),
     },
     {
-      title: '分离系数',
-      dataIndex: 'sepFactor',
-      key: 'sepFactor',
+      title: app.productConfig.resultFields?.[1]?.label,
+      dataIndex: app.productConfig.resultFields?.[1]?.field,
+      key: app.productConfig.resultFields?.[1]?.field,
       width: 120,
       align: 'right' as const,
-      filterDropdown: createUniqueValueFilterPanel('sepFactor'),
-      onFilter: uniqueValueFilter('sepFactor'),
+      filterDropdown: createUniqueValueFilterPanel(app.productConfig.resultFields?.[1]?.field ?? ''),
+      onFilter: uniqueValueFilter(app.productConfig.resultFields?.[1]?.field ?? ''),
     },
   ]
 
@@ -280,24 +283,31 @@ const xColumns = computed(() => {
   }))
 })
 
-// Y 轴列定义（结果指标）- 分离功率和分离系数
-const yColumns = [
-  {
-    title: '分离功率',
-    dataIndex: 'sepPower',
-    key: 'sepPower',
-  },
-  {
-    title: '分离系数',
-    dataIndex: 'sepFactor',
-    key: 'sepFactor',
-  },
-]
+// 结果字段（用于表格和图表 Y 轴）
+const resultFields = computed(() => app.productConfig.resultFields ?? [])
+
+// Y 轴列定义（结果指标）- 基于产品配置
+const yColumns = computed(() => {
+  if (resultFields.value.length > 0) {
+    return resultFields.value.map(f => ({
+      title: f.label,
+      dataIndex: f.field,
+      key: f.field,
+    }))
+  }
+  // 回退到默认（兼容旧数据）
+  return [
+    { title: '分离功率', dataIndex: 'sepPower', key: 'sepPower' },
+    { title: '分离系数', dataIndex: 'sepFactor', key: 'sepFactor' },
+  ]
+})
+
+// 辅助：首个结果字段 key（用于高亮最优行）
+const firstResultFieldKey = computed(() => resultFields.value[0]?.field ?? 'sepPower')
 
 // 保持数据原有顺序（最优方案保持在原位置）
 function maintainOriginalOrder(data: SchemeData[]): SchemeData[] {
   // 按 index 排序，但 -1（最优方案）保持在其原始位置
-  // 由于后端已经保持了顺序，这里直接返回即可
   return data
 }
 
@@ -342,7 +352,7 @@ const handleTableChange: TableProps['onChange'] = (_pagination, filters) => {
   Object.keys(filters).forEach((key) => {
     const filterValues = filters[key]
     if (Array.isArray(filterValues) && filterValues.length > 0) {
-      data = data.filter((record) => {
+      data = data.filter((record: SchemeData) => {
         const value = record[key as keyof SchemeData]
         return filterValues.includes(value as any)
       })
@@ -364,22 +374,13 @@ const handleTableChange: TableProps['onChange'] = (_pagination, filters) => {
 }
 
 /**
- * 格式化数值显示
- */
-function formatNumber(value: number | null | undefined, decimals = 2): string {
-  if (value === null || value === undefined)
-    return '-'
-  return value.toFixed(decimals)
-}
-
-/**
  * 判断是否为最优方案行（第一行，序号为 '*'）
  */
-function isMaxSepPowerRow(record: SchemeData): boolean {
+function isMaxSepPowerRow(record: any): boolean {
   return isOptimalSchemeRow(record)
 }
 
-function handleTabChange(key: string): void {
+function handleTabChange(key: any): void {
   activeKey.value = key
   // 切换标签页时清空选择
   selectedRowKeys.value = []
@@ -399,7 +400,7 @@ const rowSelection = computed(() => {
     return undefined
   }
   return {
-    type: 'radio',
+    type: 'radio' as const,
     selectedRowKeys: selectedRowKeys.value,
     onChange: handleRowSelectionChange,
   }
@@ -408,67 +409,67 @@ const rowSelection = computed(() => {
 /**
  * 提交方案
  */
-async function handleSubmitScheme() {
-  if (!correctionSelectedData.value) {
-    message.warning('请先选择一个方案')
-    return
-  }
+// async function handleSubmitScheme() {
+//   if (!correctionSelectedData.value) {
+//     message.warning('请先选择一个方案')
+//     return
+//   }
 
-  try {
-    const scheme = correctionSelectedData.value
+//   try {
+//     const scheme = correctionSelectedData.value
 
-    // 构建设计表单数据
-    const designForm = {
-      angularVelocity: scheme.angularVelocity,
-      rotorRadius: scheme.rotorRadius,
-      rotorShoulderLength: scheme.rotorShoulderLength,
-      rotorSidewallPressure: scheme.rotorSidewallPressure,
-      gasDiffusionCoefficient: scheme.gasDiffusionCoefficient,
-      feedFlowRate: scheme.feedFlowRate,
-      splitRatio: scheme.splitRatio,
-      feedingMethod: scheme.feedingMethod,
-      depletedEndCapTemperature: scheme.depletedEndCapTemperature,
-      enrichedEndCapTemperature: scheme.enrichedEndCapTemperature,
-      feedAxialDisturbance: scheme.feedAxialDisturbance,
-      feedAngularDisturbance: scheme.feedAngularDisturbance,
-      depletedMechanicalDriveAmount: scheme.depletedMechanicalDriveAmount,
-      extractionChamberHeight: scheme.extractionChamberHeight,
-      enrichedBaffleHoleDiameter: scheme.enrichedBaffleHoleDiameter,
-      feedBoxShockDiskHeight: scheme.feedBoxShockDiskHeight,
-      depletedExtractionArmRadius: scheme.depletedExtractionArmRadius,
-      depletedExtractionPortInnerDiameter: scheme.depletedExtractionPortInnerDiameter,
-      depletedBaffleInnerHoleOuterDiameter: scheme.depletedBaffleInnerHoleOuterDiameter,
-      enrichedBaffleHoleDistributionCircleDiameter: scheme.enrichedBaffleHoleDistributionCircleDiameter,
-      depletedExtractionPortOuterDiameter: scheme.depletedExtractionPortOuterDiameter,
-      depletedBaffleOuterHoleInnerDiameter: scheme.depletedBaffleOuterHoleInnerDiameter,
-      minAxialDistance: scheme.minAxialDistance,
-      depletedBaffleAxialPosition: scheme.depletedBaffleAxialPosition,
-      depletedBaffleOuterHoleOuterDiameter: scheme.depletedBaffleOuterHoleOuterDiameter,
-      innerBoundaryMirrorPosition: scheme.innerBoundaryMirrorPosition,
-      gridGenerationMethod: scheme.gridGenerationMethod,
-      bwgRadialProtrusionHeight: scheme.bwgRadialProtrusionHeight,
-      bwgAxialHeight: scheme.bwgAxialHeight,
-      bwgAxialPosition: scheme.bwgAxialPosition,
-      radialGridRatio: scheme.radialGridRatio,
-      compensationCoefficient: scheme.compensationCoefficient,
-      streamlineData: scheme.streamlineData,
-      separationPower: scheme.sepPower,
-      separationFactor: scheme.sepFactor,
-    }
+//     // 构建设计表单数据
+//     const designForm = {
+//       angularVelocity: scheme.angularVelocity,
+//       rotorRadius: scheme.rotorRadius,
+//       rotorShoulderLength: scheme.rotorShoulderLength,
+//       rotorSidewallPressure: scheme.rotorSidewallPressure,
+//       gasDiffusionCoefficient: scheme.gasDiffusionCoefficient,
+//       feedFlowRate: scheme.feedFlowRate,
+//       splitRatio: scheme.splitRatio,
+//       feedingMethod: scheme.feedingMethod,
+//       depletedEndCapTemperature: scheme.depletedEndCapTemperature,
+//       enrichedEndCapTemperature: scheme.enrichedEndCapTemperature,
+//       feedAxialDisturbance: scheme.feedAxialDisturbance,
+//       feedAngularDisturbance: scheme.feedAngularDisturbance,
+//       depletedMechanicalDriveAmount: scheme.depletedMechanicalDriveAmount,
+//       extractionChamberHeight: scheme.extractionChamberHeight,
+//       enrichedBaffleHoleDiameter: scheme.enrichedBaffleHoleDiameter,
+//       feedBoxShockDiskHeight: scheme.feedBoxShockDiskHeight,
+//       depletedExtractionArmRadius: scheme.depletedExtractionArmRadius,
+//       depletedExtractionPortInnerDiameter: scheme.depletedExtractionPortInnerDiameter,
+//       depletedBaffleInnerHoleOuterDiameter: scheme.depletedBaffleInnerHoleOuterDiameter,
+//       enrichedBaffleHoleDistributionCircleDiameter: scheme.enrichedBaffleHoleDistributionCircleDiameter,
+//       depletedExtractionPortOuterDiameter: scheme.depletedExtractionPortOuterDiameter,
+//       depletedBaffleOuterHoleInnerDiameter: scheme.depletedBaffleOuterHoleInnerDiameter,
+//       minAxialDistance: scheme.minAxialDistance,
+//       depletedBaffleAxialPosition: scheme.depletedBaffleAxialPosition,
+//       depletedBaffleOuterHoleOuterDiameter: scheme.depletedBaffleOuterHoleOuterDiameter,
+//       innerBoundaryMirrorPosition: scheme.innerBoundaryMirrorPosition,
+//       gridGenerationMethod: scheme.gridGenerationMethod,
+//       bwgRadialProtrusionHeight: scheme.bwgRadialProtrusionHeight,
+//       bwgAxialHeight: scheme.bwgAxialHeight,
+//       bwgAxialPosition: scheme.bwgAxialPosition,
+//       radialGridRatio: scheme.radialGridRatio,
+//       compensationCoefficient: scheme.compensationCoefficient,
+//       streamlineData: scheme.streamlineData,
+//       separationPower: scheme.sepPower,
+//       separationFactor: scheme.sepFactor,
+//     }
 
-    const res = await app.file.writeDatFile('input.dat', designForm)
-    if (res?.code === 0) {
-      message.success('提交方案成功，已生成输入文件')
-    }
-    else {
-      message.error(res?.message ?? '生成输入文件失败')
-    }
-  }
-  catch (error) {
-    console.error('提交方案失败:', error)
-    message.error(`提交方案失败: ${error instanceof Error ? error.message : String(error)}`)
-  }
-}
+//     const res = await app.file.writeDatFile('input.dat', designForm)
+//     if (res?.code === 0) {
+//       message.success('提交方案成功，已生成输入文件')
+//     }
+//     else {
+//       message.error(res?.message ?? '生成输入文件失败')
+//     }
+//   }
+//   catch (error) {
+//     console.error('提交方案失败:', error)
+//     message.error(`提交方案失败: ${error instanceof Error ? error.message : String(error)}`)
+//   }
+// }
 
 onMounted(() => {
   loadSchemes()
@@ -495,21 +496,18 @@ onMounted(() => {
             {{ record.index === -1 ? '*' : record.index + 1 }}
           </template>
           <template v-else-if="column.key === 'fileName'">
-            {{ record.fileName }}{{ fieldConfigs }}
+            {{ record.fileName }}
           </template>
-          <template v-else-if="column.key === 'sepPower'">
-            <span :class="{ 'max-power': isOptimalSchemeRow(record) }">
-              {{ formatNumber(record.sepPower) }}
+          <!-- 动态结果字段渲染，首个结果字段在最优行时高亮 -->
+          <template v-else-if="app.productConfig.resultFields?.some(f => f.field === column.key)">
+            <span :class="{ 'max-power': isOptimalSchemeRow(record) && column.key === firstResultFieldKey }">
+              {{ record[column.key as keyof SchemeData] as number }}
             </span>
-          </template>
-          <template v-else-if="column.key === 'sepFactor'">
-            {{ formatNumber(record.sepFactor, 4) }}
           </template>
           <template v-else>
             <template v-for="config in fieldConfigs" :key="config.key">
               <template v-if="column.key === config.key">
-                {{ formatNumber(record[config.key as keyof SchemeData] as number) }}
-                <span v-if="config.unit" class="unit">{{ config.unit }}</span>
+                {{ record[config.key as keyof SchemeData] as number }}
               </template>
             </template>
           </template>
@@ -536,13 +534,13 @@ onMounted(() => {
     </a-tabs>
 
     <!-- 底部提交方案按钮 -->
-    <div v-if="activeKey === '2'" class="bottom-actions">
+    <!-- <div v-if="activeKey === '2'" class="bottom-actions">
       <div class="action-row">
         <a-button type="primary" size="large" @click="handleSubmitScheme">
           提交方案
         </a-button>
       </div>
-    </div>
+    </div> -->
   </div>
 </template>
 
@@ -552,12 +550,6 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 5px;
-}
-
-.unit {
-  margin-left: 4px;
-  color: #999;
-  font-size: 12px;
 }
 
 .action-row {

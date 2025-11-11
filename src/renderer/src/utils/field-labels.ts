@@ -219,26 +219,18 @@ export const FIELD_LABELS: Record<string, FieldLabelMap> = {
     'zh-CN': '取料器总功耗',
     'en-US': 'TOTAL_EXTRACTOR_POWER_CONSUMPTION',
   },
+  poorTackPower: {
+    'zh-CN': '贫取料器功耗',
+    'en-US': 'POOR_TACK_POWER',
+  },
+  tackPower: {
+    'zh-CN': '取料器总功耗',
+    'en-US': 'TACK_POWER',
+  },
   fluidParams: {
     'zh-CN': '流体参数',
     'en-US': 'FLUID_PARAMS',
   },
-}
-
-/**
- * 供料方式选项
- */
-export const FEEDING_METHOD_OPTIONS: Record<FieldLabelMode, Array<{ label: string, value: string }>> = {
-  'zh-CN': [
-    { label: '点供料', value: '点供料' },
-    { label: '线供料', value: '线供料' },
-    { label: '面供料', value: '面供料' },
-  ],
-  'en-US': [
-    { label: 'POINT_FEEDING', value: '点供料' },
-    { label: 'LINE_FEEDING', value: '线供料' },
-    { label: 'SURFACE_FEEDING', value: '面供料' },
-  ],
 }
 
 /**
@@ -253,13 +245,4 @@ export function getFieldLabel(fieldKey: string, mode: FieldLabelMode = 'zh-CN'):
     return fieldKey
   }
   return labelMap[mode]
-}
-
-/**
- * 获取供料方式选项
- * @param mode 显示模式
- * @returns 供料方式选项列表
- */
-export function getFeedingMethodOptions(mode: FieldLabelMode = 'zh-CN'): Array<{ label: string, value: string }> {
-  return FEEDING_METHOD_OPTIONS[mode]
 }

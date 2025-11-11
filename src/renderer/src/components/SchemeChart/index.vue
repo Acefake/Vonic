@@ -44,12 +44,10 @@ const props = withDefaults(defineProps<Props>(), {
   title: '方案对比',
 })
 
-// 持久化存储键
 const STORAGE_CURVE_COLOR_KEY = 'scheme-chart:curve-color'
 const STORAGE_TITLE_COLOR_KEY = 'scheme-chart:title-color'
 const STORAGE_CHART_FONT_KEY = 'scheme-chart:font'
 
-// 注册 ECharts 组件
 use([
   CanvasRenderer,
   LineChart,
@@ -62,10 +60,15 @@ use([
   TooltipComponent,
 ])
 
+// 图表类型常量
+const CHART_TYPE_SCATTER = '散点图'
+const CHART_TYPE_RADAR = '雷达图'
+const CHART_TYPE_LINE = '曲线图'
+
 // 曲线类型选项
-type ChartType = '散点图' | '雷达图' | '曲线图'
-const chartTypeOptions: ChartType[] = ['散点图', '雷达图', '曲线图']
-const chartType = ref<ChartType>('散点图')
+type ChartType = typeof CHART_TYPE_SCATTER | typeof CHART_TYPE_RADAR | typeof CHART_TYPE_LINE
+const chartTypeOptions: ChartType[] = [CHART_TYPE_SCATTER, CHART_TYPE_RADAR, CHART_TYPE_LINE]
+const chartType = ref<ChartType>(CHART_TYPE_SCATTER)
 
 // 图表实例key，用于强制重新渲染
 const chartKey = ref(0)
@@ -104,6 +107,7 @@ function extractFieldOptions(columns: Column[]): Array<{ label: string, value: s
       label = unitMatch[1].trim()
       unit = unitMatch[2]
     }
+
     // 如果没有单位，尝试从常见字段推断
     else {
       const dataIndex = col.dataIndex as string
@@ -235,11 +239,7 @@ const chartOption = ref<echarts.EChartsOption>({})
 
 // 是否有有效数据
 const hasValidData = computed(() => {
-  // 对于雷达图，只需要至少有两个方案即可
-  if (chartType.value === '雷达图') {
-    return props.data.length >= 2
-  }
-  // 对于其他图表类型，需要X轴和Y轴字段都已选择，且有有效数据
+  // 对于所有图表类型，都需要X轴和Y轴字段都已选择，且有有效数据
   return (
     xAxisField.value !== ''
     && yAxisField.value !== ''
@@ -325,7 +325,7 @@ function updateChart() {
  */
 function generateChartConfig(validData: any[], xData: number[], yData: number[], yAverage: number, yAverageData: number[], maxX: number, maxY: number, xAxisLabel: string, yAxisLabel: string, xAxisUnit: string, yAxisUnit: string, fontFamily: string) {
   // 根据图表类型生成不同的配置
-  if (chartType.value === '散点图') {
+  if (chartType.value === CHART_TYPE_SCATTER) {
     // 散点图配置
     chartOption.value = {
       title: {
@@ -443,7 +443,7 @@ function generateChartConfig(validData: any[], xData: number[], yData: number[],
       ],
     }
   }
-  else if (chartType.value === '曲线图') {
+  else if (chartType.value === CHART_TYPE_LINE) {
     // 曲线图配置
     // 对X轴数据排序
     const sortedIndices = xData.map((_, i) => i).sort((a, b) => xData[a] - xData[b])
@@ -564,95 +564,199 @@ function generateChartConfig(validData: any[], xData: number[], yData: number[],
     return
   }
 
-  if (chartType.value === '雷达图') {
-    // 雷达图配置 - 用于对比两个方案的所有数值字段
-    // 只取前两个方案进行对比
-    const schemesToCompare = validData
+  // if (chartType.value === CHART_TYPE_RADAR) {
+  //   const schemesToCompare = validData
 
-    if (schemesToCompare.length < 2) {
-      chartOption.value = {}
-      return
+  //   console.log('schemesToCompare--雷达图', schemesToCompare)
+
+  //   if (schemesToCompare.length < 2) {
+  //     chartOption.value = {}
+  //     return
+  //   }
+
+  //   // 获取所有数值字段（排除index和fileName）
+  //   const numericFields = allFieldOptions.value.filter(
+  //     field => field.value !== 'index' && field.value !== 'fileName',
+  //   )
+
+  //   if (numericFields.length === 0) {
+  //     chartOption.value = {}
+  //     return
+  //   }
+
+  //   // 预定义的颜色数组，用于为不同方案分配颜色
+  //   const schemeColors = [
+  //     curveColor.value, // 第一个方案使用用户选择的颜色
+  //     '#1890ff', // 蓝色
+  //     '#52c41a', // 绿色
+  //     '#faad14', // 橙色
+  //     '#f5222d', // 红色
+  //     '#722ed1', // 紫色
+  //     '#13c2c2', // 青色
+  //     '#eb2f96', // 粉色
+  //     '#fa8c16', // 橙红色
+  //     '#2f54eb', // 深蓝色
+  //   ]
+
+  //   // 计算每个字段在所有方案中的最小值和最大值
+  //   const radarDimensions = numericFields.map((field) => {
+  //     const values: number[] = []
+
+  //     validData.forEach((item) => {
+  //       const val = item[field.value as keyof SchemeData] as number | null
+  //       if (val !== null && val !== undefined) {
+  //         values.push(val)
+  //       }
+  //     })
+
+  //     const min = values.length > 0 ? Math.min(...values) : 0
+  //     const max = values.length > 0 ? Math.max(...values) : 0
+
+  //     return {
+  //       name: field.label,
+  //       min,
+  //       max,
+  //     }
+  //   })
+
+  //   // 构建方案的数据，每个方案使用不同的颜色
+  //   const schemeRadarData = schemesToCompare.map((item, idx) => {
+  //     const values = numericFields.map((field) => {
+  //       const val = item[field.value as keyof SchemeData] as number | null
+  //       return val !== null && val !== undefined ? val : 0
+  //     })
+
+  //     // 循环使用颜色数组，确保每个方案都有不同的颜色
+  //     const color = schemeColors[idx % schemeColors.length]
+
+  //     return {
+  //       value: values,
+  //       name: `方案${item.index === -1 ? '*' : item.index + 1}`,
+  //       itemStyle: {
+  //         color,
+  //       },
+  //       lineStyle: {
+  //         color,
+  //         width: 1,
+  //       },
+  //       areaStyle: {
+  //         color,
+  //         opacity: 0.3, // 设置透明度，让多个方案重叠时都能看到
+  //       },
+  //       emphasis: {
+  //         lineStyle: {
+  //           width: 2,
+  //         },
+  //         areaStyle: {
+  //           opacity: 0.5, // 鼠标悬停时增加不透明度
+  //         },
+  //       },
+  //     }
+  //   })
+
+  //   chartOption.value = {
+  //     title: {
+  //       text: '方案对比',
+  //       left: 'center',
+  //       textStyle: {
+  //         fontFamily: chartFont.value,
+  //         color: titleColor.value,
+  //       },
+  //     },
+  //     legend: {
+  //       bottom: 10,
+  //       data: schemeRadarData.map(d => d.name),
+  //       textStyle: {
+  //         fontFamily,
+  //       },
+  //     },
+  //     radar: {
+  //       indicator: radarDimensions,
+  //       radius: '60%',
+  //       // @ts-expect-error - ECharts radar nameTextStyle 类型定义不完整
+  //       nameTextStyle: {
+  //         fontFamily,
+  //       },
+  //       axisLabel: {
+  //         fontFamily,
+  //       },
+  //     },
+  //     series: [
+  //       {
+  //         name: '数据对比',
+  //         type: 'radar',
+  //         data: schemeRadarData,
+  //       },
+  //     ],
+  //     xAxis: undefined,
+  //     yAxis: undefined,
+  //     grid: undefined,
+  //   }
+  // }
+
+  if (chartType.value === CHART_TYPE_RADAR) {
+    // 雷达图配置 - 使用X轴字段作为指标名称，Y轴字段作为值
+    // 构建雷达图数据：每个数据点的Y轴值作为指标的值
+    const radarValues = validData.map((item) => {
+      const yValue = item[yAxisField.value as keyof SchemeData] as number | null
+      return yValue !== null && yValue !== undefined ? yValue : 0
+    })
+
+    // 计算Y轴值的最大值，用于设置指标的最大值
+    const maxYValue = Math.max(...radarValues.filter(v => v > 0), 100)
+    let indicatorMax = Math.max(maxYValue * 1.2, 100) // 留20%的余量，最小为100
+
+    // 将最大值向上取整到合理的值，避免刻度不可读
+    // 根据数值大小，向上取整到最近的 10、100、1000 等
+    if (indicatorMax > 1000) {
+      indicatorMax = Math.ceil(indicatorMax / 100) * 100 // 向上取整到最近的100
+    }
+    else if (indicatorMax > 100) {
+      indicatorMax = Math.ceil(indicatorMax / 10) * 10 // 向上取整到最近的10
+    }
+    else {
+      indicatorMax = Math.ceil(indicatorMax) // 向上取整到最近的整数
     }
 
-    // 获取所有数值字段（排除index和fileName）
-    const numericFields = allFieldOptions.value.filter(
-      field => field.value !== 'index' && field.value !== 'fileName',
-    )
+    // 构建指标数组：每个数据点的X轴值作为指标名称
+    const indicators = validData.map((item) => {
+      const xValue = item[xAxisField.value as keyof SchemeData] as number | null
 
-    if (numericFields.length === 0) {
-      chartOption.value = {}
-      return
-    }
-
-    // 预定义的颜色数组，用于为不同方案分配颜色
-    const schemeColors = [
-      curveColor.value, // 第一个方案使用用户选择的颜色
-      '#1890ff', // 蓝色
-      '#52c41a', // 绿色
-      '#faad14', // 橙色
-      '#f5222d', // 红色
-      '#722ed1', // 紫色
-      '#13c2c2', // 青色
-      '#eb2f96', // 粉色
-      '#fa8c16', // 橙红色
-      '#2f54eb', // 深蓝色
-    ]
-
-    // 计算每个字段在所有方案中的最小值和最大值
-    const radarDimensions = numericFields.map((field) => {
-      const values: number[] = []
-
-      validData.forEach((item) => {
-        const val = item[field.value as keyof SchemeData] as number | null
-        if (val !== null && val !== undefined) {
-          values.push(val)
-        }
-      })
-
-      const min = values.length > 0 ? Math.min(...values) : 0
-      const max = values.length > 0 ? Math.max(...values) : 0
+      // 使用X轴值作为指标名称，如果X轴值为null则使用序号
+      const indicatorName = xValue !== null && xValue !== undefined
+        ? String(xValue)
+        : `指标${item.index + 1}`
 
       return {
-        name: field.label,
-        min,
-        max,
+        name: indicatorName,
+        max: indicatorMax, // 所有指标使用统一的最大值
       }
     })
 
-    // 构建方案的数据，每个方案使用不同的颜色
-    const schemeRadarData = schemesToCompare.map((item, idx) => {
-      const values = numericFields.map((field) => {
-        const val = item[field.value as keyof SchemeData] as number | null
-        return val !== null && val !== undefined ? val : 0
-      })
-
-      // 循环使用颜色数组，确保每个方案都有不同的颜色
-      const color = schemeColors[idx % schemeColors.length]
-
-      return {
-        value: values,
-        name: `方案${item.index === -1 ? '*' : item.index + 1}`,
-        itemStyle: {
-          color,
-        },
+    // 构建雷达图系列数据
+    const radarSeriesData = {
+      value: radarValues,
+      name: getFieldLabel(yAxisField.value),
+      itemStyle: {
+        color: curveColor.value,
+      },
+      lineStyle: {
+        color: curveColor.value,
+        width: 2,
+      },
+      areaStyle: {
+        color: curveColor.value,
+        opacity: 0.3,
+      },
+      emphasis: {
         lineStyle: {
-          color,
-          width: 1,
+          width: 3,
         },
         areaStyle: {
-          color,
-          opacity: 0.3, // 设置透明度，让多个方案重叠时都能看到
+          opacity: 0.5,
         },
-        emphasis: {
-          lineStyle: {
-            width: 2,
-          },
-          areaStyle: {
-            opacity: 0.5, // 鼠标悬停时增加不透明度
-          },
-        },
-      }
-    })
+      },
+    }
 
     chartOption.value = {
       title: {
@@ -663,29 +767,40 @@ function generateChartConfig(validData: any[], xData: number[], yData: number[],
           color: titleColor.value,
         },
       },
-      legend: {
-        bottom: 10,
-        data: schemeRadarData.map(d => d.name),
-        textStyle: {
-          fontFamily,
+      tooltip: {
+        trigger: 'item',
+        formatter: (params: any) => {
+          if (Array.isArray(params)) {
+            return params.map((p: any) => {
+              const index = p.dataIndex
+              const indicator = indicators[index]
+              return `${indicator.name}: ${p.value}`
+            }).join('<br/>')
+          }
+          const index = params.dataIndex
+          const indicator = indicators[index]
+          return `${indicator.name}: ${params.value}`
         },
       },
       radar: {
-        indicator: radarDimensions,
+        indicator: indicators,
         radius: '60%',
         // @ts-expect-error - ECharts radar nameTextStyle 类型定义不完整
         nameTextStyle: {
-          fontFamily,
+          fontFamily: chartFont.value,
         },
         axisLabel: {
-          fontFamily,
+          fontFamily: chartFont.value,
+          showMinLabel: true,
+          showMaxLabel: true,
         },
+        splitNumber: 5, // 设置分割段数，控制刻度数量
       },
       series: [
         {
-          name: '数据对比',
+          name: getFieldLabel(yAxisField.value),
           type: 'radar',
-          data: schemeRadarData,
+          data: [radarSeriesData],
         },
       ],
       xAxis: undefined,
@@ -787,10 +902,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.scheme-chart-container {
-  padding: 10px;
-}
-
 .chart-layout {
   display: flex;
   gap: 16px;

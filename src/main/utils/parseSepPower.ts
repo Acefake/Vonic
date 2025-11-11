@@ -4,7 +4,6 @@
  * @param content 文件内容字符串
  * @returns 解析后的数据对象
  */
-
 export interface SepPowerData {
   /** 最大分离功率 */
   maxSepPower: number | null

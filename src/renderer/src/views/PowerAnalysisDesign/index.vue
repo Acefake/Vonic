@@ -14,88 +14,53 @@ import { getFieldLabel } from '../../utils/field-labels'
 const designStore = usePowerAnalysisDesignStore()
 const logStore = useLogStore()
 const settingsStore = useSettingsStore()
+const themeColor = ref(app.productConfig.themeColor)
 
-const { isMultiScheme, topLevelParams, fluidParams, separationComponents, outputResults } = storeToRefs(designStore)
+const { isMultiScheme, formData, outputResults } = storeToRefs(designStore)
 
 const { fieldLabelMode } = storeToRefs(settingsStore)
 
 const isLoading = ref(false)
 
-// 运行进度条
-const progressVisible = ref(false)
-const progressPercent = ref(0)
-const progressStatus = ref<'normal' | 'active' | 'exception' | 'success'>('normal')
-let progressTimer: number | null = null
-
-function startProgress() {
-  progressVisible.value = true
-  progressStatus.value = 'active'
-  progressPercent.value = 0
-  // 清理旧定时器
-  if (progressTimer != null) {
-    window.clearInterval(progressTimer)
-    progressTimer = null
+/**  读取任务文件内容（优先 input.txt，其次 input.dat），自动填充表单 */
+async function readTakeData() {
+  const source = app.productConfig.file?.inputFileName
+  if (!source) {
+    message.error('读取任务文件名称未配置')
+    return
   }
-  // 逐步前进到 95%，等待关闭事件后再到 100%
-  progressTimer = window.setInterval(() => {
-    if (progressPercent.value < 95) {
-      // 渐进式推进，越接近95越慢
-      const delta = Math.max(1, Math.round((95 - progressPercent.value) * 0.05))
-      progressPercent.value = Math.min(95, progressPercent.value + delta)
+  let content = await app.file.readDatFile(source)
+
+  if (!content) {
+    message.error('未找到任务文件 (input.txt)')
+    // 如果没找到就手动选择 选择一个文件
+    const files = await app.file.selectFile()
+    if (files) {
+      content = await app.file.readDatFile(files[0])
     }
     else {
-      if (progressTimer != null) {
-        window.clearInterval(progressTimer)
-        progressTimer = null
-      }
+      message.error('未选择文件')
+      return
     }
-  }, 300)
-}
-
-function completeProgress(isSuccess: boolean) {
-  if (progressTimer != null) {
-    window.clearInterval(progressTimer)
-    progressTimer = null
   }
-  progressPercent.value = 100
-  progressStatus.value = isSuccess ? 'success' : 'exception'
-  // 稍微停留一下再隐藏
-  window.setTimeout(() => {
-    progressVisible.value = false
-    progressPercent.value = 0
-    progressStatus.value = 'normal'
-  }, 1000)
-}
 
-function stopProgress() {
-  if (progressTimer != null) {
-    window.clearInterval(progressTimer)
-    progressTimer = null
+  try {
+    if (content.includes('=')) {
+      parseTxtContent(content)
+    }
+    else {
+      await parseDatContent(content)
+    }
+    message.success(`已从 ${source} 填充到表单`)
   }
-  progressVisible.value = false
-  progressPercent.value = 0
-  progressStatus.value = 'normal'
-}
-
-/**  读取 input.dat 文件内容 */
-async function readTakeData() {
-  const fileName = 'input.dat'
-  const content = await app.file.readDatFile(fileName)
-  if (content) {
-    // TODO: 实现 parseDatContent 函数来解析 input.dat 内容
-    // parseDatContent(content)
-    message.info('文件读取成功，解析功能待实现')
-  }
-  else {
-    message.error('未找到input.dat文件')
+  catch (error) {
+    message.error(`解析任务文件失败: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 
 const formRef = ref<FormInstance>()
 const formModel = reactive({
-  ...topLevelParams.value,
-  ...fluidParams.value,
-  ...separationComponents.value,
+  ...formData.value,
 })
 const prevModel = reactive({ ...formModel })
 
@@ -183,34 +148,7 @@ rules.depletedExtractionPortOuterDiameter = [
 function updateStoreByField(name: string, val: number | null) {
   if (val == null)
     return
-  const topKeys = ['angularVelocity', 'rotorRadius']
-  const fluidKeys = ['averageTemperature', 'enrichedBaffleTemperature', 'feedFlowRate', 'rotorSidewallPressure']
-  const sepKeys = [
-    'depletedExtractionPortInnerDiameter',
-    'depletedExtractionPortOuterDiameter',
-    'depletedExtractionRootOuterDiameter',
-    'extractorAngleOfAttack',
-    'extractionChamberHeight',
-    'depletedExtractionCenterDistance',
-    'enrichedExtractionCenterDistance',
-    'constantSectionStraightPipeLength',
-    'extractorCuttingAngle',
-    'enrichedBaffleHoleDiameter',
-    'variableSectionStraightPipeLength',
-    'bendRadiusOfCurvature',
-    'extractorSurfaceRoughness',
-    'extractorTaperAngle',
-    'enrichedBaffleHoleDistributionCircleDiameter',
-  ]
-  if (topKeys.includes(name)) {
-    designStore.updateTopLevelParams({ [name]: val } as any)
-  }
-  else if (fluidKeys.includes(name)) {
-    designStore.updateFluidParams({ [name]: val } as any)
-  }
-  else if (sepKeys.includes(name)) {
-    designStore.updateSeparationComponents({ [name]: val } as any)
-  }
+  designStore.updateFormData({ [name]: val } as any)
 }
 
 async function onFieldChange(name: string, val: number | null) {
@@ -251,11 +189,82 @@ async function onFieldChange(name: string, val: number | null) {
 
 function syncFormFromStore() {
   Object.assign(formModel, {
-    ...topLevelParams.value,
-    ...fluidParams.value,
-    ...separationComponents.value,
+    ...formData.value,
   })
   Object.assign(prevModel, formModel)
+}
+
+/**
+ * 生成 input.txt 文件（数字+注释格式）
+ */
+function buildInputTxtContent(data: typeof formData.value): string {
+  const getVal = (field: keyof typeof data, defaultValue = 0) => {
+    const val = data[field]
+    return val !== null && val !== undefined ? val : defaultValue
+  }
+
+  // 根据用户提供的格式生成 1-26 行
+  const lines: string[] = []
+
+  // 1. 半径
+  lines.push(`${getVal('rotorRadius')}    !半径`)
+  // 2. 转速
+  lines.push(`${getVal('angularVelocity')}    !转速`)
+  // 3. T0
+  lines.push(`${getVal('averageTemperature')}    !T0`)
+  // 4. 精料挡板温度
+  lines.push(`${getVal('enrichedBaffleTemperature')}    !精料挡板温度`)
+  // 5. Pw_w
+  lines.push(`${getVal('rotorSidewallPressure')}    !Pw_w`)
+  // 6. 供料流量
+  lines.push(`${getVal('feedFlowRate')}    !供料流量`)
+  // 7. 贫料流量（表单中没有，设为0）
+  lines.push(`0    !贫料流量`)
+  // 8. ds
+  lines.push(`${getVal('depletedExtractionPortInnerDiameter')}    !ds`)
+  // 9. ds1
+  lines.push(`${getVal('depletedExtractionPortOuterDiameter')}    !ds1`)
+  // 10. ds0
+  lines.push(`${getVal('depletedExtractionRootOuterDiameter')}    !ds0`)
+  // 11. rw
+  lines.push(`${getVal('depletedExtractionCenterDistance')}    !rw`)
+  // 12. rp
+  lines.push(`${getVal('enrichedExtractionCenterDistance')}    !rp`)
+  // 13. Ls
+  lines.push(`${getVal('constantSectionStraightPipeLength')}    !Ls`)
+  // 14. Lss
+  lines.push(`${getVal('variableSectionStraightPipeLength')}    !Lss`)
+  // 15. rss
+  lines.push(`${getVal('bendRadiusOfCurvature')}    !rss`)
+  // 16. Hr_Scoop=roughness 取料器镀镍后的表面粗糙度
+  lines.push(`${getVal('extractorSurfaceRoughness')}    !Hr_Scoop=roughness 取料器镀镍后的表面粗糙度`)
+  // 17,18,19. angle_angle(1:3) - 三个角度
+  lines.push(`${getVal('extractorAngleOfAttack')}    !angle_angle(1)`)
+  lines.push(`${getVal('extractorCuttingAngle')}    !angle_angle(2)`)
+  lines.push(`${getVal('extractorTaperAngle')}    !angle_angle(3)`)
+  // 20. hs取料腔高度的一半
+  const extractionChamberHeight = getVal('extractionChamberHeight')
+  lines.push(`${extractionChamberHeight / 2}    !hs取料腔高度的一半`)
+  // 21. holedia_p
+  lines.push(`${getVal('enrichedBaffleHoleDiameter')}    !holedia_p`)
+  // 22. sigma_p精料挡板孔的面积(单个) - 计算或设为0
+  const holeDiameter = getVal('enrichedBaffleHoleDiameter')
+  const sigmaP = holeDiameter > 0 ? Math.PI * (holeDiameter / 2) ** 2 : 0
+  lines.push(`${sigmaP}    !sigma_p精料挡板孔的面积(单个)`)
+  // 23. ka最大流量公式对应的值域与气体料类有关的参数k
+  lines.push(`0    !ka最大流量公式对应的值域与气体料类有关的参数k`)
+  // 24. rk_p精料挡板空的中心距
+  lines.push(`${getVal('enrichedBaffleHoleDistributionCircleDiameter')}    !rk_p精料挡板空的中心距`)
+  // 25. Ma_x孔板气体马赫数
+  lines.push(`0    !Ma_x孔板气体马赫数`)
+  // 26. w_prot
+  lines.push(`0    !w_prot`)
+  // 27. cpipe1
+  lines.push(`0    !cpipe1`)
+  // 28. pws
+  lines.push(`0    !pws`)
+
+  return lines.join('\n')
 }
 
 /**
@@ -279,34 +288,41 @@ async function simulateCalculation(): Promise<void> {
 
   logStore.info('开始仿真计算')
 
-  const exeName = 'ns-linear.exe'
+  const exeName = app.productConfig.file?.exeName
 
-  const designForm = {
-    ...topLevelParams.value,
-    ...fluidParams.value,
-    ...separationComponents.value,
-    ...outputResults.value,
+  if (!exeName) {
+    message.error('可执行文件名称未配置')
+    return
   }
 
-  const res = await app.file.writeDatFile('input.dat', designForm)
+  // 生成 input.txt 文件内容
+  const inputTxtContent = buildInputTxtContent(formData.value)
 
-  logStore.success(res.message)
+  // 写入 input.txt 文件
+  const baseDir = await app.file.getWorkDir()
+  const inputPath = baseDir.includes('\\') ? `${baseDir}\\${app.productConfig.file?.inputFileName}` : `${baseDir}/${app.productConfig.file?.inputFileName}`
+  await app.file.writeFile(inputPath, inputTxtContent)
+
+  logStore.success(`已生成输入文件: ${inputPath}`)
 
   const result = await app.callExe(exeName)
 
   console.log(result)
 
   if (result.status === 'started') {
-    logStore.info('调用Fortran开始仿真计算')
+    logStore.info('调用PowerLoss.exe开始仿真计算')
     logStore.info('生成输入文件')
-    startProgress()
+    app.window.loading.open({
+      data: {
+        title: '正在进行仿真计算...',
+      },
+    })
   }
   else {
-    logStore.error('Fortran调用失败')
+    logStore.error('PowerLoss.exe调用失败')
     logStore.error(result.reason)
     message.error(`仿真计算启动失败: ${result.reason}`)
-    completeProgress(false)
-    stopProgress()
+    app.window.loading.close()
     isLoading.value = false
   }
 }
@@ -325,24 +341,52 @@ async function submitDesign(): Promise<void> {
     return
   }
 
-  const designForm = {
-    ...topLevelParams.value,
-    ...fluidParams.value,
-    ...separationComponents.value,
-    ...outputResults.value,
-  }
+  // 生成 output.txt（key=value）内容（字段名与需求图片一致）
+  const ORDERED_KEYS: Array<{ key: string, field: string }> = [
+    // 顶层参数
+    { key: 'DegSpeed', field: 'angularVelocity' },
+    { key: 'RotorRadius', field: 'rotorRadius' },
+    // 流体参数
+    { key: 'Temperature', field: 'averageTemperature' },
+    { key: 'RichBaffleTemp', field: 'enrichedBaffleTemperature' },
+    { key: 'RotorPressure', field: 'rotorSidewallPressure' },
+    { key: 'PowerFlow', field: 'feedFlowRate' },
+    // 分离部件
+    { key: 'PoorTackInnerRadius', field: 'depletedExtractionPortInnerDiameter' },
+    { key: 'PoorTackOuterRadius', field: 'depletedExtractionPortOuterDiameter' },
+    { key: 'PoorTackRootOuterRadius', field: 'depletedExtractionRootOuterDiameter' },
+    { key: 'PoorTackDistance', field: 'depletedExtractionCenterDistance' },
+    { key: 'RichTackDistance', field: 'enrichedExtractionCenterDistance' },
+    { key: 'EvenSectionPipeLength', field: 'constantSectionStraightPipeLength' },
+    { key: 'ChangeSectionPipeLength', field: 'variableSectionStraightPipeLength' },
+    { key: 'PipeRadius', field: 'bendRadiusOfCurvature' },
+    { key: 'TackSurfaceRoughness', field: 'extractorSurfaceRoughness' },
+    { key: 'TackAttkAngle', field: 'extractorAngleOfAttack' },
+    { key: 'TackChamferAngle', field: 'extractorCuttingAngle' },
+    { key: 'TackTaperAngle', field: 'extractorTaperAngle' },
+    { key: 'TackHeight', field: 'extractionChamberHeight' },
+    { key: 'RichBaffleHoleDiam', field: 'enrichedBaffleHoleDiameter' },
+    { key: 'RichBaffleArrayHoleDiam', field: 'enrichedBaffleHoleDistributionCircleDiameter' },
+  ]
 
-  const res = await app.file.writeDatFile('input.dat', designForm)
-  if (res?.code === 0) {
-    message.success('提交参数校验通过，已生成输入文件')
-  }
-  else {
-    message.error(res?.message ?? '生成输入文件失败')
-  }
+  const lines: string[] = ORDERED_KEYS.map(({ key, field }) => {
+    const v: any = (formData.value as any)[field]
+    return `${key}=${v ?? ''}`
+  })
+
+  // 输出结果
+  lines.push(`PoorTackPower=${outputResults.value.poorTackPower ?? ''}`)
+  lines.push(`TackPower=${outputResults.value.tackPower ?? ''}`)
+
+  const baseDir = await app.file.getWorkDir()
+  const outPath = baseDir.includes('\\') ? `${baseDir}\\output.txt` : `${baseDir}/output.txt`
+  await app.file.writeFile(outPath, lines.join('\n'))
+
+  message.success(`提交参数校验通过，已生成 ${outPath}`)
 }
 
 /**
- * 读取Sep_power.dat替换结果中的功耗
+ * 读取output.dat替换结果中的功耗
  */
 function replacePowerParams(content: string): void {
   logStore.info('读取仿真结果文件')
@@ -350,26 +394,46 @@ function replacePowerParams(content: string): void {
   const lineArr = content
     .replace(/\r\n/g, '\n') // 统一换行符为 \n（兼容 Windows 环境）
     .split('\n') // 按换行符拆分
-    .filter(line => line.trim() !== '') // 过滤空行
+    .map(line => line.trim()) // 去除前后空格
+    .filter(line => line !== '') // 过滤空行
 
-  // eslint-disable-next-line regexp/no-super-linear-backtracking
-  const regex = /^\s*([^=]+?)\s*=\s*(\d+)\s*$/
   const result: Record<string, number> = {}
   lineArr.forEach((line) => {
-    const match = line.match(regex) // 执行匹配
-    if (match) {
-      const key = match[1].trim() // 指标名（去除前后空格）
-      const value = Number(match[2]) // 数值（转为 Number 类型，避免字符串）
-      result[key] = value
-    }
+    // 解析 output.dat 格式：key = value 或 key=value（等号前后可能有空格）
+    // 支持格式：beta  =0.22 或 total_scoop=   23.33      total_accele =   22
+    // 一行可能包含多个键值对，使用正则表达式匹配所有键值对
+    // 匹配模式：key（可能包含空格）=（可能包含空格）value（数字，可能包含前后空格）
+    const keyValuePattern = /(\w+)\s*=\s*([+-]?\d*\.?\d+)/g
+    const matches = Array.from(line.matchAll(keyValuePattern))
+    matches.forEach((match) => {
+      const key = match[1].trim()
+      const valueStr = match[2].trim()
+      const value = Number(valueStr)
+      if (!Number.isNaN(value) && Number.isFinite(value)) {
+        result[key] = value
+      }
+    })
   })
 
-  designStore.updateOutputResults({
-    // eslint-disable-next-line dot-notation
-    depletedExtractorPowerConsumption: result['DEPLETED_EXTRACTOR_POWER_CONSUMPTION'],
-    // eslint-disable-next-line dot-notation
-    totalExtractorPowerConsumption: result['TOTAL_EXTRACTOR_POWER_CONSUMPTION'],
-  })
+  // 记录解析到的所有字段，用于调试
+  logStore.info(`解析到的字段: ${Object.keys(result).join(', ')}`)
+
+  // 从 output.dat 读取：W_waccele（贫取料器功耗）和 total_accele（取料器总功耗）
+  // eslint-disable-next-line dot-notation
+  const poorTackPower = result['W_waccele']
+  // eslint-disable-next-line dot-notation
+  const tackPower = result['total_accele']
+
+  if (poorTackPower !== undefined || tackPower !== undefined) {
+    designStore.updateOutputResults({
+      poorTackPower,
+      tackPower,
+    })
+    logStore.info(`成功读取功耗值: 贫取料器功耗=${poorTackPower ?? '未找到'}, 取料器总功耗=${tackPower ?? '未找到'}`)
+  }
+  else {
+    logStore.warning(`未找到功耗字段，解析到的字段名: ${Object.keys(result).join(', ')}`)
+  }
 
   logStore.info('仿真计算完成')
 
@@ -379,39 +443,137 @@ function replacePowerParams(content: string): void {
 /**
  * 处理读取的文本内容填充到设计方案中
  */
-// async function parseDatContent(content: string): Promise<void> {
-//   // 这里可以根据实际的文件格式来解析
-//   // 暂时使用简单的解析逻辑
-//   const lines = content
-//     .trim()
-//     .split('\n')
-//     .map(l => l.trim())
-//     .filter(Boolean)
+async function parseDatContent(content: string): Promise<void> {
+  const lines = content
+    .trim()
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean)
 
-//   // 解析逻辑根据实际 input.dat 格式实现
-//   // 这里只是示例
-//   syncFormFromStore()
-// }
+  // 行2：角速度、半径、两肩长、取料腔高度、侧壁压力、扩散系数
+  const [angularVelocity, rotorRadius, _rotorShoulderLength, extractionChamberHeight, rotorSidewallPressure] = lines[1]
+    .replace(/!.*/, '')
+    .split(',')
+    .map(Number)
+
+  designStore.updateFormData({ angularVelocity, rotorRadius, extractionChamberHeight, rotorSidewallPressure } as any)
+
+  // 后续字段（从第3行开始），只解析功率分析需要的部分
+  const paramKeys = [
+    'enrichedBaffleHoleDistributionCircleDiameter', // 第9行
+    'enrichedBaffleHoleDiameter', // 第10行
+    'depletedExtractionPortInnerDiameter', // 第11行
+    'depletedExtractionPortOuterDiameter', // 第12行
+    'minAxialDistance', // 第13行（可选，仅同步，不用于校验）
+    'feedBoxShockDiskHeight', // 第14行（可选，仅同步，不用于校验）
+    'feedFlowRate', // 第15行
+  ]
+
+  for (let i = 0; i < paramKeys.length; i++) {
+    const rawLine = lines[i + 2]
+    if (!rawLine)
+      continue
+    const raw = rawLine.replace(/!.*/, '').trim()
+    const num = Number(raw)
+    const val = Number.isNaN(num) ? raw : num
+    designStore.updateFormData({ [paramKeys[i]]: val } as any)
+  }
+
+  syncFormFromStore()
+}
+
+/**
+ * 解析 input.txt (key=value) 内容并填充到 formData / outputResults
+ */
+function parseTxtContent(content: string): void {
+  const KEY_MAP: Record<string, string> = {
+    // 顶层参数
+    DegSpeed: 'angularVelocity',
+    RotorRadius: 'rotorRadius',
+    // 流体参数
+    Temperature: 'averageTemperature',
+    RichBaffleTemp: 'enrichedBaffleTemperature',
+    RotorPressure: 'rotorSidewallPressure',
+    PowerFlow: 'feedFlowRate',
+    // 分离部件
+    PoorTackInnerRadius: 'depletedExtractionPortInnerDiameter',
+    PoorTackOuterRadius: 'depletedExtractionPortOuterDiameter',
+    PoorTackRootOuterRadius: 'depletedExtractionRootOuterDiameter',
+    PoorTackDistance: 'depletedExtractionCenterDistance',
+    RichTackDistance: 'enrichedExtractionCenterDistance',
+    EvenSectionPipeLength: 'constantSectionStraightPipeLength',
+    ChangeSectionPipeLength: 'variableSectionStraightPipeLength',
+    PipeRadius: 'bendRadiusOfCurvature',
+    TackSurfaceRoughness: 'extractorSurfaceRoughness',
+    TackAttkAngle: 'extractorAngleOfAttack',
+    TackChamferAngle: 'extractorCuttingAngle',
+    TackTaperAngle: 'extractorTaperAngle',
+    TackHeight: 'extractionChamberHeight',
+    RichBaffleHoleDiam: 'enrichedBaffleHoleDiameter',
+    RichBaffleArrayHoleDiam: 'enrichedBaffleHoleDistributionCircleDiameter',
+  }
+
+  const RESULT_KEY_MAP: Record<string, string> = {
+    PoorTackPower: 'poorTackPower',
+    TackPower: 'tackPower',
+  }
+
+  const removeInvisible = (s: string) => s.replace(/[\u200B-\u200D\uFEFF]/g, '')
+
+  const updates: Record<string, any> = {}
+  const resultUpdates: Record<string, any> = {}
+
+  content
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean)
+    .forEach((line) => {
+      const [rawKey, rawVal] = line.split('=')
+      if (!rawKey)
+        return
+      const key = removeInvisible(rawKey.trim())
+      const valStr = removeInvisible((rawVal ?? '').trim())
+      const num = Number(valStr)
+      const val = Number.isFinite(num) ? num : valStr
+
+      if (KEY_MAP[key]) {
+        updates[KEY_MAP[key]] = val
+      }
+      else if (RESULT_KEY_MAP[key]) {
+        resultUpdates[RESULT_KEY_MAP[key]] = val
+      }
+    })
+
+  if (Object.keys(updates).length > 0)
+    designStore.updateFormData(updates)
+  if (Object.keys(resultUpdates).length > 0)
+    designStore.updateOutputResults(resultUpdates)
+
+  syncFormFromStore()
+}
 
 // exe关闭事件监听器
 async function handleExeClose(_: Electron.IpcRendererEvent, exeName: string, result: any) {
-  const fileName = 'Sep_power.dat'
+  const fileName = 'output.dat'
 
   if (result.isSuccess === false) {
     app.message.error(`${exeName} 程序异常退出，退出码: ${result.exitCode}`)
+    app.window.loading.close()
     isLoading.value = false
-    completeProgress(false)
   }
   else {
+    // 从 output.dat 读取
     const content = await app.file.readDatFile(fileName)
     if (!content) {
+      logStore.warning(`未找到 ${fileName} 文件`)
+      app.window.loading.close()
       isLoading.value = false
-      completeProgress(false)
       return
     }
     replacePowerParams(content)
+
+    app.window.loading.close()
     isLoading.value = false
-    completeProgress(true)
   }
 }
 
@@ -424,7 +586,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.electron.ipcRenderer.removeListener?.('exe-closed', handleExeClose)
-  stopProgress()
+  app.window.loading.close()
 })
 </script>
 
@@ -461,7 +623,7 @@ onUnmounted(() => {
             <div class="form-row">
               <a-form-item name="angularVelocity" :label="getFieldLabel('angularVelocity', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="topLevelParams.angularVelocity"
+                  :value="formData.angularVelocity"
                   :placeholder="`请输入${getFieldLabel('angularVelocity', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="Hz"
@@ -471,7 +633,7 @@ onUnmounted(() => {
 
               <a-form-item name="rotorRadius" :label="getFieldLabel('rotorRadius', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="topLevelParams.rotorRadius"
+                  :value="formData.rotorRadius"
                   :placeholder="`请输入${getFieldLabel('rotorRadius', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
@@ -490,7 +652,7 @@ onUnmounted(() => {
             <div class="form-row">
               <a-form-item name="averageTemperature" :label="getFieldLabel('averageTemperature', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="fluidParams.averageTemperature"
+                  :value="formData.averageTemperature"
                   :placeholder="`请输入${getFieldLabel('averageTemperature', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="K"
@@ -500,7 +662,7 @@ onUnmounted(() => {
 
               <a-form-item name="enrichedBaffleTemperature" :label="getFieldLabel('enrichedBaffleTemperature', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="fluidParams.enrichedBaffleTemperature"
+                  :value="formData.enrichedBaffleTemperature"
                   :placeholder="`请输入${getFieldLabel('enrichedBaffleTemperature', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="K"
@@ -510,7 +672,7 @@ onUnmounted(() => {
 
               <a-form-item name="feedFlowRate" :label="getFieldLabel('feedFlowRate', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="fluidParams.feedFlowRate"
+                  :value="formData.feedFlowRate"
                   :placeholder="`请输入${getFieldLabel('feedFlowRate', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="Kg/s"
@@ -520,7 +682,7 @@ onUnmounted(() => {
 
               <a-form-item name="rotorSidewallPressure" :label="getFieldLabel('rotorSidewallPressure', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="fluidParams.rotorSidewallPressure"
+                  :value="formData.rotorSidewallPressure"
                   :placeholder="`请输入${getFieldLabel('rotorSidewallPressure', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="Pa"
@@ -543,7 +705,7 @@ onUnmounted(() => {
                 class="form-col"
               >
                 <a-input-number
-                  :value="separationComponents.depletedExtractionPortInnerDiameter"
+                  :value="formData.depletedExtractionPortInnerDiameter"
                   :placeholder="`请输入${getFieldLabel('depletedExtractionPortInnerDiameter', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
@@ -557,7 +719,7 @@ onUnmounted(() => {
                 class="form-col"
               >
                 <a-input-number
-                  :value="separationComponents.depletedExtractionPortOuterDiameter"
+                  :value="formData.depletedExtractionPortOuterDiameter"
                   :placeholder="`请输入${getFieldLabel('depletedExtractionPortOuterDiameter', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
@@ -571,7 +733,7 @@ onUnmounted(() => {
                 class="form-col"
               >
                 <a-input-number
-                  :value="separationComponents.depletedExtractionRootOuterDiameter"
+                  :value="formData.depletedExtractionRootOuterDiameter"
                   :placeholder="`请输入${getFieldLabel('depletedExtractionRootOuterDiameter', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
@@ -585,7 +747,7 @@ onUnmounted(() => {
                 class="form-col"
               >
                 <a-input-number
-                  :value="separationComponents.extractorAngleOfAttack"
+                  :value="formData.extractorAngleOfAttack"
                   :placeholder="`请输入${getFieldLabel('extractorAngleOfAttack', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="rad"
@@ -595,7 +757,7 @@ onUnmounted(() => {
 
               <a-form-item name="extractionChamberHeight" :label="getFieldLabel('extractionChamberHeight', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="separationComponents.extractionChamberHeight"
+                  :value="formData.extractionChamberHeight"
                   :placeholder="`请输入${getFieldLabel('extractionChamberHeight', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
@@ -609,7 +771,7 @@ onUnmounted(() => {
                 class="form-col"
               >
                 <a-input-number
-                  :value="separationComponents.depletedExtractionCenterDistance"
+                  :value="formData.depletedExtractionCenterDistance"
                   :placeholder="`请输入${getFieldLabel('depletedExtractionCenterDistance', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
@@ -623,7 +785,7 @@ onUnmounted(() => {
                 class="form-col"
               >
                 <a-input-number
-                  :value="separationComponents.enrichedExtractionCenterDistance"
+                  :value="formData.enrichedExtractionCenterDistance"
                   :placeholder="`请输入${getFieldLabel('enrichedExtractionCenterDistance', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
@@ -637,7 +799,7 @@ onUnmounted(() => {
                 class="form-col"
               >
                 <a-input-number
-                  :value="separationComponents.constantSectionStraightPipeLength"
+                  :value="formData.constantSectionStraightPipeLength"
                   :placeholder="`请输入${getFieldLabel('constantSectionStraightPipeLength', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
@@ -647,7 +809,7 @@ onUnmounted(() => {
 
               <a-form-item name="extractorCuttingAngle" :label="getFieldLabel('extractorCuttingAngle', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="separationComponents.extractorCuttingAngle"
+                  :value="formData.extractorCuttingAngle"
                   :placeholder="`请输入${getFieldLabel('extractorCuttingAngle', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="rad"
@@ -657,7 +819,7 @@ onUnmounted(() => {
 
               <a-form-item name="enrichedBaffleHoleDiameter" :label="getFieldLabel('enrichedBaffleHoleDiameter', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="separationComponents.enrichedBaffleHoleDiameter"
+                  :value="formData.enrichedBaffleHoleDiameter"
                   :placeholder="`请输入${getFieldLabel('enrichedBaffleHoleDiameter', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
@@ -671,7 +833,7 @@ onUnmounted(() => {
                 class="form-col"
               >
                 <a-input-number
-                  :value="separationComponents.variableSectionStraightPipeLength"
+                  :value="formData.variableSectionStraightPipeLength"
                   :placeholder="`请输入${getFieldLabel('variableSectionStraightPipeLength', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
@@ -681,7 +843,7 @@ onUnmounted(() => {
 
               <a-form-item name="bendRadiusOfCurvature" :label="getFieldLabel('bendRadiusOfCurvature', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="separationComponents.bendRadiusOfCurvature"
+                  :value="formData.bendRadiusOfCurvature"
                   :placeholder="`请输入${getFieldLabel('bendRadiusOfCurvature', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
@@ -691,7 +853,7 @@ onUnmounted(() => {
 
               <a-form-item name="extractorSurfaceRoughness" :label="getFieldLabel('extractorSurfaceRoughness', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="separationComponents.extractorSurfaceRoughness"
+                  :value="formData.extractorSurfaceRoughness"
                   :placeholder="`请输入${getFieldLabel('extractorSurfaceRoughness', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
@@ -701,7 +863,7 @@ onUnmounted(() => {
 
               <a-form-item name="extractorTaperAngle" :label="getFieldLabel('extractorTaperAngle', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="separationComponents.extractorTaperAngle"
+                  :value="formData.extractorTaperAngle"
                   :placeholder="`请输入${getFieldLabel('extractorTaperAngle', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="rad"
@@ -715,7 +877,7 @@ onUnmounted(() => {
                 class="form-col"
               >
                 <a-input-number
-                  :value="separationComponents.enrichedBaffleHoleDistributionCircleDiameter"
+                  :value="formData.enrichedBaffleHoleDistributionCircleDiameter"
                   :placeholder="`请输入${getFieldLabel('enrichedBaffleHoleDistributionCircleDiameter', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
@@ -734,22 +896,22 @@ onUnmounted(() => {
     <div class="output-results">
       <a-space size="large">
         <div class="result-item">
-          <span class="result-label">{{ getFieldLabel('depletedExtractorPowerConsumption', fieldLabelMode) }}:</span>
-          <span class="result-value">
+          <span class="result-label">{{ getFieldLabel('poorTackPower', fieldLabelMode) }}:</span>
+          <span class="result-value" :style="{ color: themeColor }">
             {{
-              outputResults.depletedExtractorPowerConsumption !== null && outputResults.depletedExtractorPowerConsumption !== undefined
-                ? outputResults.depletedExtractorPowerConsumption.toFixed(2)
+              outputResults.poorTackPower !== null && outputResults.poorTackPower !== undefined
+                ? outputResults.poorTackPower.toFixed(2)
                 : '-'
             }}
             W
           </span>
         </div>
         <div class="result-item">
-          <span class="result-label">{{ getFieldLabel('totalExtractorPowerConsumption', fieldLabelMode) }}:</span>
-          <span class="result-value">
+          <span class="result-label">{{ getFieldLabel('tackPower', fieldLabelMode) }}:</span>
+          <span class="result-value" :style="{ color: themeColor }">
             {{
-              outputResults.totalExtractorPowerConsumption !== null && outputResults.totalExtractorPowerConsumption !== undefined
-                ? outputResults.totalExtractorPowerConsumption.toFixed(2)
+              outputResults.tackPower !== null && outputResults.tackPower !== undefined
+                ? outputResults.tackPower.toFixed(2)
                 : '-'
             }}
             W
@@ -760,9 +922,6 @@ onUnmounted(() => {
 
     <!-- 操作按钮 -->
     <div class="action-row">
-      <div v-if="progressVisible" class="progress-wrapper">
-        <a-progress :percent="progressPercent" :status="progressStatus" />
-      </div>
       <a-space>
         <a-button type="primary" :disabled="isLoading" @click="simulateCalculation">
           仿真计算
@@ -813,7 +972,6 @@ onUnmounted(() => {
 
 .result-value {
   font-weight: 600;
-  color: #1890ff;
   font-size: 14px;
 }
 
@@ -825,9 +983,5 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 16px;
-}
-
-.progress-wrapper {
-  min-width: 240px;
 }
 </style>

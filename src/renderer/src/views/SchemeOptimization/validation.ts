@@ -662,7 +662,7 @@ export function validateMOPSOFactors(factors: DesignFactor[]): string[] {
       }
 
       if (arr.length < 3) {
-        errors.push(formatBatchError(name, '取值数量应大于等于3'))
+        errors.push(formatBatchError(name, '取值数量应为大于2的正整数，如： [10,12,33]'))
         continue
       }
       // 校验通过，可以继续处理该因子
@@ -693,7 +693,7 @@ export function validateMOPSOFactors(factors: DesignFactor[]): string[] {
 
       // 校验水平数（不能小于3）
       if (!isValidFiniteNumber(level) || !Number.isInteger(level) || level < 3) {
-        errors.push(formatBatchError(name, '水平数不能小于3'))
+        errors.push(formatBatchError(name, '水平数应为大于2的正整数'))
         continue
       }
 

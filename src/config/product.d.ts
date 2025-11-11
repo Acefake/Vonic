@@ -50,6 +50,34 @@ export interface ProductConfig {
     /** 错误处理策略：stop-all（停止所有）或 continue（继续运行） */
     errorStrategy?: 'stop-all' | 'continue'
   }
+  /** 文件配置 */
+  file?: {
+    /** 可执行文件名称 */
+    exeName?: string
+    /** 读取任务文件名称 */
+    inputFileName?: string
+    /** 读取结果文件名称 */
+    outputFileName?: string
+    /** 提交任务文件名称 */
+    submitFileName?: string
+  }
+  /** 结果字段配置 */
+  resultFields?: {
+    /** 字段名 */
+    field: string
+    /** 结果文件中的键名（用于解析） */
+    fileKey?: string
+    /** 显示标签 */
+    label: string
+    /** 单位 */
+    unit?: string
+  }[]
+  optimizationTarget?: {
+    /** 目标字段名 */
+    field: string
+    /** 优化方向：minimize（最小化）或 maximize（最大化） */
+    direction: 'minimize' | 'maximize'
+  }
   /** 其他自定义配置 */
   [key: string]: unknown
 }

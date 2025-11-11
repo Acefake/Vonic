@@ -207,7 +207,8 @@ const chartOption = computed<EChartsOption>(() => {
   // ===== 雷达图单系列（试验数据页面）=====
   if (props.chartData.type === 'radar' && props.chartData.radarData) {
     const { indicators, values } = props.chartData.radarData
-
+    console.log(indicators, 'indicators--雷达图')
+    console.log(values, 'values--雷达图')
     const radarData = [{
       value: values,
       name: props.chartConfig.yAxis,

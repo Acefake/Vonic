@@ -541,8 +541,6 @@ export interface AppAPI {
   callExe: (exeName: string, workingDir?: string) => Promise<callExeRes>
   /** 产品配置 */
   productConfig: ProductConfig
-  /** 系统资源监控 API */
-  system: SystemAPI
 }
 
 export interface SystemAPI {

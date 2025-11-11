@@ -1,5 +1,5 @@
 appId: com.tianjin.powerAnalysis
-productName: 功率分析
+productName: 功率分析设计
 directories:
   buildResources: build
   output: dist
@@ -12,23 +12,28 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!**/*.map'
+  - '!**/__pycache__/**'
+  - '!**/*.pyc'
+  - '!**/*.pyo'
+  - '!**/{README.md,README.txt,RELEASES.md}'
+  # 排除extension文件
 asarUnpack:
   - resources/**
-  - packages/**
 
-# 打包额外资源
-# extraResources:
-#   # 包含 DOE 服务文件
-#   - from: src/main/services/doeService
-#     to: services/doeService
-#     filter:
-#       - '**/*.jar'
-#       - '**/*.bat'
-#       - '**/*.exe'
-#       - 'Python/**/*'
+extraResources:
+  # 包含 DOE 服务文件
+  - from: src/main/services/doeService
+    to: services/doeService
+    filter:
+      - '**/*.jar'
+      - '**/*.bat'
+      - '**/*.exe'
+      - 'Python/**/*'
+      # 注意：filter 不支持排除语法，排除规则需要在 files 中配置
 
 # win:
-#   executableName: mPhysSim
+#   executableName: powerAnalysis
 #   target:
 #     - target: nsis
 #       arch:
@@ -43,23 +48,19 @@ asarUnpack:
 #   # 禁用差异更新支持
 #   differentialPackage: false
 
+# win:
+#   executableName: powerAnalysis
+#   target: portable
+
 win:
+  icon: resources/icons/logo.ico
   executableName: powerAnalysis
   target:
     - zip
 
-# linux:
-#   target:
-#     - AppImage
-#     - snap
-#     - deb
-#   maintainer: electronjs.org
-#   category: Utility
 appImage:
-  artifactName: ${name}-mPhysSim-${version}.${ext}
+  artifactName: ${name}-powerAnalysis.${ext}
 npmRebuild: false
-publish:
-  provider: generic
-  url: https://example.com/auto-updates
+publish: false # 无需发布，关闭自动更新处理
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/

@@ -15,92 +15,46 @@ export const FEEDING_METHOD_MAP = [
 ]
 
 /**
- * 顶层参数接口
+ * 扁平化的设计表单字段接口
+ * 将原来的顶层参数/运行参数/驱动参数/分离部件四个分组合并为一个对象
  */
-export interface TopLevelParams {
-  /** 角速度 (Hz) */
+export interface DesignFormData {
+  // 顶层参数
   angularVelocity?: number
-  /** 转子半径 (mm) */
   rotorRadius?: number
-  /** 转子两肩长 (mm) */
   rotorShoulderLength?: number
-}
-
-/**
- * 运行参数接口
- */
-export interface OperatingParams {
-  /** 转子侧壁压强 (Pa) */
+  // 运行参数
   rotorSidewallPressure?: number
-  /** 气体扩散系数 */
   gasDiffusionCoefficient?: number
-  /** 供料流量 (Kg/s) */
   feedFlowRate?: number
-  /** 供料方式 */
   feedingMethod: FeedingMethod
-  /** 分流比 */
   splitRatio?: number
-}
-
-/**
- * 驱动参数接口
- */
-export interface DrivingParams {
-  /** 贫料端盖温度 (K) */
+  // 驱动参数
   depletedEndCapTemperature?: number
-  /** 精料端盖温度 (K) */
   enrichedEndCapTemperature?: number
-  /** 供料轴向扰动 (mm) */
   feedAxialDisturbance?: number
-  /** 供料角向扰动 (mm) */
   feedAngularDisturbance?: number
-  /** 贫料机械驱动量 (mm) */
   depletedMechanicalDriveAmount?: number
-}
-
-/**
- * 分离部件接口
- */
-export interface SeparationComponents {
-  /** 取料腔高度 (mm) */
+  // 分离部件
   extractionChamberHeight?: number
-  /** 精挡板孔直径 (mm) */
   enrichedBaffleHoleDiameter?: number
-  /** 供料箱激波盘高度 (mm) */
   feedBoxShockDiskHeight?: number
-  /** 贫料取料支臂半径 (mm) */
   depletedExtractionArmRadius?: number
-  /** 贫取料口部内径 (mm) */
   depletedExtractionPortInnerDiameter?: number
-  /** 贫料挡板内孔外径 (mm) */
   depletedBaffleInnerHoleOuterDiameter?: number
-  /** 精挡板孔分布圆直径 (mm) */
   enrichedBaffleHoleDistributionCircleDiameter?: number
-  /** 贫取料口部外径 (mm) */
   depletedExtractionPortOuterDiameter?: number
-  /** 贫料挡板外孔内径 (mm) */
   depletedBaffleOuterHoleInnerDiameter?: number
-  /** 供料箱与贫取料器最近轴向间距 (mm) */
   minAxialDistance?: number
-  /** 贫料挡板轴向位置 (mm) */
   depletedBaffleAxialPosition?: number
-  /** 贫料挡板外孔外径 (mm) */
   depletedBaffleOuterHoleOuterDiameter?: number
-  /** 内边界镜像位置 (mm) */
   innerBoundaryMirrorPosition?: number
-  /** 网格生成方式 */
   gridGenerationMethod?: number
-  /** BWG径向凸起高度 (mm) */
   bwgRadialProtrusionHeight?: number
-  /** BWG轴向高度 (mm) */
   bwgAxialHeight?: number
-  /** BWG轴向位置 (mm) */
   bwgAxialPosition?: number
-  /** 径向网格比 */
   radialGridRatio?: number
-  /** 补偿系数 */
   compensationCoefficient?: number
-  /** 流线数据 */
   streamlineData?: number
 }
 
@@ -120,14 +74,8 @@ export interface OutputResults {
 export interface DesignScheme {
   /** 是否多方案 */
   isMultiScheme: boolean
-  /** 顶层参数 */
-  topLevelParams: TopLevelParams
-  /** 运行参数 */
-  operatingParams: OperatingParams
-  /** 驱动参数 */
-  drivingParams: DrivingParams
-  /** 分离部件 */
-  separationComponents: SeparationComponents
+  /** 扁平化的表单数据 */
+  formData: DesignFormData
   /** 输出结果 */
   outputResults: OutputResults
 }
@@ -140,33 +88,25 @@ export const useDesignStore = defineStore('design', () => {
   /** 是否多方案 */
   const isMultiScheme = ref<boolean>(false)
 
-  /** 顶层参数 */
-  const topLevelParams = ref<TopLevelParams>({
+  /** 扁平化的表单数据 */
+  const formData = ref<DesignFormData>({
+    // 顶层参数
     angularVelocity: undefined,
     rotorRadius: undefined,
     rotorShoulderLength: undefined,
-  })
-
-  /** 运行参数 */
-  const operatingParams = ref<OperatingParams>({
+    // 运行参数
     rotorSidewallPressure: undefined,
     gasDiffusionCoefficient: undefined,
     feedFlowRate: undefined,
     feedingMethod: 0,
     splitRatio: undefined,
-  })
-
-  /** 驱动参数 */
-  const drivingParams = ref<DrivingParams>({
+    // 驱动参数
     depletedEndCapTemperature: undefined,
     enrichedEndCapTemperature: undefined,
     feedAxialDisturbance: undefined,
     feedAngularDisturbance: undefined,
     depletedMechanicalDriveAmount: undefined,
-  })
-
-  /** 分离部件 */
-  const separationComponents = ref<SeparationComponents>({
+    // 分离部件
     extractionChamberHeight: undefined,
     enrichedBaffleHoleDiameter: undefined,
     feedBoxShockDiskHeight: undefined,
@@ -200,10 +140,7 @@ export const useDesignStore = defineStore('design', () => {
    */
   const getDesignScheme = computed((): DesignScheme => ({
     isMultiScheme: isMultiScheme.value,
-    topLevelParams: topLevelParams.value,
-    operatingParams: operatingParams.value,
-    drivingParams: drivingParams.value,
-    separationComponents: separationComponents.value,
+    formData: formData.value,
     outputResults: outputResults.value,
   }))
 
@@ -214,15 +151,11 @@ export const useDesignStore = defineStore('design', () => {
   function isFormValid(): boolean {
     // 必需的顶层参数
     const requiredTopLevel = ['angularVelocity', 'rotorRadius', 'rotorShoulderLength'] as const
-    const topLevelValid = requiredTopLevel.every(key =>
-      topLevelParams.value[key] !== undefined && topLevelParams.value[key] !== null,
-    )
+    const topLevelValid = requiredTopLevel.every(key => formData.value[key] !== undefined && formData.value[key] !== null)
 
     // 必需的运行参数（feedingMethod 有默认值，不需要检查）
     const requiredOperating = ['rotorSidewallPressure', 'gasDiffusionCoefficient', 'feedFlowRate', 'splitRatio'] as const
-    const operatingValid = requiredOperating.every(key =>
-      operatingParams.value[key] !== undefined && operatingParams.value[key] !== null,
-    )
+    const operatingValid = requiredOperating.every(key => formData.value[key] !== undefined && formData.value[key] !== null)
 
     // 必需的驱动参数
     const requiredDriving = [
@@ -232,9 +165,7 @@ export const useDesignStore = defineStore('design', () => {
       'feedAngularDisturbance',
       'depletedMechanicalDriveAmount',
     ] as const
-    const drivingValid = requiredDriving.every(key =>
-      drivingParams.value[key] !== undefined && drivingParams.value[key] !== null,
-    )
+    const drivingValid = requiredDriving.every(key => formData.value[key] !== undefined && formData.value[key] !== null)
 
     // 必需的分离部件参数（排除可选字段）
     const requiredSeparation = [
@@ -251,9 +182,7 @@ export const useDesignStore = defineStore('design', () => {
       'depletedBaffleAxialPosition',
       'depletedBaffleOuterHoleOuterDiameter',
     ] as const
-    const separationValid = requiredSeparation.every(key =>
-      separationComponents.value[key] !== undefined && separationComponents.value[key] !== null,
-    )
+    const separationValid = requiredSeparation.every(key => formData.value[key] !== undefined && formData.value[key] !== null)
 
     return topLevelValid && operatingValid && drivingValid && separationValid
   }
@@ -268,29 +197,11 @@ export const useDesignStore = defineStore('design', () => {
   /**
    * 更新顶层参数
    */
-  function updateTopLevelParams(params: Partial<TopLevelParams>): void {
-    topLevelParams.value = { ...topLevelParams.value, ...params }
-  }
-
   /**
-   * 更新运行参数
+   * 更新扁平化表单字段
    */
-  function updateOperatingParams(params: Partial<OperatingParams>): void {
-    operatingParams.value = { ...operatingParams.value, ...params }
-  }
-
-  /**
-   * 更新驱动参数
-   */
-  function updateDrivingParams(params: Partial<DrivingParams>): void {
-    drivingParams.value = { ...drivingParams.value, ...params }
-  }
-
-  /**
-   * 更新分离部件
-   */
-  function updateSeparationComponents(params: Partial<SeparationComponents>): void {
-    separationComponents.value = { ...separationComponents.value, ...params }
+  function updateFormData(params: Partial<DesignFormData>): void {
+    formData.value = { ...formData.value, ...params }
   }
 
   /**
@@ -305,10 +216,7 @@ export const useDesignStore = defineStore('design', () => {
    */
   function setDesignScheme(scheme: DesignScheme): void {
     isMultiScheme.value = scheme.isMultiScheme
-    topLevelParams.value = { ...scheme.topLevelParams }
-    operatingParams.value = { ...scheme.operatingParams }
-    drivingParams.value = { ...scheme.drivingParams }
-    separationComponents.value = { ...scheme.separationComponents }
+    formData.value = { ...scheme.formData }
     outputResults.value = { ...scheme.outputResults }
   }
 
@@ -317,26 +225,24 @@ export const useDesignStore = defineStore('design', () => {
    */
   function reset(): void {
     isMultiScheme.value = true
-    topLevelParams.value = {
+    formData.value = {
+      // 顶层参数
       angularVelocity: undefined,
       rotorRadius: undefined,
       rotorShoulderLength: undefined,
-    }
-    operatingParams.value = {
+      // 运行参数
       rotorSidewallPressure: undefined,
       gasDiffusionCoefficient: undefined,
       feedFlowRate: undefined,
       feedingMethod: 0,
       splitRatio: undefined,
-    }
-    drivingParams.value = {
+      // 驱动参数
       depletedEndCapTemperature: undefined,
       enrichedEndCapTemperature: undefined,
       feedAxialDisturbance: undefined,
       feedAngularDisturbance: undefined,
       depletedMechanicalDriveAmount: undefined,
-    }
-    separationComponents.value = {
+      // 分离部件
       extractionChamberHeight: undefined,
       enrichedBaffleHoleDiameter: undefined,
       feedBoxShockDiskHeight: undefined,
@@ -367,10 +273,7 @@ export const useDesignStore = defineStore('design', () => {
   return {
     // 状态
     isMultiScheme,
-    topLevelParams,
-    operatingParams,
-    drivingParams,
-    separationComponents,
+    formData,
     outputResults,
 
     // 计算属性
@@ -379,10 +282,7 @@ export const useDesignStore = defineStore('design', () => {
 
     // 方法
     setIsMultiScheme,
-    updateTopLevelParams,
-    updateOperatingParams,
-    updateDrivingParams,
-    updateSeparationComponents,
+    updateFormData,
     updateOutputResults,
     setDesignScheme,
     reset,

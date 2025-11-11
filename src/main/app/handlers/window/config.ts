@@ -82,7 +82,9 @@ export const windowConfig: WindowConfig[] = [
     options: {
       ...mainWindowOptions,
       frame: false,
-      fullscreen: true,
+      // fullscreen: true,
+      minHeight: 1080,
+      minWidth: 1920,
     },
   },
   {
