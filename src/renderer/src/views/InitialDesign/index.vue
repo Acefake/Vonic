@@ -74,8 +74,8 @@ async function readTakeData() {
   const fileName = 'input.txt'
   const content = await app.file.readDatFile(fileName)
   if (content) {
-    console.log(content, 'content')
-    // 自动识别格式：包含 '=' 使用 txt 解析，否则使用 dat 解析
+    logStore.info('开始读取文件内容')
+
     if (content.includes('=')) {
       parseTxtContent(content)
     }
@@ -84,7 +84,7 @@ async function readTakeData() {
     }
   }
   else {
-    message.error('未找到input.txt文件')
+    message.error('未找到文件')
   }
 }
 
@@ -547,10 +547,12 @@ function parseTxtContent(content: string): void {
   if (Object.keys(updates).length > 0) {
     designStore.updateFormData(updates)
     syncFormFromStore()
-    message.success('已从 input.txt 填充到表单')
+    message.success('读取文件内容成功')
+    logStore.info('读取文件内容成功')
   }
   else {
-    message.warning('input.txt 未包含可识别的参数键')
+    message.warning('读取文件内容失败')
+    logStore.error('读取文件内容失败')
   }
 }
 
@@ -626,7 +628,10 @@ onMounted(() => {
   window.electron.ipcRenderer.removeAllListeners?.('exe-closed')
   window.electron.ipcRenderer.on('exe-closed', handleExeClose)
   syncFormFromStore()
-  readTakeData()
+  /** 如果表单没有值，则读取文件内容 */
+  if (!designStore.isFormValid()) {
+    readTakeData()
+  }
 })
 
 onUnmounted(() => {

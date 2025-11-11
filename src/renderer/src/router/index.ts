@@ -22,16 +22,16 @@ declare module 'vue-router' {
  * 使用 Hash 模式，避免 Electron 中的路径问题
  */
 const routes: RouteRecordRaw[] = [
-  {
-    path: '/Demo',
-    name: 'Demo',
-    component: () => import('../views/demo/index.vue'),
-    meta: {
-      title: 'Demo',
-      icon: 'CodeOutlined',
-      order: 0,
-    },
-  },
+  // {
+  //   path: '/Demo',
+  //   name: 'Demo',
+  //   component: () => import('../views/demo/index.vue'),
+  //   meta: {
+  //     title: 'Demo',
+  //     icon: 'CodeOutlined',
+  //     order: 0,
+  //   },
+  // },
   {
     path: '/',
     name: 'InitialDesign',

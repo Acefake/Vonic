@@ -27,6 +27,7 @@ AGENTS
 # Electron
 out
 doeService
+testFiles
 # Electron-vite temporary config files
 electron.vite.config.*.mjs
 electron.vite.config.*.js

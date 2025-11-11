@@ -1,28 +1,25 @@
-2    !半径
-2    !转速
-2    !T0
-3    !精料挡板温度
-1    !Pw_w
-23    !供料流量
-0    !贫料流量
-44    !ds
-22222222    !ds1
-8    !ds0
-8    !rw
-77    !rp
-66    !Ls
-554    !Lss
-22    !rss
-11    !Hr_Scoop=roughness 取料器镀镍后的表面粗糙度
-33    !angle_angle(1)
-22    !angle_angle(2)
-44    !angle_angle(3)
-5.5    !hs取料腔高度的一半
-33    !holedia_p
-855.2985999398212    !sigma_p精料挡板孔的面积(单个)
-0    !ka最大流量公式对应的值域与气体料类有关的参数k
-55    !rk_p精料挡板空的中心距
-0    !Ma_x孔板气体马赫数
-0    !w_prot
-0    !cpipe1
-0    !pws
+DegSpeed=11
+RotorRadius=22
+RotorLength=33
+FeedMethod=44
+RotorPressure=55
+GasParam=66
+FeedFlow=77
+SplitRatio=88
+PoorCoverTemp=99
+RichCoverTemp=100
+FeedAxialDist‌=111
+FeedDegDist‌=222
+PoorDrive=333
+TackHeight=444
+RichBaffleHoleDiam=555
+FeedBoxHeight=666
+PoorArmRadius=777
+PoorTackInnerRadius=888
+PoorTackOuterRadius=2222
+PoorBaffleInnerHoleOuterRadius=99
+PoorBaffleOuterHoleInnerRadius=100
+PoorBaffleOuterHoleOuterRadius=200
+RichBaffleArrayHoleDiam=10
+FeedBoxAndPoorInterval=11
+PoorBaffleAxialSpace=11

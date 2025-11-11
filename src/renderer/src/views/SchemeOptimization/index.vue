@@ -502,7 +502,7 @@ async function executeOptimization(): Promise<void> {
             dirName: info.dirName,
           })
 
-          logStore.info(`样本 ${info.sampleId} 完成: ${app.productConfig.resultFields?.[0]?.label ?? '分离功率'}=${results[results.length - 1].sepPower ?? ''}, ${app.productConfig.resultFields?.[1]?.label ?? '分离系数'}=${results[results.length - 1].sepFactor ?? ''}`)
+          logStore.info(`样本 ${info.sampleId} 完成`)
         }
         catch (error) {
           logStore.error(`样本 ${info.sampleId} 读取结果失败: ${error instanceof Error ? error.message : String(error)}`)
@@ -913,8 +913,6 @@ async function executeOptimization(): Promise<void> {
           if (Object.keys(mergedParams).length > 0) {
             designStore.updateFormData(mergedParams as any)
           }
-
-          logStore.info(`已将最优方案（序号 ${optimalIndex}）的结果和参数值更新到初始设计`)
         }
         catch (error) {
           logStore.error(`更新最优方案到初始设计时出错: ${error instanceof Error ? error.message : String(error)}`)
@@ -947,8 +945,8 @@ async function executeOptimization(): Promise<void> {
     // 保存结果到文件（供MultiScheme读取）
 
     ensureNotCancelled()
-    app.message.success(`仿真优化计算完成，共处理 ${results.length} 个样本，最优方案序号: ${optimalIndex >= 0 ? optimalIndex : '无'}`)
-    logStore.info(`仿真优化计算完成: 算法=${optimizationAlgorithm.value}, 样本点数=${samplePointCountforRes.value}, 处理结果数=${results.length}, 最优方案序号=${optimalIndex >= 0 ? optimalIndex : '无'}`)
+    app.message.success(`仿真优化计算完成，共处理 ${results.length} 个样本`)
+    logStore.info(`仿真优化计算完成: 算法=${optimizationAlgorithm.value}, 样本点数=${samplePointCountforRes.value}, 处理结果数=${results.length}`)
   }
   catch (error) {
     if (error instanceof Error && error.message === CANCELLED_ERROR) {

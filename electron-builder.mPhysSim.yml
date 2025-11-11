@@ -18,9 +18,7 @@ files:
   - '!**/*.pyo'
   - '!**/{README.md,README.txt,RELEASES.md}'
   - '!testFile/**'
-  # 排除extension文件
-asarUnpack:
-  - resources/**
+  - '!resources/**'
 
 extraResources:
   # 包含 DOE 服务文件
@@ -54,7 +52,7 @@ extraResources:
 #   target: portable
 
 win:
-  icon: resources/icons/logo.ico
+  icon: resources/logo.ico
   executableName: mPhysSim
   target:
     - zip

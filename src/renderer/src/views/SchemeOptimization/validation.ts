@@ -10,8 +10,9 @@ type FieldName = 'lowerLimit' | 'upperLimit' | 'levelCount'
 /**
  * 检查值是否为空（undefined 或 null）
  */
-function isNullOrUndefined(val: unknown): val is null | undefined {
-  return val === undefined || val === null
+// 可以为空，直接返回 false，表示不认定为空
+function isNullOrUndefined(val: unknown): val is false {
+  return false
 }
 
 /**
