@@ -41,13 +41,14 @@ watch(() => props.tableData, (newData) => {
   })
 }, { immediate: true })
 
-// 表格滚动配置 - 只设置横向滚动，不限制高度
+// 表格滚动配置 - 设置横向和纵向滚动，固定表头
 const scrollConfig = computed(() => {
   if (!hasData.value) {
     return undefined
   }
   return {
-    x: 'max-content', // 只设置横向滚动
+    x: 'max-content', // 横向滚动
+    y: 'calc(100vh - 350px)', // 减小表格高度，防止底部被遮挡
   }
 })
 
@@ -81,12 +82,11 @@ async function handleStatisticsCalculate(): Promise<void> {
 
   logStore.success('统计计算完成', `方法: ${statisticalMethod.value}, 数据行数: ${dataRows.length}`)
   message.success('统计计算完成！')
-
-  // 滚动到底部显示新添加的统计行
+  // 等待DOM更新后，找到表格内部的滚动容器
   await nextTick()
-  const tableWrapper = document.querySelector('.table-wrapper')
-  if (tableWrapper) {
-    tableWrapper.scrollTop = tableWrapper.scrollHeight
+  const tableBody = document.querySelector('.data-table .ant-table-body')
+  if (tableBody) {
+    tableBody.scrollTop = tableBody.scrollHeight
   }
 }
 </script>
@@ -122,11 +122,16 @@ async function handleStatisticsCalculate(): Promise<void> {
           :scroll="scrollConfig"
           :bordered="hasData"
           size="small"
+          sticky
           class="data-table"
         >
           <template #emptyText>
             <div class="empty-state">
-              <a-empty description="暂无数据，请导入试验数据文件" />
+              <a-empty>
+                <template #description>
+                  <span style="color: rgba(0, 0, 0, 0.45);">暂无数据，请导入试验数据文件</span>
+                </template>
+              </a-empty>
             </div>
           </template>
         </a-table>
@@ -142,7 +147,6 @@ async function handleStatisticsCalculate(): Promise<void> {
   flex-direction: column;
   height: 100%;
   min-height: 500px; /* 设置最小高度，防止屏幕太小 */
-  padding: 0 16px 16px 0;
 }
 
 .config-section {
@@ -191,12 +195,17 @@ async function handleStatisticsCalculate(): Promise<void> {
 
 .table-wrapper {
   flex: 1; /* 占据剩余空间 */
-  overflow: auto; /* 允许表格滚动 */
+  overflow: visible; /* 不产生滚动条，由表格内部处理滚动 */
   min-height: 300px; /* 表格区域最小高度 */
 }
 
 .data-table {
   width: 100%;
+}
+
+/* 确保表格内部滚动容器有足够空间 */
+.data-table :deep(.ant-table-body) {
+  margin-bottom: 0;
 }
 
 .empty-state {

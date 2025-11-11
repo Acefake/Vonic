@@ -156,56 +156,10 @@ function handleColorInput(key: keyof ChartConfig, event: Event): void {
  * 图表配置
  */
 const chartOption = computed<EChartsOption>(() => {
-  // 先判断是否上传了文件（通过 tableColumns 判断）
-  const hasUploadedFile = props.tableColumns && props.tableColumns.length > 0
-
-  // 没有上传文件
-  if (!hasUploadedFile) {
-    return {
-      title: {
-        text: '暂无数据，请先导入试验数据文件',
-        left: 'center',
-        top: 'center',
-        textStyle: {
-          color: '#999',
-          fontSize: 14,
-        },
-      },
-    }
-  }
-
-  // 上传了文件，但没有选择轴（雷达图不依赖 X/Y 轴）
-  if (props.chartConfig.chartType !== '雷达图' && (!props.chartConfig.xAxis || !props.chartConfig.yAxis)) {
-    return {
-      title: {
-        text: '请选择 X 轴和 Y 轴数据',
-        left: 'center',
-        top: 'center',
-        textStyle: {
-          color: '#999',
-          fontSize: 14,
-        },
-      },
-    }
-  }
-
-  // 选择了轴，但没有数据（理论上不应该出现，但保险起见）
-  if (!props.chartData) {
-    return {
-      title: {
-        text: '暂无数据',
-        left: 'center',
-        top: 'center',
-        textStyle: {
-          color: '#999',
-          fontSize: 14,
-        },
-      },
-    }
-  }
+  // 空状态处理已移到模板中，这里直接处理有数据的情况
 
   // ===== 雷达图单系列（试验数据页面）=====
-  if (props.chartData.type === 'radar' && props.chartData.radarData) {
+  if (props.chartData?.type === 'radar' && props.chartData?.radarData) {
     const { indicators, values } = props.chartData.radarData
     console.log(indicators, 'indicators--雷达图')
     console.log(values, 'values--雷达图')
@@ -281,7 +235,7 @@ const chartOption = computed<EChartsOption>(() => {
   }
 
   // ===== 多系列数据模式（数据对比）=====
-  if (props.chartData.series && props.chartData.series.length > 0) {
+  if (props.chartData?.series && props.chartData.series.length > 0) {
     const seriesType: 'line' | 'scatter' = props.chartData.type === 'line' ? 'line' : 'scatter'
     // 判断是否为曲线图（平滑）
     const isSmoothLine = props.chartConfig.chartType === '曲线图'
@@ -351,22 +305,13 @@ const chartOption = computed<EChartsOption>(() => {
   }
 
   // ===== 单数据源模式：只显示一条曲线（试验数据页面） =====
-  const seriesType = props.chartData.type === 'line' ? 'line' : 'scatter'
-  const chartData = props.chartData.scatterData || []
+  const seriesType = props.chartData?.type === 'line' ? 'line' : 'scatter'
+  const chartData = props.chartData?.scatterData || []
   console.log(props.chartData, 'chartData--单数据源模式')
 
+  // 数据为空时返回空配置，由模板处理空状态显示
   if (chartData.length === 0) {
-    return {
-      title: {
-        text: '所选列没有有效的数值数据',
-        left: 'center',
-        top: 'center',
-        textStyle: {
-          color: '#999',
-          fontSize: 14,
-        },
-      },
-    }
+    return {}
   }
 
   return {
@@ -433,7 +378,25 @@ const chartOption = computed<EChartsOption>(() => {
   <div class="chart-panel">
     <!-- 图表显示区域 -->
     <div class="chart-wrapper">
+      <!-- 空状态显示 -->
+      <a-empty
+        v-if="!props.tableColumns || props.tableColumns.length === 0"
+        description="请先导入试验数据文件"
+        style="margin-top: 100px"
+      />
+      <a-empty
+        v-else-if="chartConfig.chartType !== '雷达图' && (!chartConfig.xAxis || !chartConfig.yAxis)"
+        description="请选择X轴和Y轴数据，并确保有有效数据"
+        style="margin-top: 100px"
+      />
+      <a-empty
+        v-else-if="!props.chartData || (props.chartData.scatterData && props.chartData.scatterData.length === 0)"
+        description="所选列没有有效的数值数据"
+        style="margin-top: 100px"
+      />
+      <!-- 有数据时显示图表 -->
       <VChart
+        v-else
         :key="chartConfig.chartType"
         :option="chartOption"
         :update-options="{ notMerge: true }"

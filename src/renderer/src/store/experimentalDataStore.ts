@@ -24,7 +24,7 @@ export const useExperimentalDataStore = defineStore('experimentalData', () => {
     chartType: '散点图', // 默认展示散点图
     lineColor: '#1890ff', // 默认蓝色
     titleText: '试验数据统计曲线',
-    titleColor: '#2c3e50', // 默认深灰蓝色（视觉接近黑色）
+    titleColor: '#000000',
     titleFont: '宋体',
   })
 
