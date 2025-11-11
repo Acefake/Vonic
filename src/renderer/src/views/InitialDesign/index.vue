@@ -25,6 +25,10 @@ const props = defineProps({
   },
 } as const)
 
+const emit = defineEmits<{
+  (e: 'submitted', payload: { formData: any, outputResults: any }): void
+}>()
+
 const designStore = useDesignStore()
 const logStore = useLogStore()
 const settingsStore = useSettingsStore()
@@ -55,6 +59,9 @@ const disabledKeys = computed(() => {
 })
 
 function isFactorDisabledByKey(key: string): boolean {
+  // 在方案修正页面（showButton=false）不禁用任何字段
+  if (!props.showButton)
+    return false
   return disabledKeys.value.has(key)
 }
 
@@ -384,6 +391,12 @@ async function submitDesign(): Promise<void> {
   await app.file.writeFile(outPath, lines.join('\n'))
 
   message.success(`方案提交成功，已生成 ${outPath}`)
+
+  // 通知父组件（如多方案修正页）以便更新表格数据
+  emit('submitted', {
+    formData: { ...formData.value },
+    outputResults: { ...outputResults.value },
+  })
 }
 
 /**
@@ -620,6 +633,11 @@ onUnmounted(() => {
   window.electron.ipcRenderer.removeListener?.('exe-closed', handleExeClose)
   app.window.loading.close()
 })
+
+/** 导出给父组件 */
+defineExpose({
+  submitDesign,
+})
 </script>
 
 <template>
@@ -639,7 +657,7 @@ onUnmounted(() => {
       </div>
 
       <!-- 设计类型 -->
-      <a-card :title="getFieldLabel('designType', fieldLabelMode)">
+      <a-card v-if="props.showButton" :title="getFieldLabel('designType', fieldLabelMode)">
         <a-checkbox :checked="isMultiScheme" @update:checked="designStore.setIsMultiScheme">
           {{ getFieldLabel('isMultiScheme', fieldLabelMode) }}
         </a-checkbox>
@@ -1021,7 +1039,7 @@ onUnmounted(() => {
         <a-button type="primary" :disabled="isLoading" @click="simulateCalculation">
           仿真计算
         </a-button>
-        <a-button type="primary" @click="submitDesign">
+        <a-button v-if="props.showButton" type="primary" @click="submitDesign">
           提交设计
         </a-button>
       </a-space>

@@ -406,74 +406,71 @@ const rowSelection = computed(() => {
   }
 })
 
-/**
- * 提交方案
- */
-// async function handleSubmitScheme() {
-//   if (!correctionSelectedData.value) {
-//     message.warning('请先选择一个方案')
-//     return
-//   }
-
-//   try {
-//     const scheme = correctionSelectedData.value
-
-//     // 构建设计表单数据
-//     const designForm = {
-//       angularVelocity: scheme.angularVelocity,
-//       rotorRadius: scheme.rotorRadius,
-//       rotorShoulderLength: scheme.rotorShoulderLength,
-//       rotorSidewallPressure: scheme.rotorSidewallPressure,
-//       gasDiffusionCoefficient: scheme.gasDiffusionCoefficient,
-//       feedFlowRate: scheme.feedFlowRate,
-//       splitRatio: scheme.splitRatio,
-//       feedingMethod: scheme.feedingMethod,
-//       depletedEndCapTemperature: scheme.depletedEndCapTemperature,
-//       enrichedEndCapTemperature: scheme.enrichedEndCapTemperature,
-//       feedAxialDisturbance: scheme.feedAxialDisturbance,
-//       feedAngularDisturbance: scheme.feedAngularDisturbance,
-//       depletedMechanicalDriveAmount: scheme.depletedMechanicalDriveAmount,
-//       extractionChamberHeight: scheme.extractionChamberHeight,
-//       enrichedBaffleHoleDiameter: scheme.enrichedBaffleHoleDiameter,
-//       feedBoxShockDiskHeight: scheme.feedBoxShockDiskHeight,
-//       depletedExtractionArmRadius: scheme.depletedExtractionArmRadius,
-//       depletedExtractionPortInnerDiameter: scheme.depletedExtractionPortInnerDiameter,
-//       depletedBaffleInnerHoleOuterDiameter: scheme.depletedBaffleInnerHoleOuterDiameter,
-//       enrichedBaffleHoleDistributionCircleDiameter: scheme.enrichedBaffleHoleDistributionCircleDiameter,
-//       depletedExtractionPortOuterDiameter: scheme.depletedExtractionPortOuterDiameter,
-//       depletedBaffleOuterHoleInnerDiameter: scheme.depletedBaffleOuterHoleInnerDiameter,
-//       minAxialDistance: scheme.minAxialDistance,
-//       depletedBaffleAxialPosition: scheme.depletedBaffleAxialPosition,
-//       depletedBaffleOuterHoleOuterDiameter: scheme.depletedBaffleOuterHoleOuterDiameter,
-//       innerBoundaryMirrorPosition: scheme.innerBoundaryMirrorPosition,
-//       gridGenerationMethod: scheme.gridGenerationMethod,
-//       bwgRadialProtrusionHeight: scheme.bwgRadialProtrusionHeight,
-//       bwgAxialHeight: scheme.bwgAxialHeight,
-//       bwgAxialPosition: scheme.bwgAxialPosition,
-//       radialGridRatio: scheme.radialGridRatio,
-//       compensationCoefficient: scheme.compensationCoefficient,
-//       streamlineData: scheme.streamlineData,
-//       separationPower: scheme.sepPower,
-//       separationFactor: scheme.sepFactor,
-//     }
-
-//     const res = await app.file.writeDatFile('input.dat', designForm)
-//     if (res?.code === 0) {
-//       message.success('提交方案成功，已生成输入文件')
-//     }
-//     else {
-//       message.error(res?.message ?? '生成输入文件失败')
-//     }
-//   }
-//   catch (error) {
-//     console.error('提交方案失败:', error)
-//     message.error(`提交方案失败: ${error instanceof Error ? error.message : String(error)}`)
-//   }
-// }
+const initialDesignRef = ref<InstanceType<typeof InitialDesign>>()
 
 onMounted(() => {
   loadSchemes()
 })
+
+/**
+ * 接收子组件（InitialDesign）提交成功事件，更新当前选中行
+ */
+function onDesignSubmitted(payload: { formData: any, outputResults: any }) {
+  const row = correctionSelectedData.value
+  if (!row)
+    return
+  // 更新选中行的各字段
+  const updates: Partial<SchemeData> = {
+    angularVelocity: payload.formData.angularVelocity,
+    rotorRadius: payload.formData.rotorRadius,
+    rotorShoulderLength: payload.formData.rotorShoulderLength,
+    extractionChamberHeight: payload.formData.extractionChamberHeight,
+    rotorSidewallPressure: payload.formData.rotorSidewallPressure,
+    gasDiffusionCoefficient: payload.formData.gasDiffusionCoefficient,
+    depletedEndCapTemperature: payload.formData.depletedEndCapTemperature,
+    enrichedEndCapTemperature: payload.formData.enrichedEndCapTemperature,
+    depletedMechanicalDriveAmount: payload.formData.depletedMechanicalDriveAmount,
+    depletedExtractionArmRadius: payload.formData.depletedExtractionArmRadius,
+    innerBoundaryMirrorPosition: payload.formData.innerBoundaryMirrorPosition,
+    gridGenerationMethod: payload.formData.gridGenerationMethod,
+    enrichedBaffleHoleDistributionCircleDiameter: payload.formData.enrichedBaffleHoleDistributionCircleDiameter,
+    enrichedBaffleHoleDiameter: payload.formData.enrichedBaffleHoleDiameter,
+    depletedExtractionPortInnerDiameter: payload.formData.depletedExtractionPortInnerDiameter,
+    depletedExtractionPortOuterDiameter: payload.formData.depletedExtractionPortOuterDiameter,
+    minAxialDistance: payload.formData.minAxialDistance,
+    feedBoxShockDiskHeight: payload.formData.feedBoxShockDiskHeight,
+    feedFlowRate: payload.formData.feedFlowRate,
+    splitRatio: payload.formData.splitRatio,
+    feedAngularDisturbance: payload.formData.feedAngularDisturbance,
+    feedAxialDisturbance: payload.formData.feedAxialDisturbance,
+    depletedBaffleInnerHoleOuterDiameter: payload.formData.depletedBaffleInnerHoleOuterDiameter,
+    depletedBaffleOuterHoleInnerDiameter: payload.formData.depletedBaffleOuterHoleInnerDiameter,
+    depletedBaffleOuterHoleOuterDiameter: payload.formData.depletedBaffleOuterHoleOuterDiameter,
+    depletedBaffleAxialPosition: payload.formData.depletedBaffleAxialPosition,
+    bwgRadialProtrusionHeight: payload.formData.bwgRadialProtrusionHeight,
+    bwgAxialHeight: payload.formData.bwgAxialHeight,
+    bwgAxialPosition: payload.formData.bwgAxialPosition,
+    radialGridRatio: payload.formData.radialGridRatio,
+    feedingMethod: payload.formData.feedingMethod,
+    compensationCoefficient: payload.formData.compensationCoefficient,
+    streamlineData: payload.formData.streamlineData,
+    sepPower: payload.outputResults.separationPower ?? row.sepPower,
+    sepFactor: payload.outputResults.separationFactor ?? row.sepFactor,
+  }
+  // 定位在 schemes 中的相应行
+  const keyOf = (r: SchemeData) => `${r.index}_${r.fileName}`
+  const targetKey = keyOf(row)
+  const si = schemes.value.findIndex(r => keyOf(r) === targetKey)
+  if (si >= 0) {
+    schemes.value[si] = { ...schemes.value[si], ...updates }
+  }
+  // 同步 filteredData（保持当前筛选结果）
+  const fi = filteredData.value.findIndex(r => keyOf(r) === targetKey)
+  if (fi >= 0) {
+    filteredData.value[fi] = { ...filteredData.value[fi], ...updates }
+  }
+  message.success('已更新多方案对比表格中的该条数据')
+}
 </script>
 
 <template>
@@ -529,18 +526,19 @@ onMounted(() => {
         </a-card>
       </a-tab-pane>
       <a-tab-pane key="2" tab="方案修正">
-        <InitialDesign :selected-scheme="correctionSelectedData" :show-button="false" />
+        <div style="margin-bottom: 10px;">
+          <a-button type="primary" :disabled="!correctionSelectedData" @click="initialDesignRef?.submitDesign">
+            提交方案
+          </a-button>
+        </div>
+        <InitialDesign
+          ref="initialDesignRef"
+          :selected-scheme="correctionSelectedData"
+          :show-button="false"
+          @submitted="onDesignSubmitted"
+        />
       </a-tab-pane>
     </a-tabs>
-
-    <!-- 底部提交方案按钮 -->
-    <!-- <div v-if="activeKey === '2'" class="bottom-actions">
-      <div class="action-row">
-        <a-button type="primary" size="large" @click="handleSubmitScheme">
-          提交方案
-        </a-button>
-      </div>
-    </div> -->
   </div>
 </template>
 

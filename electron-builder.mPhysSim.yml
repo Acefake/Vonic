@@ -17,6 +17,7 @@ files:
   - '!**/*.pyc'
   - '!**/*.pyo'
   - '!**/{README.md,README.txt,RELEASES.md}'
+  - '!testFile/**'
   # 排除extension文件
 asarUnpack:
   - resources/**

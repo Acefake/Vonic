@@ -11,6 +11,17 @@ import { usePowerAnalysisDesignStore } from '../../store/powerAnalysisDesignStor
 import { useSettingsStore } from '../../store/settingsStore'
 import { getFieldLabel } from '../../utils/field-labels'
 
+const props = defineProps({
+  showButton: {
+    type: Boolean,
+    default: true,
+  },
+} as const)
+
+const emit = defineEmits<{
+  (e: 'submitted', payload: { formData: any, outputResults: any }): void
+}>()
+
 const designStore = usePowerAnalysisDesignStore()
 const logStore = useLogStore()
 const settingsStore = useSettingsStore()
@@ -383,6 +394,12 @@ async function submitDesign(): Promise<void> {
   await app.file.writeFile(outPath, lines.join('\n'))
 
   message.success(`提交参数校验通过，已生成 ${outPath}`)
+
+  // 通知父组件（如多方案修正页）以便更新表格数据
+  emit('submitted', {
+    formData: { ...formData.value },
+    outputResults: { ...outputResults.value },
+  })
 }
 
 /**
@@ -588,13 +605,17 @@ onUnmounted(() => {
   window.electron.ipcRenderer.removeListener?.('exe-closed', handleExeClose)
   app.window.loading.close()
 })
+
+defineExpose({
+  submitDesign,
+})
 </script>
 
 <template>
   <div class="power-analysis-design-container">
     <div class="form-content">
       <!-- 顶部按钮 -->
-      <div class="top-actions">
+      <div v-if="props.showButton" class="top-actions">
         <a-button @click="readTakeData">
           <template #icon>
             <FileTextOutlined />
@@ -926,7 +947,7 @@ onUnmounted(() => {
         <a-button type="primary" :disabled="isLoading" @click="simulateCalculation">
           仿真计算
         </a-button>
-        <a-button type="primary" @click="submitDesign">
+        <a-button v-if="props.showButton" type="primary" @click="submitDesign">
           提交设计
         </a-button>
       </a-space>
