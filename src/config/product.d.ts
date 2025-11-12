@@ -54,9 +54,11 @@ export interface ProductConfig {
   file?: {
     /** 可执行文件名称 */
     exeName?: string
-    /** 读取任务文件名称 */
+    /** 功耗分析读取文件名称 */
     inputFileName?: string
-    /** 读取结果文件名称 */
+    /** Fortran读取的文件名称 */
+    inputFileName_fortran?: string
+    /** Fortran运行后生成结果文件名称 */
     outputFileName?: string
     /** 提交任务文件名称 */
     submitFileName?: string

@@ -108,17 +108,6 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
-    path: '/settings',
-    name: 'Settings',
-    component: () => import('../views/Settings/index.vue'),
-    meta: {
-      title: '设置',
-      icon: 'SettingOutlined',
-      order: 100,
-      hidden: true,
-    },
-  },
-  {
     path: '/embedded',
     name: 'Embedded',
     component: () => import('../views/Embedded/index.vue'),

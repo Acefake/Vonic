@@ -10,6 +10,10 @@ import { parseSepPower } from '@/main/utils/parseSepPower'
 import { readFileData } from '@/main/utils/readFileData'
 import { writeDatFile } from '@/main/utils/writeDatFile'
 import { ALLOWED_DELETE_EXTENSIONS, ALLOWED_READ_EXTENSIONS, ALLOWED_WRITE_EXTENSIONS } from '@/shared/files-config'
+import { Logger } from './LogerManager'
+
+const logger = new Logger()
+
 /**
  * 文件管理器类
  */
@@ -406,6 +410,7 @@ export class FileManager {
             (inputFileName || '').toLowerCase(),
             'input.dat',
             'input2.txt',
+            'input.txt',
             'input_p.txt',
           ].filter(Boolean)
           let foundInputPath: string | null = null
@@ -417,6 +422,10 @@ export class FileManager {
             }
           }
           const inputPath = foundInputPath ?? join(sepPowerDir, inputFileName)
+          // 获取实际找到的文件名（用于后续判断）
+          const actualInputName = foundInputPath
+            ? (foundInputPath.split(/[/\\]/).pop() || '').toLowerCase()
+            : (inputFileName || '').toLowerCase()
 
           // 从输入文件读取参数
           const inputParams: Record<string, number> = {
@@ -490,8 +499,7 @@ export class FileManager {
               const inputContent = await fsReadFile(inputPath, 'utf-8')
               const lines = inputContent.trim().split('\n').map(l => l.trim()).filter(Boolean)
 
-              // 根据 实际找到的 input 文件名 选择解析方式
-              const actualInputName = (inputPath.split(/[/\\]/).pop() || '').toLowerCase()
+              // 根据 实际找到的 input 文件名 选择解析方式（使用外部已定义的 actualInputName）
               if (actualInputName === 'input2.txt') {
                 // key=value 解析
                 const kv: Record<string, string> = {}
@@ -580,8 +588,8 @@ export class FileManager {
                   }
                 }
               }
-              else if (actualInputName === 'input_p.txt') {
-                // powerAnalysis 的 input_p.txt 行式解析（数值 + 注释）
+              else if (actualInputName === 'input.txt' || actualInputName === 'input_p.txt') {
+                // powerAnalysis 的 input.txt/input_p.txt 行式解析（数值 + 注释）
                 const valAt = (lineIdx: number): number => {
                   const raw = lines[lineIdx - 1] || ''
                   const num = Number.parseFloat(raw.replace(/!.*/, '').trim())
@@ -748,7 +756,8 @@ export class FileManager {
           }
 
           // 若为 powerAnalysis，附加其表单字段，供多方案界面按字段显示
-          if (['input2.txt', 'input_p.txt'].includes(inputFileName.toLowerCase())) {
+          // 使用实际找到的文件名来判断，而不是配置中的文件名
+          if (['input2.txt', 'input.txt', 'input_p.txt'].includes(actualInputName)) {
             Object.assign(schemeBase, paParams)
           }
 
@@ -786,6 +795,8 @@ export class FileManager {
           console.error(`读取文件失败 (${fileName}):`, error)
         }
       }
+
+      logger.log('info', `schemes: ${JSON.stringify(schemes)}`)
 
       // 在所有采样空间数据循环结束后，判断各方案中分离功率最大值所在方案，作为最优方案
       // 先找到最优方案，记录其原始序号

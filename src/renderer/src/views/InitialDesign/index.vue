@@ -3,10 +3,11 @@ import type { FormInstance } from 'ant-design-vue'
 
 import type { FeedingMethod } from '../../store/designStore'
 import { FileTextOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
 
+import { message } from 'ant-design-vue'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { useTake } from '../../hooks/useTake'
 import { useSchemeOptimizationStore } from '../../store'
 import { FEEDING_METHOD_MAP, useDesignStore } from '../../store/designStore'
 import { useLogStore } from '../../store/logStore'
@@ -19,6 +20,7 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  /** 当前选择的方案 */
   selectedScheme: {
     type: Object as () => any,
     default: null,
@@ -29,11 +31,12 @@ const emit = defineEmits<{
   (e: 'submitted', payload: { formData: any, outputResults: any }): void
 }>()
 
+const { fillFormFromScheme } = useTake()
+
 const designStore = useDesignStore()
 const logStore = useLogStore()
 const settingsStore = useSettingsStore()
 const schemeOptStore = useSchemeOptimizationStore()
-
 const { isMultiScheme, formData, outputResults } = storeToRefs(designStore)
 
 // 从方案优化仓库读取已添加的设计因子，用于禁用设计表单对应字段
@@ -71,23 +74,29 @@ const isLoading = ref(false)
 
 /**  读取任务文件内容（优先 input.txt，其次 input.dat），自动填充表单 */
 async function readTakeData() {
-  const source = app.productConfig.file?.inputFileName || 'input.txt'
-  let content = await app.file.readDatFile(source)
+  try {
+    const source = app.productConfig.file?.inputFileName
 
-  if (!content) {
-    message.error(`未找到任务文件 (${source})`)
-    // 如果没找到就手动选择文件
-    const files = await app.file.selectFile()
-    if (files) {
-      content = await app.file.readDatFile(files[0])
-    }
-    else {
-      message.error('未选择文件')
+    if (!source) {
+      message.error('未找到任务文件')
       return
     }
-  }
 
-  try {
+    let content = await app.file.readDatFile(source)
+
+    if (!content) {
+      message.error(`未找到任务文件 (${source})`)
+      // 如果没找到就手动选择文件
+      const files = await app.file.selectFile()
+      if (files) {
+        content = await app.file.readDatFile(files[0])
+      }
+      else {
+        message.error('未选择文件')
+        return
+      }
+    }
+
     if (content.includes('=')) {
       parseTxtContent(content)
     }
@@ -263,21 +272,9 @@ async function onFieldChange(name: string, val: number | null) {
 }
 
 /**
- * 从 store 同步表单数据到模型
- */
-function syncFormFromStore() {
-  Object.assign(formModel, {
-    ...formData.value,
-  })
-  Object.assign(prevModel, formModel)
-}
-
-/**
  * 仿真计算
  */
 async function simulateCalculation(): Promise<void> {
-  syncFormFromStore()
-
   try {
     await formRef.value?.validate()
   }
@@ -342,7 +339,6 @@ async function executeSimulateCalculation(): Promise<void> {
  * 提交设计
  */
 async function submitDesign(): Promise<void> {
-  syncFormFromStore()
   if (!outputResults.value.separationPower || !outputResults.value.separationFactor) {
     message.error('请先进行仿真计算，获取分离功率和分离系数')
     return
@@ -406,10 +402,10 @@ async function submitDesign(): Promise<void> {
   message.success(`方案提交成功，已生成 ${outPath}`)
 
   // 通知父组件（如多方案修正页）以便更新表格数据
-  emit('submitted', {
-    formData: { ...formData.value },
-    outputResults: { ...outputResults.value },
-  })
+//   emit('submitted', {
+//     formData: { ...formData.value },
+//     outputResults: { ...outputResults.value },
+//   })
 }
 
 /**
@@ -511,7 +507,6 @@ async function parseDatContent(content: string): Promise<void> {
     designStore.updateFormData({ [paramKeys[i]]: val } as any)
   }
   // 解析完毕后，同步到表单模型，保证成对约束读到最新值
-  syncFormFromStore()
 }
 
 /**
@@ -588,7 +583,7 @@ function parseTxtContent(content: string): void {
 
   if (Object.keys(updates).length > 0) {
     designStore.updateFormData(updates)
-    syncFormFromStore()
+
     message.success('读取文件内容成功')
     logStore.info('读取文件内容成功')
   }
@@ -598,7 +593,6 @@ function parseTxtContent(content: string): void {
   }
 }
 
-// Fortran关闭事件监听器
 async function handleExeClose(_: Electron.IpcRendererEvent, exeName: string, result: any) {
   const fileName = 'Sep_power.dat'
 
@@ -621,49 +615,18 @@ async function handleExeClose(_: Electron.IpcRendererEvent, exeName: string, res
     app.window.loading.close()
     isLoading.value = false
   }
-}
 
-// 监听 selectedScheme 变化，自动填充表单
-function fillFormFromScheme(scheme: any) {
-  if (!scheme)
-    return
-
-  // 更新 store 中的各个参数
-  designStore.updateFormData({
-    angularVelocity: scheme.angularVelocity,
-    rotorRadius: scheme.rotorRadius,
-    rotorShoulderLength: scheme.rotorShoulderLength,
-    rotorSidewallPressure: scheme.rotorSidewallPressure,
-    gasDiffusionCoefficient: scheme.gasDiffusionCoefficient,
-    feedFlowRate: scheme.feedFlowRate,
-    splitRatio: scheme.splitRatio,
-    feedingMethod: scheme.feedingMethod,
-    depletedEndCapTemperature: scheme.depletedEndCapTemperature,
-    enrichedEndCapTemperature: scheme.enrichedEndCapTemperature,
-    feedAxialDisturbance: scheme.feedAxialDisturbance,
-    feedAngularDisturbance: scheme.feedAngularDisturbance,
-    depletedMechanicalDriveAmount: scheme.depletedMechanicalDriveAmount,
-    extractionChamberHeight: scheme.extractionChamberHeight,
-    enrichedBaffleHoleDiameter: scheme.enrichedBaffleHoleDiameter,
-    feedBoxShockDiskHeight: scheme.feedBoxShockDiskHeight,
-    depletedExtractionArmRadius: scheme.depletedExtractionArmRadius,
-    depletedExtractionPortInnerDiameter: scheme.depletedExtractionPortInnerDiameter,
-    depletedBaffleInnerHoleOuterDiameter: scheme.depletedBaffleInnerHoleOuterDiameter,
-    enrichedBaffleHoleDistributionCircleDiameter: scheme.enrichedBaffleHoleDistributionCircleDiameter,
-    depletedExtractionPortOuterDiameter: scheme.depletedExtractionPortOuterDiameter,
-    depletedBaffleOuterHoleInnerDiameter: scheme.depletedBaffleOuterHoleInnerDiameter,
-    minAxialDistance: scheme.minAxialDistance,
-    depletedBaffleAxialPosition: scheme.depletedBaffleAxialPosition,
-    depletedBaffleOuterHoleOuterDiameter: scheme.depletedBaffleOuterHoleOuterDiameter,
-  } as any)
-
-  // 同步到表单
-  syncFormFromStore()
-
-  message.success('已填充选中方案数据')
+  if (!props.showButton) {
+    emit('submitted', {
+      formData: { ...formData.value },
+      outputResults: { ...outputResults.value },
+    })
+  }
 }
 
 watch(() => props.selectedScheme, (newScheme) => {
+  console.log(newScheme)
+
   if (newScheme) {
     fillFormFromScheme(newScheme)
   }
@@ -672,7 +635,7 @@ watch(() => props.selectedScheme, (newScheme) => {
 onMounted(() => {
   window.electron.ipcRenderer.removeAllListeners?.('exe-closed')
   window.electron.ipcRenderer.on('exe-closed', handleExeClose)
-  syncFormFromStore()
+
   /** 如果表单没有值，则读取文件内容 */
   if (!designStore.isFormValid()) {
     readTakeData()

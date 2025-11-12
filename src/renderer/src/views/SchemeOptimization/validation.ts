@@ -10,9 +10,8 @@ type FieldName = 'lowerLimit' | 'upperLimit' | 'levelCount'
 /**
  * 检查值是否为空（undefined 或 null）
  */
-// 可以为空，直接返回 false，表示不认定为空
-function isNullOrUndefined(val: unknown): val is false {
-  return false
+function isNullOrUndefined(val: unknown): val is undefined | null {
+  return val === undefined || val === null
 }
 
 /**
@@ -663,7 +662,7 @@ export function validateMOPSOFactors(factors: DesignFactor[]): string[] {
       }
 
       if (arr.length < 3) {
-        errors.push(formatBatchError(name, '取值数量应为大于2的正整数，如： [10,12,33]'))
+        errors.push(formatBatchError(name, '取值应为数组并且至少大于2，如： [10,12,33]'))
         continue
       }
       // 校验通过，可以继续处理该因子

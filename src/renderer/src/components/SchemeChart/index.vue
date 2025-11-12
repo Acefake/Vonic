@@ -946,7 +946,7 @@ onMounted(() => {
 
 .control-label {
   font-size: 13px;
-  color: #595959;
+  color: #333333;
   font-weight: 500;
 }
 

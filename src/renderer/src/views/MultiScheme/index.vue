@@ -1,15 +1,14 @@
 <script setup lang="ts">
-import type { TableProps } from 'ant-design-vue'
 import { Button, message } from 'ant-design-vue'
-import { cloneDeep } from 'lodash-es'
 import { storeToRefs } from 'pinia'
+import { computed, h, onMounted, ref } from 'vue'
 
-import { computed, h, nextTick, onMounted, ref } from 'vue'
 import app from '../../app/index'
 import SchemeChart from '../../components/SchemeChart/index.vue'
 import { useSchemeOptimizationStore } from '../../store'
 import { FIELD_LABELS, getFieldLabel } from '../../utils/field-labels'
 import InitialDesign from '../InitialDesign/index.vue'
+import PowerAnalysisDesign from '../PowerAnalysisDesign/index.vue'
 
 interface SchemeData {
   index: number // -1 表示最优方案（第一行），显示为 '*'；其他为原始序号
@@ -89,42 +88,76 @@ function isOptimalSchemeRow(record: any): boolean {
   return record && record.index === -1
 }
 
-// 定义所有字段的配置
-const fieldConfigs = [
-  { key: 'angularVelocity', label: getFieldLabel('angularVelocity'), width: 120, unit: 'Hz' },
-  { key: 'rotorRadius', label: getFieldLabel('rotorRadius'), width: 120, unit: 'mm' },
-  { key: 'rotorShoulderLength', label: getFieldLabel('rotorShoulderLength'), width: 140, unit: 'mm' },
-  { key: 'extractionChamberHeight', label: getFieldLabel('extractionChamberHeight'), width: 140, unit: 'mm' },
-  { key: 'rotorSidewallPressure', label: getFieldLabel('rotorSidewallPressure'), width: 140, unit: 'Pa' },
-  { key: 'gasDiffusionCoefficient', label: getFieldLabel('gasDiffusionCoefficient'), width: 140 },
-  { key: 'depletedEndCapTemperature', label: getFieldLabel('depletedEndCapTemperature'), width: 140, unit: 'K' },
-  { key: 'enrichedEndCapTemperature', label: getFieldLabel('enrichedEndCapTemperature'), width: 140, unit: 'K' },
-  { key: 'depletedMechanicalDriveAmount', label: getFieldLabel('depletedMechanicalDriveAmount'), width: 160, unit: 'mm' },
-  { key: 'depletedExtractionArmRadius', label: getFieldLabel('depletedExtractionArmRadius'), width: 160, unit: 'mm' },
-  { key: 'innerBoundaryMirrorPosition', label: '内边界镜像位置', width: 140, unit: 'mm' },
-  { key: 'gridGenerationMethod', label: '网格生成方式', width: 120 },
-  { key: 'enrichedBaffleHoleDistributionCircleDiameter', label: getFieldLabel('enrichedBaffleHoleDistributionCircleDiameter'), width: 180, unit: 'mm' },
-  { key: 'enrichedBaffleHoleDiameter', label: getFieldLabel('enrichedBaffleHoleDiameter'), width: 140, unit: 'mm' },
-  { key: 'depletedExtractionPortInnerDiameter', label: getFieldLabel('depletedExtractionPortInnerDiameter'), width: 160, unit: 'mm' },
-  { key: 'depletedExtractionPortOuterDiameter', label: getFieldLabel('depletedExtractionPortOuterDiameter'), width: 160, unit: 'mm' },
-  { key: 'minAxialDistance', label: getFieldLabel('minAxialDistance'), width: 200, unit: 'mm' },
-  { key: 'feedBoxShockDiskHeight', label: getFieldLabel('feedBoxShockDiskHeight'), width: 160, unit: 'mm' },
-  { key: 'feedFlowRate', label: getFieldLabel('feedFlowRate'), width: 120, unit: 'kg/s' },
-  { key: 'splitRatio', label: getFieldLabel('splitRatio'), width: 100 },
-  { key: 'feedAngularDisturbance', label: getFieldLabel('feedAngularDisturbance'), width: 140, unit: 'mm' },
-  { key: 'feedAxialDisturbance', label: getFieldLabel('feedAxialDisturbance'), width: 140, unit: 'mm' },
-  { key: 'depletedBaffleInnerHoleOuterDiameter', label: getFieldLabel('depletedBaffleInnerHoleOuterDiameter'), width: 200, unit: 'mm' },
-  { key: 'depletedBaffleOuterHoleInnerDiameter', label: getFieldLabel('depletedBaffleOuterHoleInnerDiameter'), width: 200, unit: 'mm' },
-  { key: 'depletedBaffleOuterHoleOuterDiameter', label: getFieldLabel('depletedBaffleOuterHoleOuterDiameter'), width: 200, unit: 'mm' },
-  { key: 'depletedBaffleAxialPosition', label: getFieldLabel('depletedBaffleAxialPosition'), width: 160, unit: 'mm' },
-  { key: 'bwgRadialProtrusionHeight', label: 'BWG径向凸起高度', width: 140, unit: 'mm' },
-  { key: 'bwgAxialHeight', label: 'BWG轴向高度', width: 120, unit: 'mm' },
-  { key: 'bwgAxialPosition', label: 'BWG轴向位置', width: 140, unit: 'mm' },
-  { key: 'radialGridRatio', label: '径向网格比', width: 120 },
-  { key: 'feedingMethod', label: getFieldLabel('feedingMethod'), width: 120 },
-  { key: 'compensationCoefficient', label: '补偿系数', width: 120 },
-  { key: 'streamlineData', label: '流线数据', width: 120 },
-]
+// 根据产品类型定义字段配置
+const fieldConfigs = computed(() => {
+  const isPowerAnalysis = app.productConfig.id === 'powerAnalysis'
+
+  // 共同字段（两种产品都有的字段）
+  const commonFields = [
+    { key: 'angularVelocity', label: getFieldLabel('angularVelocity'), width: 120, unit: 'Hz' },
+    { key: 'rotorRadius', label: getFieldLabel('rotorRadius'), width: 120, unit: 'mm' },
+    { key: 'extractionChamberHeight', label: getFieldLabel('extractionChamberHeight'), width: 140, unit: 'mm' },
+    { key: 'rotorSidewallPressure', label: getFieldLabel('rotorSidewallPressure'), width: 140, unit: 'Pa' },
+    { key: 'feedFlowRate', label: getFieldLabel('feedFlowRate'), width: 120, unit: 'kg/s' },
+    { key: 'enrichedBaffleHoleDistributionCircleDiameter', label: getFieldLabel('enrichedBaffleHoleDistributionCircleDiameter'), width: 180, unit: 'mm' },
+    { key: 'enrichedBaffleHoleDiameter', label: getFieldLabel('enrichedBaffleHoleDiameter'), width: 140, unit: 'mm' },
+    { key: 'depletedExtractionPortInnerDiameter', label: getFieldLabel('depletedExtractionPortInnerDiameter'), width: 160, unit: 'mm' },
+    { key: 'depletedExtractionPortOuterDiameter', label: getFieldLabel('depletedExtractionPortOuterDiameter'), width: 160, unit: 'mm' },
+  ]
+
+  // 功率分析特有字段
+  const powerAnalysisFields = [
+    { key: 'averageTemperature', label: getFieldLabel('averageTemperature'), width: 140, unit: 'K' },
+    { key: 'enrichedBaffleTemperature', label: getFieldLabel('enrichedBaffleTemperature'), width: 160, unit: 'K' },
+    { key: 'depletedExtractionRootOuterDiameter', label: getFieldLabel('depletedExtractionRootOuterDiameter'), width: 180, unit: 'mm' },
+    { key: 'extractorAngleOfAttack', label: getFieldLabel('extractorAngleOfAttack'), width: 140, unit: 'rad' },
+    { key: 'depletedExtractionCenterDistance', label: getFieldLabel('depletedExtractionCenterDistance'), width: 160, unit: 'mm' },
+    { key: 'enrichedExtractionCenterDistance', label: getFieldLabel('enrichedExtractionCenterDistance'), width: 160, unit: 'mm' },
+    { key: 'constantSectionStraightPipeLength', label: getFieldLabel('constantSectionStraightPipeLength'), width: 180, unit: 'mm' },
+    { key: 'extractorCuttingAngle', label: getFieldLabel('extractorCuttingAngle'), width: 140, unit: 'rad' },
+    { key: 'variableSectionStraightPipeLength', label: getFieldLabel('variableSectionStraightPipeLength'), width: 180, unit: 'mm' },
+    { key: 'bendRadiusOfCurvature', label: getFieldLabel('bendRadiusOfCurvature'), width: 140, unit: 'mm' },
+    { key: 'extractorSurfaceRoughness', label: getFieldLabel('extractorSurfaceRoughness'), width: 160, unit: 'mm' },
+    { key: 'extractorTaperAngle', label: getFieldLabel('extractorTaperAngle'), width: 140, unit: 'rad' },
+  ]
+
+  // 多物理场数值模拟仿真计算特有字段
+  const mPhysSimFields = [
+    { key: 'rotorShoulderLength', label: getFieldLabel('rotorShoulderLength'), width: 140, unit: 'mm' },
+    { key: 'gasDiffusionCoefficient', label: getFieldLabel('gasDiffusionCoefficient'), width: 140 },
+    { key: 'depletedEndCapTemperature', label: getFieldLabel('depletedEndCapTemperature'), width: 140, unit: 'K' },
+    { key: 'enrichedEndCapTemperature', label: getFieldLabel('enrichedEndCapTemperature'), width: 140, unit: 'K' },
+    { key: 'depletedMechanicalDriveAmount', label: getFieldLabel('depletedMechanicalDriveAmount'), width: 160, unit: 'mm' },
+    { key: 'depletedExtractionArmRadius', label: getFieldLabel('depletedExtractionArmRadius'), width: 160, unit: 'mm' },
+    { key: 'innerBoundaryMirrorPosition', label: '内边界镜像位置', width: 140, unit: 'mm' },
+    { key: 'gridGenerationMethod', label: '网格生成方式', width: 120 },
+    { key: 'minAxialDistance', label: getFieldLabel('minAxialDistance'), width: 200, unit: 'mm' },
+    { key: 'feedBoxShockDiskHeight', label: getFieldLabel('feedBoxShockDiskHeight'), width: 160, unit: 'mm' },
+    { key: 'splitRatio', label: getFieldLabel('splitRatio'), width: 100 },
+    { key: 'feedAngularDisturbance', label: getFieldLabel('feedAngularDisturbance'), width: 140, unit: 'mm' },
+    { key: 'feedAxialDisturbance', label: getFieldLabel('feedAxialDisturbance'), width: 140, unit: 'mm' },
+    { key: 'depletedBaffleInnerHoleOuterDiameter', label: getFieldLabel('depletedBaffleInnerHoleOuterDiameter'), width: 200, unit: 'mm' },
+    { key: 'depletedBaffleOuterHoleInnerDiameter', label: getFieldLabel('depletedBaffleOuterHoleInnerDiameter'), width: 200, unit: 'mm' },
+    { key: 'depletedBaffleOuterHoleOuterDiameter', label: getFieldLabel('depletedBaffleOuterHoleOuterDiameter'), width: 200, unit: 'mm' },
+    { key: 'depletedBaffleAxialPosition', label: getFieldLabel('depletedBaffleAxialPosition'), width: 160, unit: 'mm' },
+    { key: 'bwgRadialProtrusionHeight', label: 'BWG径向凸起高度', width: 140, unit: 'mm' },
+    { key: 'bwgAxialHeight', label: 'BWG轴向高度', width: 120, unit: 'mm' },
+    { key: 'bwgAxialPosition', label: 'BWG轴向位置', width: 140, unit: 'mm' },
+    { key: 'radialGridRatio', label: '径向网格比', width: 120 },
+    { key: 'feedingMethod', label: getFieldLabel('feedingMethod'), width: 120 },
+    { key: 'compensationCoefficient', label: '补偿系数', width: 120 },
+    { key: 'streamlineData', label: '流线数据', width: 120 },
+  ]
+
+  // 根据产品类型返回对应的字段配置
+  if (isPowerAnalysis) {
+    return [...commonFields, ...powerAnalysisFields]
+  }
+  else {
+    // 多物理场数值模拟仿真计算包含所有字段
+    return [...commonFields, ...powerAnalysisFields, ...mPhysSimFields]
+  }
+})
 
 // 反查：根据中文标签获取字段 key
 function getFieldKeyByLabel(label: string): string | null {
@@ -234,10 +267,9 @@ const columns = computed(() => {
   ]
 
   // 仅显示方案优化中选中的设计因子对应的列
-  const activeFieldConfigs = fieldConfigs.filter(cfg => selectedDesignFactorKeys.value.includes(cfg.key))
+  const activeFieldConfigs = fieldConfigs.value.filter(cfg => selectedDesignFactorKeys.value.includes(cfg.key))
 
-  // 深拷贝避免修改原始数据和被引用
-  const fieldColumns = cloneDeep(activeFieldConfigs).map(config => ({
+  const fieldColumns = activeFieldConfigs.map(config => ({
     title: config.unit ? `${config.label}(${config.unit})` : config.label,
     dataIndex: config.key,
     key: config.key,
@@ -246,8 +278,6 @@ const columns = computed(() => {
     filterDropdown: createUniqueValueFilterPanel(config.key),
     onFilter: uniqueValueFilter(config.key),
   }))
-
-  // const resultFields = app.productConfig.resultFields
 
   const resultColumns = [
     {
@@ -275,7 +305,7 @@ const columns = computed(() => {
 
 // X 轴列定义（设计因子）- 仅包含方案优化选中的设计因子
 const xColumns = computed(() => {
-  const activeFieldConfigs = fieldConfigs.filter(cfg => selectedDesignFactorKeys.value.includes(cfg.key))
+  const activeFieldConfigs = fieldConfigs.value.filter(cfg => selectedDesignFactorKeys.value.includes(cfg.key))
   return activeFieldConfigs.map(config => ({
     title: config.label,
     dataIndex: config.key,
@@ -344,36 +374,6 @@ async function loadSchemes() {
 }
 
 /**
- * 处理表格变化（筛选、分页）
- */
-const handleTableChange: TableProps['onChange'] = (_pagination, filters) => {
-  let data = [...schemes.value]
-
-  Object.keys(filters).forEach((key) => {
-    const filterValues = filters[key]
-    if (Array.isArray(filterValues) && filterValues.length > 0) {
-      data = data.filter((record: SchemeData) => {
-        const value = record[key as keyof SchemeData]
-        return filterValues.includes(value as any)
-      })
-    }
-  })
-
-  // 保持原有顺序（最优方案保持在原位置）
-  data = maintainOriginalOrder(data)
-
-  filteredData.value = data
-
-  // 分页切换时滚动到顶部
-  nextTick(() => {
-    const tableEl = document.querySelector('.ant-table-body')
-    if (tableEl) {
-      tableEl.scrollTop = 0
-    }
-  })
-}
-
-/**
  * 判断是否为最优方案行（第一行，序号为 '*'）
  */
 function isMaxSepPowerRow(record: any): boolean {
@@ -407,6 +407,7 @@ const rowSelection = computed(() => {
 })
 
 const initialDesignRef = ref<InstanceType<typeof InitialDesign>>()
+const componentValue = app.productConfig.id === 'mPhysSim' ? InitialDesign : PowerAnalysisDesign
 
 onMounted(() => {
   loadSchemes()
@@ -486,7 +487,7 @@ function onDesignSubmitted(payload: { formData: any, outputResults: any }) {
         :columns="columns" :data-source="filteredData" :loading="loading" :pagination="false"
         :row-class-name="(record) => isMaxSepPowerRow(record) ? 'optimal-row' : ''"
         :row-key="(record) => `${record.index}_${record.fileName}`" size="small" :scroll="{ x: 'max-content', y: 520 }" sticky
-        :row-selection="rowSelection" @change="handleTableChange"
+        :row-selection="rowSelection"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'index'">
@@ -531,7 +532,9 @@ function onDesignSubmitted(payload: { formData: any, outputResults: any }) {
             提交方案
           </a-button>
         </div>
-        <InitialDesign
+
+        <component
+          :is="componentValue"
           ref="initialDesignRef"
           :selected-scheme="correctionSelectedData"
           :show-button="false"

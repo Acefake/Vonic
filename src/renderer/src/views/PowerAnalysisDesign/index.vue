@@ -3,9 +3,9 @@ import type { FormInstance } from 'ant-design-vue'
 
 import { FileTextOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
-
 import { storeToRefs } from 'pinia'
-import { onMounted, onUnmounted, reactive, ref } from 'vue'
+import { onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { useTake } from '../../hooks/useTake'
 import { useLogStore } from '../../store/logStore'
 import { usePowerAnalysisDesignStore } from '../../store/powerAnalysisDesignStore'
 import { useSettingsStore } from '../../store/settingsStore'
@@ -16,11 +16,18 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  /** 当前选择的方案 */
+  selectedScheme: {
+    type: Object as () => any,
+    default: null,
+  },
 } as const)
 
 const emit = defineEmits<{
   (e: 'submitted', payload: { formData: any, outputResults: any }): void
 }>()
+
+const { fillFormFromScheme } = useTake()
 
 const designStore = usePowerAnalysisDesignStore()
 const logStore = useLogStore()
@@ -35,27 +42,15 @@ const isLoading = ref(false)
 
 /**  读取任务文件内容（优先 input.txt，其次 input.dat），自动填充表单 */
 async function readTakeData() {
-  const source = app.productConfig.file?.inputFileName
-  if (!source) {
-    message.error('读取任务文件名称未配置')
-    return
-  }
-  let content = await app.file.readDatFile(source)
-
-  if (!content) {
-    message.error('未找到任务文件 (input.txt)')
-    // 如果没找到就手动选择 选择一个文件
-    const files = await app.file.selectFile()
-    if (files) {
-      content = await app.file.readDatFile(files[0])
-    }
-    else {
-      message.error('未选择文件')
+  try {
+    const source = app.productConfig.file?.inputFileName
+    if (!source) {
+      message.error('读取任务文件名称未配置')
       return
     }
-  }
 
-  try {
+    const content = await app.file.readDatFile(source)
+
     if (content.includes('=')) {
       parseTxtContent(content)
     }
@@ -63,9 +58,24 @@ async function readTakeData() {
       await parseDatContent(content)
     }
     message.success(`已从 ${source} 填充到表单`)
+    console.log('readTakeData - 更新后的 store 数据:', designStore.formData)
   }
   catch (error) {
     message.error(`解析任务文件失败: ${error instanceof Error ? error.message : String(error)}`)
+    const files = await app.file.selectFile()
+    if (files) {
+      const content = await app.file.readDatFile(files[0])
+      if (content.includes('=')) {
+        parseTxtContent(content)
+      }
+      else {
+        await parseDatContent(content)
+      }
+      message.success(`已从 ${files[0]} 填充到表单`)
+    }
+    else {
+      message.error('未选择文件')
+    }
   }
 }
 
@@ -311,7 +321,7 @@ async function simulateCalculation(): Promise<void> {
 
   // 写入 input.txt 文件
   const baseDir = await app.file.getWorkDir()
-  const inputPath = baseDir.includes('\\') ? `${baseDir}\\${app.productConfig.file?.inputFileName}` : `${baseDir}/${app.productConfig.file?.inputFileName}`
+  const inputPath = baseDir.includes('\\') ? `${baseDir}\\${app.productConfig.file?.inputFileName_fortran}` : `${baseDir}/${app.productConfig.file?.inputFileName_fortran}`
   await app.file.writeFile(inputPath, inputTxtContent)
 
   logStore.success(`已生成输入文件: ${inputPath}`)
@@ -593,6 +603,12 @@ async function handleExeClose(_: Electron.IpcRendererEvent, exeName: string, res
     isLoading.value = false
   }
 }
+
+watch(() => props.selectedScheme, (newScheme) => {
+  if (newScheme) {
+    fillFormFromScheme(newScheme)
+  }
+}, { immediate: true })
 
 onMounted(() => {
   window.electron.ipcRenderer.removeAllListeners?.('exe-closed')
@@ -917,7 +933,7 @@ defineExpose({
     <div class="output-results">
       <a-space size="large">
         <div class="result-item">
-          <span class="result-label">{{ getFieldLabel('poorTackPower', fieldLabelMode) }}:</span>
+          <span class="result-label">贫取料器功耗:</span>
           <span class="result-value" :style="{ color: themeColor }">
             {{
               outputResults.poorTackPower !== null && outputResults.poorTackPower !== undefined
@@ -928,7 +944,7 @@ defineExpose({
           </span>
         </div>
         <div class="result-item">
-          <span class="result-label">{{ getFieldLabel('tackPower', fieldLabelMode) }}:</span>
+          <span class="result-label">取料器总功耗:</span>
           <span class="result-value" :style="{ color: themeColor }">
             {{
               outputResults.tackPower !== null && outputResults.tackPower !== undefined

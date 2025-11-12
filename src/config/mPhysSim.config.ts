@@ -30,8 +30,10 @@ const mPhysSimConfig: ProductConfig = {
   file: {
     /** 可执行文件名称 */
     exeName: 'ns-linear.exe',
+    /** 多物理场数值模拟仿真计算读取文件名称 */
+    inputFileName: 'input.txt',
     /** Fortran读取输入文件名称 */
-    inputFileName: 'input.dat',
+    inputFileName_fortran: 'input.dat',
     /** Fortran运行后生成结果文件名称 */
     outputFileName: 'Sep_power.dat',
     /** 提交任务后生成结果文件名称 */

@@ -3,6 +3,7 @@ import type { WindowConfig } from './types'
 import { join } from 'node:path'
 // import { is } from '@electron-toolkit/utils'
 
+import { getProductConfig } from '@/config/product.config'
 import { WindowName } from '@/shared/constants'
 
 export { WindowName }
@@ -26,6 +27,8 @@ const browserWindowDefaultOptions: BrowserWindowConstructorOptions = {
     webSecurity: false,
     // 缩放因子
     zoomFactor: 1,
+    // 为不同产品使用不同的 session partition，实现独立的 localStorage, 避免数据污染
+    partition: `persist:${getProductConfig().id}`,
   },
 }
 

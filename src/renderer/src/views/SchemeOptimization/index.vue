@@ -8,6 +8,7 @@ import { getProductConfig } from '../../../../config/product.config'
 import app from '../../app/index'
 import { useLogStore, useSchemeOptimizationStore } from '../../store'
 import { useDesignStore } from '../../store/designStore'
+import { usePowerAnalysisDesignStore } from '../../store/powerAnalysisDesignStore'
 import { FIELD_LABELS } from '../../utils/field-labels'
 import { parseOutput } from '../../utils/parseOutinpu'
 import { parseSepPower } from '../../utils/parseSepPower'
@@ -28,7 +29,7 @@ import {
 } from './validation'
 
 const logStore = useLogStore()
-const designStore = useDesignStore()
+const designStore = app.productConfig.id === 'powerAnalysis' ? usePowerAnalysisDesignStore() : useDesignStore()
 const schemeOptimizationStore = useSchemeOptimizationStore()
 const { designFactors, sampleSpaceData, optimizationAlgorithm, samplePointCount, samplingCriterion, factorCount, samplePointCountforRes } = storeToRefs(schemeOptimizationStore)
 
@@ -228,12 +229,12 @@ async function getWorkBaseDir(): Promise<string> {
 const isOptimizing = ref(false)
 
 async function performOptimization(): Promise<void> {
-  console.log('designStore.isFormValid()', designStore.isFormValid())
+  console.log('designStore.isFormValid()', designStore)
 
-  // if (!designStore.isFormValid()) {
-  //   app.message.error('方案设计因子未填写完整，请检查输入！')
-  //   return
-  // }
+  if (!designStore.isFormValid()) {
+    app.message.error('方案设计因子未填写完整，请检查输入！')
+    return
+  }
 
   if (designFactors.value.length === 0) {
     app.message.warning('请先添加设计因子')
@@ -302,8 +303,9 @@ async function executeOptimization(): Promise<void> {
     const exeName = app.productConfig.file?.exeName
     const inputFileName = app.productConfig.file?.inputFileName
     const outputFileName = app.productConfig.file?.outputFileName
+    const inputFileName_fortran = app.productConfig.file?.inputFileName_fortran
 
-    if (!exeName || !inputFileName || !outputFileName) {
+    if (!exeName || !inputFileName || !outputFileName || !inputFileName_fortran) {
       app.window.loading.close()
       app.message.error('产品配置中缺少必要的文件配置')
       logStore.error('产品配置中缺少必要的文件配置')
@@ -375,10 +377,10 @@ async function executeOptimization(): Promise<void> {
         ...sampleParams,
       }
 
-      const writeResult = await app.file.writeDatFile(inputFileName, combinedParams, info.workDir)
+      const writeResult = await app.file.writeDatFile(inputFileName_fortran, combinedParams, info.workDir)
       console.log(writeResult, 'writeResult')
       if (writeResult.code !== 200) {
-        logStore.error(`样本 ${info.sampleId} 写入${inputFileName}失败: ${writeResult.message}`)
+        logStore.error(`样本 ${info.sampleId} 写入${inputFileName_fortran}失败: ${writeResult.message}`)
         results.push({
           index: info.sampleId,
           sampleData: info.sample,
@@ -482,7 +484,6 @@ async function executeOptimization(): Promise<void> {
       }
       else {
         try {
-          // 读取 Sep_power.dat
           const content = await app.file.readDatFile(outputFileName, info.workDir)
 
           let parsedData
@@ -494,11 +495,19 @@ async function executeOptimization(): Promise<void> {
             parsedData = parseSepPower(content)
           }
 
+          const sepPowerVal = app.productConfig.id === 'powerAnalysis'
+            ? parsedData.poorTackPower
+            : parsedData.actualSepPower
+
+          const sepFactorVal = app.productConfig.id === 'powerAnalysis'
+            ? parsedData.tackPower
+            : parsedData.actualSepFactor
+
           results.push({
             index: info.sampleId,
             sampleData: info.sample,
-            sepPower: parsedData.poorTackPower,
-            sepFactor: parsedData.tackPower,
+            sepPower: sepPowerVal,
+            sepFactor: sepFactorVal,
             dirName: info.dirName,
           })
 
@@ -824,9 +833,12 @@ async function executeOptimization(): Promise<void> {
       sepFactor: number | null
     }> = []
 
+    console.log(optimalIndex, ';finalResults')
+
     // 首先添加最优方案（序号为-1，显示为'*'）
-    if (optimalIndex >= 0) {
+    if (optimalIndex !== -1) {
       const optimal = results.find(r => r.index === optimalIndex)
+
       if (optimal) {
         const optimalData: any = {
           index: -1, // 最优方案标记
@@ -844,13 +856,21 @@ async function executeOptimization(): Promise<void> {
 
         finalResults.push(optimalData)
 
-        // 将最优方案的结果和参数值更新到 InitialDesign 的 store 中
+        // 将最优方案的结果和参数值更新到对应产品的设计 Store 中
         try {
           // 更新输出结果
-          designStore.updateOutputResults({
-            separationPower: optimal.sepPower ?? undefined,
-            separationFactor: optimal.sepFactor ?? undefined,
-          })
+          if (app.productConfig.id === 'powerAnalysis') {
+            designStore.updateOutputResults({
+              poorTackPower: optimal.sepPower ?? undefined,
+              tackPower: optimal.sepFactor ?? undefined,
+            } as any)
+          }
+          else {
+            designStore.updateOutputResults({
+              separationPower: optimal.sepPower ?? undefined,
+              separationFactor: optimal.sepFactor ?? undefined,
+            } as any)
+          }
 
           // 将最优方案的参数值更新到对应的 store 中
           const optimalParams = convertSampleDataToKeys(optimal.sampleData)
@@ -908,10 +928,17 @@ async function executeOptimization(): Promise<void> {
             }
           }
 
-          // 统一更新扁平化的表单数据
-          const mergedParams = { ...topParams, ...opParams, ...drvParams, ...sepParams }
-          if (Object.keys(mergedParams).length > 0) {
-            designStore.updateFormData(mergedParams as any)
+          // 统一更新扁平化的表单数据（按产品分别处理）
+          if (app.productConfig.id === 'powerAnalysis') {
+            const paParams = optimalParams
+            if (Object.keys(paParams).length > 0)
+              designStore.updateFormData(paParams as any)
+          }
+          else {
+            const mergedParams = { ...topParams, ...opParams, ...drvParams, ...sepParams }
+            if (Object.keys(mergedParams).length > 0) {
+              designStore.updateFormData(mergedParams as any)
+            }
           }
         }
         catch (error) {
@@ -1151,7 +1178,6 @@ function assembleNSGAIIParams() {
     numVars: factorCount.value,
     // 采样准则
     criterion: samplingCriterion.value,
-    //
     params: tableParams,
   }
 
@@ -1465,15 +1491,21 @@ async function executeSampleSpace(params: any) {
 
                       if (optimizationAlgorithm === 'NSGA-II') {
                         // NSGA-II: 校验（清空时不触发必填校验）
-                        if (!validateLowerLimitNSGAII(factor, Number(newVal), prev ?? undefined, showError, record as DesignFactor)) {
+                        if (!validateLowerLimitNSGAII(factor, newVal as number | undefined, prev ?? undefined, showError, record as DesignFactor)) {
                           return
                         }
-                        factor.lowerLimit = Number(newVal)
-                        record.lowerLimit = Number(newVal)
+                        if (newVal === undefined || newVal === null) {
+                          factor.lowerLimit = undefined
+                          record.lowerLimit = undefined
+                        }
+                        else {
+                          factor.lowerLimit = Number(newVal)
+                          record.lowerLimit = Number(newVal)
+                        }
                       }
                       else if (optimizationAlgorithm === 'MOPSO') {
                         // MOPSO: 处理更新逻辑
-                        handleMOPSOLowerLimitUpdate(factor, record as DesignFactor, Number(newVal), prev ?? undefined, showError)
+                        handleMOPSOLowerLimitUpdate(factor, record as DesignFactor, newVal as number | undefined, prev ?? undefined, showError)
                       }
                     }"
                   />
@@ -1489,15 +1521,21 @@ async function executeSampleSpace(params: any) {
 
                       if (optimizationAlgorithm === 'NSGA-II') {
                         // NSGA-II: 校验（清空时不触发必填校验）
-                        if (!validateUpperLimitNSGAII(factor, Number(newVal), prev ?? undefined, showError, record as DesignFactor)) {
+                        if (!validateUpperLimitNSGAII(factor, newVal as number | undefined, prev ?? undefined, showError, record as DesignFactor)) {
                           return
                         }
-                        factor.upperLimit = Number(newVal)
-                        record.upperLimit = Number(newVal)
+                        if (newVal === undefined || newVal === null) {
+                          factor.upperLimit = undefined
+                          record.upperLimit = undefined
+                        }
+                        else {
+                          factor.upperLimit = Number(newVal)
+                          record.upperLimit = Number(newVal)
+                        }
                       }
                       else if (optimizationAlgorithm === 'MOPSO') {
                         // MOPSO: 处理更新逻辑
-                        handleMOPSOUpperLimitUpdate(factor, record as DesignFactor, Number(newVal), prev ?? undefined, showError)
+                        handleMOPSOUpperLimitUpdate(factor, record as DesignFactor, newVal as number | undefined, prev ?? undefined, showError)
                       }
                     }"
                   />
@@ -1514,11 +1552,11 @@ async function executeSampleSpace(params: any) {
 
                       if (optimizationAlgorithm === 'NSGA-II') {
                         // NSGA-II: 处理水平数更新
-                        handleNSGAIILevelCountUpdate(factor, record as DesignFactor, Number(newVal), prev ?? undefined, showError)
+                        handleNSGAIILevelCountUpdate(factor, record as DesignFactor, newVal as number | undefined, prev ?? undefined, showError)
                       }
                       else if (optimizationAlgorithm === 'MOPSO') {
                         // MOPSO: 处理水平数更新
-                        handleMOPSOLevelCountUpdate(factor, record as DesignFactor, Number(newVal), prev ?? undefined, showError)
+                        handleMOPSOLevelCountUpdate(factor, record as DesignFactor, newVal as number | undefined, prev ?? undefined, showError)
                       }
                     }"
                   />

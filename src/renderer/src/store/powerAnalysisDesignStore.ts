@@ -1,36 +1,55 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
-/**
- * 功率分析-扁平化设计表单数据
- * 合并顶层参数、流体参数、分离部件为一个对象
- */
 export interface PowerAnalysisFormData {
   // 顶层参数
+
+  /** 角速度 (Hz) */
   angularVelocity?: number
+  /** 转子半径 (m) */
   rotorRadius?: number
 
   // 流体参数
+
+  /** 平均温度 (K) */
   averageTemperature?: number
+  /** 富集区温度 (K) */
   enrichedBaffleTemperature?: number
+  /** 流量 (m^3/s) */
   feedFlowRate?: number
+  /** 转子侧壁压力 (Pa) */
   rotorSidewallPressure?: number
 
   // 分离部件
+
+  /** 贫取料器内径 (m) */
   depletedExtractionPortInnerDiameter?: number
+  /** 贫取料器外径 (m) */
   depletedExtractionPortOuterDiameter?: number
+  /** 贫取料器根外径 (m) */
   depletedExtractionRootOuterDiameter?: number
   extractorAngleOfAttack?: number
+  /** 取料腔高度 (m) */
   extractionChamberHeight?: number
+  /** 贫取料器中心距离 (m) */
   depletedExtractionCenterDistance?: number
+  /** 富集区中心距离 (m) */
   enrichedExtractionCenterDistance?: number
+  /** 常数段直管长度 (m) */
   constantSectionStraightPipeLength?: number
+  /** 取料器切割角度 (°) */
   extractorCuttingAngle?: number
+  /** 富集区隔板孔径 (m) */
   enrichedBaffleHoleDiameter?: number
+  /** 变数段直管长度 (m) */
   variableSectionStraightPipeLength?: number
+  /** 弯曲半径 (m) */
   bendRadiusOfCurvature?: number
+  /** 取料器表面粗糙度 (m) */
   extractorSurfaceRoughness?: number
+  /** 取料器锥角 (°) */
   extractorTaperAngle?: number
+  /** 富集区隔板孔分布圆直径 (m) */
   enrichedBaffleHoleDistributionCircleDiameter?: number
 }
 
@@ -64,17 +83,14 @@ export const usePowerAnalysisDesignStore = defineStore('powerAnalysisDesign', ()
   /** 是否多方案 */
   const isMultiScheme = ref<boolean>(false)
 
-  /** 扁平化的表单数据 */
+  /** 表单数据 */
   const formData = ref<PowerAnalysisFormData>({
-    // 顶层参数
     angularVelocity: undefined,
     rotorRadius: undefined,
-    // 流体参数
     averageTemperature: undefined,
     enrichedBaffleTemperature: undefined,
     feedFlowRate: undefined,
     rotorSidewallPressure: undefined,
-    // 分离部件
     depletedExtractionPortInnerDiameter: undefined,
     depletedExtractionPortOuterDiameter: undefined,
     depletedExtractionRootOuterDiameter: undefined,
@@ -110,10 +126,36 @@ export const usePowerAnalysisDesignStore = defineStore('powerAnalysisDesign', ()
   /**
    * 检查表单是否完整
    */
-  const isFormValid = computed((): boolean => {
-    // 这里可以根据业务需求添加验证逻辑
-    return true
-  })
+  const isFormValid = (): boolean => {
+    // 必填字段校验
+    const requiredFields: Array<keyof PowerAnalysisFormData> = [
+      'angularVelocity',
+      'rotorRadius',
+      'averageTemperature',
+      'enrichedBaffleTemperature',
+      'feedFlowRate',
+      'rotorSidewallPressure',
+      'depletedExtractionPortInnerDiameter',
+      'depletedExtractionPortOuterDiameter',
+      'depletedExtractionRootOuterDiameter',
+      'extractorAngleOfAttack',
+      'extractionChamberHeight',
+      'depletedExtractionCenterDistance',
+      'enrichedExtractionCenterDistance',
+      'constantSectionStraightPipeLength',
+      'extractorCuttingAngle',
+      'enrichedBaffleHoleDiameter',
+      'variableSectionStraightPipeLength',
+      'bendRadiusOfCurvature',
+      'extractorSurfaceRoughness',
+      'extractorTaperAngle',
+      'enrichedBaffleHoleDistributionCircleDiameter',
+    ]
+
+    return requiredFields.every(
+      key => formData.value[key] !== undefined && formData.value[key] !== null,
+    )
+  }
 
   /**
    * 设置是否多方案
@@ -123,10 +165,7 @@ export const usePowerAnalysisDesignStore = defineStore('powerAnalysisDesign', ()
   }
 
   /**
-   * 更新顶层参数
-   */
-  /**
-   * 更新扁平化的表单字段
+   * 更新表单数据
    */
   function updateFormData(params: Partial<PowerAnalysisFormData>): void {
     formData.value = { ...formData.value, ...params }
@@ -154,15 +193,12 @@ export const usePowerAnalysisDesignStore = defineStore('powerAnalysisDesign', ()
   function reset(): void {
     isMultiScheme.value = false
     formData.value = {
-      // 顶层参数
       angularVelocity: undefined,
       rotorRadius: undefined,
-      // 流体参数
       averageTemperature: undefined,
       enrichedBaffleTemperature: undefined,
       feedFlowRate: undefined,
       rotorSidewallPressure: undefined,
-      // 分离部件
       depletedExtractionPortInnerDiameter: undefined,
       depletedExtractionPortOuterDiameter: undefined,
       depletedExtractionRootOuterDiameter: undefined,

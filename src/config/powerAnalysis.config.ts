@@ -29,8 +29,10 @@ const powerAnalysisConfig: ProductConfig = {
   file: {
     /** 可执行文件名称 */
     exeName: 'PowerLoss.exe',
-    /** Fortran读取输入文件名称 */
+    /** 功耗分析读取文件名称 */
     inputFileName: 'input_p.txt',
+    /** Fortran读取的文件名称 */
+    inputFileName_fortran: 'input.txt',
     /** Fortran运行后生成结果文件名称 */
     outputFileName: 'output.dat',
     /** 提交任务文件名称 */
@@ -40,12 +42,12 @@ const powerAnalysisConfig: ProductConfig = {
     {
       field: 'PoorTackPower',
       fileKey: 'W_waccele',
-      label: '贫料功率',
+      label: '贫取料器功耗',
     },
     {
       field: 'TackPower',
       fileKey: 'total_accele',
-      label: '富料功率',
+      label: '取料器总功耗',
     },
   ],
 }

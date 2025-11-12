@@ -1,4 +1,4 @@
-DegSpeed=111111
+DegSpeed=11
 RotorRadius=22
 RotorLength=33
 FeedMethod=0
@@ -23,5 +23,5 @@ PoorBaffleOuterHoleOuterRadius=200
 RichBaffleArrayHoleDiam=10
 FeedBoxAndPoorInterval=11
 PoorBaffleAxialSpace=11
-SplitPower=151.34
-SplitParam=159.27
+SplitPower=259.25
+SplitParam=112.51

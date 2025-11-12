@@ -121,7 +121,7 @@ export const fileAPI: FileAPI = {
 
   /**
    * 读取多个方案数据
-   * 扫描文件夹中所有包含 Sep_power.dat 的文件，并解析对应的数据
+   * 扫描文件夹中所有包含 Sep_power.dat/output.dat 的文件，并解析对应的数据
    * @returns 方案数据数组
    */
   async readMultiSchemes(): Promise<Array<{
