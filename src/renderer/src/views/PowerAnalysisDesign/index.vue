@@ -631,7 +631,7 @@ defineExpose({
         </a-checkbox>
       </a-card>
 
-      <div style="height: 10px" />
+      <div style="height: 5px" />
 
       <a-card :title="getFieldLabel('designType', fieldLabelMode)">
         <a-form ref="formRef" layout="vertical" :model="formModel" :rules="rules">
@@ -957,12 +957,12 @@ defineExpose({
 
 <style scoped>
 .power-analysis-design-container {
-  padding: 10px;
+  padding: 5px;
   margin-bottom: 60px;
 }
 
 .top-actions {
-  margin-bottom: 10px;
+  margin-bottom: 5px;
 }
 
 .section-content {

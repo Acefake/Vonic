@@ -69,22 +69,35 @@ const { fieldLabelMode } = storeToRefs(settingsStore)
 
 const isLoading = ref(false)
 
-/**  读取 input.txt 文件内容 */
+/**  读取任务文件内容（优先 input.txt，其次 input.dat），自动填充表单 */
 async function readTakeData() {
-  const fileName = 'input.txt'
-  const content = await app.file.readDatFile(fileName)
-  if (content) {
-    logStore.info('开始读取文件内容')
+  const source = app.productConfig.file?.inputFileName || 'input.txt'
+  let content = await app.file.readDatFile(source)
 
+  if (!content) {
+    message.error(`未找到任务文件 (${source})`)
+    // 如果没找到就手动选择文件
+    const files = await app.file.selectFile()
+    if (files) {
+      content = await app.file.readDatFile(files[0])
+    }
+    else {
+      message.error('未选择文件')
+      return
+    }
+  }
+
+  try {
     if (content.includes('=')) {
       parseTxtContent(content)
     }
     else {
-      parseDatContent(content)
+      await parseDatContent(content)
     }
+    message.success(`已从 ${source} 填充到表单`)
   }
-  else {
-    message.error('未找到文件')
+  catch (error) {
+    message.error(`解析任务文件失败: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 
@@ -268,8 +281,8 @@ async function simulateCalculation(): Promise<void> {
   try {
     await formRef.value?.validate()
   }
-  catch {
-    const msg = '参数校验未通过，请检查输入！'
+  catch (e: any) {
+    const msg = e?.errorFields?.[0]?.errors?.[0] || '参数校验未通过，请检查输入！'
     message.error(msg)
     return
   }
@@ -407,10 +420,22 @@ function replaceSepPowerParams(content: string): void {
 
   const result = parseSepPowerFile(content)
 
-  designStore.updateOutputResults({
-    separationPower: findValue(result, ['ACTURAL SEPERATIVE POWER', 'ACTUAL SEPERATIVE POWER']),
-    separationFactor: findValue(result, ['ACTURAL SEPERATIVE FACTOR', 'ACTUAL SEPERATIVE FACTOR']),
-  })
+  // 记录解析到的所有字段，用于调试
+  logStore.info(`解析到的字段: ${Object.keys(result).join(', ')}`)
+
+  const separationPower = findValue(result, ['ACTURAL SEPERATIVE POWER', 'ACTUAL SEPERATIVE POWER'])
+  const separationFactor = findValue(result, ['ACTURAL SEPERATIVE FACTOR', 'ACTUAL SEPERATIVE FACTOR'])
+
+  if (separationPower !== undefined || separationFactor !== undefined) {
+    designStore.updateOutputResults({
+      separationPower,
+      separationFactor,
+    })
+    logStore.info(`成功读取结果值: 分离功率=${separationPower ?? '未找到'}, 分离系数=${separationFactor ?? '未找到'}`)
+  }
+  else {
+    logStore.warning(`未找到结果字段，解析到的字段名: ${Object.keys(result).join(', ')}`)
+  }
 
   logStore.info('仿真计算完成')
   message.success('仿真计算完成')
@@ -426,10 +451,22 @@ async function parseDatContent(content: string): Promise<void> {
     .split('\n')
     .map(l => l.trim())
     .filter(Boolean)
-  const [angularVelocity, rotorRadius, rotorShoulderLength, rotorSidewallPressure, gasDiffusionCoefficient] = lines[1]
-    .replace(/!.*/, '')
+
+  // 检查文件格式是否有效
+  if (lines.length < 2) {
+    throw new Error('文件格式错误：文件行数不足')
+  }
+
+  // 解析第2行（索引1）：角速度、半径、两肩长、侧壁压力、扩散系数
+  const line2 = lines[1]?.replace(/!.*/, '').trim()
+  if (!line2) {
+    throw new Error('文件格式错误：第2行数据为空')
+  }
+
+  const [angularVelocity, rotorRadius, rotorShoulderLength, rotorSidewallPressure, gasDiffusionCoefficient] = line2
     .split(',')
     .map(Number)
+
   designStore.updateFormData({ angularVelocity, rotorRadius, rotorShoulderLength, rotorSidewallPressure, gasDiffusionCoefficient } as any)
 
   const paramKeys = [
@@ -463,7 +500,12 @@ async function parseDatContent(content: string): Promise<void> {
   ]
 
   for (let i = 0; i < paramKeys.length; i++) {
-    const raw = lines[i + 2].replace(/!.*/, '').trim()
+    const lineIndex = i + 2
+    if (lineIndex >= lines.length) {
+      // 如果行数不足，跳过剩余字段
+      break
+    }
+    const raw = lines[lineIndex]?.replace(/!.*/, '').trim() || ''
     const val = Number.isNaN(Number(raw)) ? raw : Number(raw)
     // 扁平化结构：统一更新
     designStore.updateFormData({ [paramKeys[i]]: val } as any)
@@ -557,24 +599,27 @@ function parseTxtContent(content: string): void {
 }
 
 // Fortran关闭事件监听器
-async function handleExeClose(_: Electron.IpcRendererEvent, _exeName: string, result: any) {
+async function handleExeClose(_: Electron.IpcRendererEvent, exeName: string, result: any) {
   const fileName = 'Sep_power.dat'
 
   if (result.isSuccess === false) {
-    app.message.error(`Fortran 程序异常退出，退出码: ${result.exitCode}`)
-    isLoading.value = false
+    app.message.error(`${exeName} 程序异常退出，退出码: ${result.exitCode}`)
+    logStore.error(`${exeName} 程序异常退出，退出码: ${result.exitCode}`)
     app.window.loading.close()
+    isLoading.value = false
   }
   else {
+    // 从 Sep_power.dat 读取
     const content = await app.file.readDatFile(fileName)
     if (!content) {
-      isLoading.value = false
+      logStore.warning(`未找到 ${fileName} 文件`)
       app.window.loading.close()
+      isLoading.value = false
       return
     }
     replaceSepPowerParams(content)
-    isLoading.value = false
     app.window.loading.close()
+    isLoading.value = false
   }
 }
 
