@@ -172,6 +172,10 @@ export const fileAPI: FileAPI = {
     return window.electron.ipcRenderer.invoke('file:read-multi-schemes')
   },
 
+  async getOutFingerprint(): Promise<string> {
+    return window.electron.ipcRenderer.invoke('file:get-out-fingerprint')
+  },
+
   /**
    * 获取工作目录
    * @returns 工作目录路径

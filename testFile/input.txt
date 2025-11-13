@@ -1,25 +1,28 @@
-DegSpeed=11
-RotorRadius=22
-RotorLength=33
-FeedMethod=44
-RotorPressure=55
-GasParam=66
-FeedFlow=77
-SplitRatio=88
-PoorCoverTemp=99
-RichCoverTemp=100
-FeedAxialDist‌=111
-FeedDegDist‌=222
-PoorDrive=333
-TackHeight=444
-RichBaffleHoleDiam=555
-FeedBoxHeight=666
-PoorArmRadius=777
-PoorTackInnerRadius=888
-PoorTackOuterRadius=2222
-PoorBaffleInnerHoleOuterRadius=99
-PoorBaffleOuterHoleInnerRadius=100
-PoorBaffleOuterHoleOuterRadius=200
-RichBaffleArrayHoleDiam=10
-FeedBoxAndPoorInterval=11
-PoorBaffleAxialSpace=11
+33    !半径
+22    !转速
+44    !T0
+55    !精料挡板温度
+66    !Pw_w
+77    !供料流量
+0    !贫料流量
+99    !ds
+991    !ds1
+99    !ds0
+99    !rw
+99    !rp
+99    !Ls
+99    !Lss
+99    !rss
+99    !Hr_Scoop=roughness 取料器镀镍后的表面粗糙度
+99    !angle_angle(1)
+99    !angle_angle(2)
+99    !angle_angle(3)
+49.5    !hs取料腔高度的一半
+99    !holedia_p
+7697.68739945839    !sigma_p精料挡板孔的面积(单个)
+0    !ka最大流量公式对应的值域与气体料类有关的参数k
+99    !rk_p精料挡板空的中心距
+0    !Ma_x孔板气体马赫数
+0    !w_prot
+0    !cpipe1
+0    !pws

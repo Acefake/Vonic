@@ -1,16 +1,17 @@
 <script setup lang="ts">
-import { Button, message } from 'ant-design-vue'
+import { message } from 'ant-design-vue'
 import { storeToRefs } from 'pinia'
-import { computed, h, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import app from '../../app/index'
 import SchemeChart from '../../components/SchemeChart/index.vue'
-import { useSchemeOptimizationStore } from '../../store'
-import { FIELD_LABELS, getFieldLabel } from '../../utils/field-labels'
+import { useDesignStore, usePowerAnalysisDesignStore } from '../../store'
+import { useMultiSchemeStore } from '../../store/msStore'
+import { getFieldLabel } from '../../utils/field-labels'
 import InitialDesign from '../InitialDesign/index.vue'
 import PowerAnalysisDesign from '../PowerAnalysisDesign/index.vue'
 
-interface SchemeData {
+export interface SchemeData {
   index: number // -1 表示最优方案（第一行），显示为 '*'；其他为原始序号
   originalIndex?: number // 最优方案的原始序号（当 index === -1 时使用）
   fileName: string
@@ -58,14 +59,9 @@ interface SchemeData {
   sepFactor: number | null
 }
 
-const schemes = ref<SchemeData[]>([])
-const loading = ref(false)
-const filteredData = ref<SchemeData[]>([])
-const activeKey = ref('1')
-
-// 行选择相关
-const selectedRowKeys = ref<(string | number)[]>([])
-const selectedRows = ref<SchemeData[]>([])
+const multiSchemeStore = useMultiSchemeStore()
+const designStoreAny: any = app.productConfig.id === 'powerAnalysis' ? usePowerAnalysisDesignStore() : useDesignStore()
+const { schemes, loading, filteredData, activeKey, selectedRowKeys, selectedRows, columns, xColumns, hasLoaded, outFingerprint } = storeToRefs(multiSchemeStore)
 
 // 方案对比：多选数据（用于雷达图）
 const comparisonSelectedData = computed(() => {
@@ -159,160 +155,6 @@ const fieldConfigs = computed(() => {
   }
 })
 
-// 反查：根据中文标签获取字段 key
-function getFieldKeyByLabel(label: string): string | null {
-  for (const [key, map] of Object.entries(FIELD_LABELS)) {
-    if (map['zh-CN'] === label)
-      return key
-  }
-  return null
-}
-
-// 从方案优化中获取当前选中的设计因子，转换为字段 key 列表
-const schemeOptimizationStore = useSchemeOptimizationStore()
-const { designFactors } = storeToRefs(schemeOptimizationStore)
-const selectedDesignFactorKeys = computed<string[]>(() => {
-  const keys = designFactors.value
-    .map(f => getFieldKeyByLabel(f.name))
-    .filter((k): k is string => !!k)
-  return keys
-})
-
-// 获取某列的所有唯一值（去重）
-function getUniqueValues(dataIndex: string): any[] {
-  const values = schemes.value
-    .map(record => record[dataIndex as keyof SchemeData])
-    .filter((value): value is number => value !== null && value !== undefined)
-
-  // 使用Set去重，然后排序
-  const uniqueValues = Array.from(new Set(values)).sort((a, b) => a - b)
-  return uniqueValues
-}
-
-// 创建基于唯一值的筛选面板
-function createUniqueValueFilterPanel(dataIndex: string) {
-  return ({
-    setSelectedKeys,
-    selectedKeys,
-    confirm,
-  }: any) => {
-    const uniqueValues = getUniqueValues(dataIndex)
-
-    const handleCheckboxChange = (value: any, checked: boolean) => {
-      const newKeys = checked
-        ? [...selectedKeys, value]
-        : selectedKeys.filter((k: any) => k !== value)
-      setSelectedKeys(newKeys)
-      // 选中即生效
-      confirm({ closeDropdown: false })
-    }
-
-    return h('div', { style: 'max-height: 300px; display: flex; flex-direction: column; min-width: 150px' }, [
-      // 重置按钮放在顶部
-      h('div', { style: 'padding: 8px; border-bottom: 1px solid #e8e8e8' }, [
-        h(
-          Button,
-          {
-            size: 'small',
-            block: true,
-            onClick: () => {
-              setSelectedKeys([])
-              confirm({ closeDropdown: true })
-            },
-          },
-          { default: () => '重置' },
-        ),
-      ]),
-      // 可滚动的选项列表
-      h('div', { style: 'padding: 8px; overflow-y: auto; flex: 1' }, uniqueValues.map(value =>
-        h('div', {
-          key: value,
-          style: 'padding: 4px 0; cursor: pointer; display: flex; align-items: center;',
-          onClick: (e: Event) => {
-            e.preventDefault()
-            const checked = !selectedKeys.includes(value)
-            handleCheckboxChange(value, checked)
-          },
-        }, [
-          h('input', {
-            type: 'checkbox',
-            checked: selectedKeys.includes(value),
-            style: 'margin-right: 8px; pointer-events: none;',
-          }),
-          h('span', {}, value.toString()),
-        ]),
-      )),
-    ])
-  }
-}
-
-// 基于唯一值的筛选函数
-function uniqueValueFilter(dataIndex: string) {
-  return (value: any, record: SchemeData) => {
-    const recordValue = record[dataIndex as keyof SchemeData]
-    return recordValue === value
-  }
-}
-
-// 表格列定义
-const columns = computed(() => {
-  const baseColumns = [
-    {
-      title: '序号',
-      dataIndex: 'index',
-      key: 'index',
-      width: 50,
-      align: 'center' as const,
-    },
-  ]
-
-  // 仅显示方案优化中选中的设计因子对应的列
-  const activeFieldConfigs = fieldConfigs.value.filter(cfg => selectedDesignFactorKeys.value.includes(cfg.key))
-
-  const fieldColumns = activeFieldConfigs.map(config => ({
-    title: config.unit ? `${config.label}(${config.unit})` : config.label,
-    dataIndex: config.key,
-    key: config.key,
-    width: config.width,
-    align: 'right' as const,
-    filterDropdown: createUniqueValueFilterPanel(config.key),
-    onFilter: uniqueValueFilter(config.key),
-  }))
-
-  const resultColumns = [
-    {
-      title: app.productConfig.resultFields?.[0]?.label,
-      dataIndex: app.productConfig.resultFields?.[0]?.field,
-      key: app.productConfig.resultFields?.[0]?.field,
-      width: 120,
-      align: 'right' as const,
-      filterDropdown: createUniqueValueFilterPanel(app.productConfig.resultFields?.[0]?.field ?? ''),
-      onFilter: uniqueValueFilter(app.productConfig.resultFields?.[0]?.field ?? ''),
-    },
-    {
-      title: app.productConfig.resultFields?.[1]?.label,
-      dataIndex: app.productConfig.resultFields?.[1]?.field,
-      key: app.productConfig.resultFields?.[1]?.field,
-      width: 120,
-      align: 'right' as const,
-      filterDropdown: createUniqueValueFilterPanel(app.productConfig.resultFields?.[1]?.field ?? ''),
-      onFilter: uniqueValueFilter(app.productConfig.resultFields?.[1]?.field ?? ''),
-    },
-  ]
-
-  return [...baseColumns, ...fieldColumns, ...resultColumns]
-})
-
-// X 轴列定义（设计因子）- 仅包含方案优化选中的设计因子
-const xColumns = computed(() => {
-  const activeFieldConfigs = fieldConfigs.value.filter(cfg => selectedDesignFactorKeys.value.includes(cfg.key))
-  return activeFieldConfigs.map(config => ({
-    title: config.label,
-    dataIndex: config.key,
-    key: config.key,
-  }))
-})
-
 // 结果字段（用于表格和图表 Y 轴）
 const resultFields = computed(() => app.productConfig.resultFields ?? [])
 
@@ -345,17 +187,21 @@ function maintainOriginalOrder(data: SchemeData[]): SchemeData[] {
  * 加载方案数据
  */
 async function loadSchemes() {
+  const fp = await app.file.getOutFingerprint()
+  if (hasLoaded.value && outFingerprint.value === fp)
+    return
   loading.value = true
   try {
     const data = await app.file.readMultiSchemes()
 
-    console.log(data, 'data')
-
-    // 保持原有顺序（最优方案保持在原位置）
     const sortedData = maintainOriginalOrder(data)
 
-    schemes.value = sortedData
-    filteredData.value = sortedData
+    multiSchemeStore.$patch(() => {
+      schemes.value = sortedData
+      filteredData.value = sortedData
+      hasLoaded.value = true
+      outFingerprint.value = fp
+    })
 
     if (data.length === 0) {
       message.warning('未找到任何方案数据文件')
@@ -381,16 +227,41 @@ function isMaxSepPowerRow(record: any): boolean {
 }
 
 function handleTabChange(key: any): void {
-  activeKey.value = key
-  // 切换标签页时清空选择
-  selectedRowKeys.value = []
-  selectedRows.value = []
+  multiSchemeStore.$patch(() => {
+    activeKey.value = key
+    // 切换标签页时清空选择
+    selectedRowKeys.value = []
+    selectedRows.value = []
+  })
 }
 
 // 处理行选择变化
 function handleRowSelectionChange(selectedKeys: (string | number)[], selectedRowsData: SchemeData[]) {
-  selectedRowKeys.value = selectedKeys
-  selectedRows.value = selectedRowsData
+  multiSchemeStore.$patch(() => {
+    selectedRowKeys.value = selectedKeys
+    selectedRows.value = selectedRowsData
+  })
+
+  const row = selectedRowsData[0]
+  if (row) {
+    if (app.productConfig.id === 'powerAnalysis') {
+      const payload: Record<string, number | undefined> = {}
+      const rf = app.productConfig.resultFields ?? []
+      for (const f of rf) {
+        if (!f.field)
+          continue
+        const storeKey = f.field.charAt(0).toLowerCase() + f.field.slice(1)
+        payload[storeKey] = (row as any)[f.field] ?? undefined
+      }
+      designStoreAny.updateOutputResults(payload)
+    }
+    else {
+      designStoreAny.updateOutputResults({
+        separationPower: (row as any).sepPower ?? undefined,
+        separationFactor: (row as any).sepFactor ?? undefined,
+      })
+    }
+  }
 }
 
 // 计算行选择配置
@@ -462,14 +333,16 @@ function onDesignSubmitted(payload: { formData: any, outputResults: any }) {
   const keyOf = (r: SchemeData) => `${r.index}_${r.fileName}`
   const targetKey = keyOf(row)
   const si = schemes.value.findIndex(r => keyOf(r) === targetKey)
-  if (si >= 0) {
-    schemes.value[si] = { ...schemes.value[si], ...updates }
-  }
-  // 同步 filteredData（保持当前筛选结果）
-  const fi = filteredData.value.findIndex(r => keyOf(r) === targetKey)
-  if (fi >= 0) {
-    filteredData.value[fi] = { ...filteredData.value[fi], ...updates }
-  }
+  multiSchemeStore.$patch(() => {
+    if (si >= 0) {
+      schemes.value[si] = { ...schemes.value[si], ...updates }
+    }
+    // 同步 filteredData（保持当前筛选结果）
+    const fi = filteredData.value.findIndex(r => keyOf(r) === targetKey)
+    if (fi >= 0) {
+      filteredData.value[fi] = { ...filteredData.value[fi], ...updates }
+    }
+  })
   message.success('已更新多方案对比表格中的该条数据')
 }
 </script>
@@ -484,7 +357,7 @@ function onDesignSubmitted(payload: { formData: any, outputResults: any }) {
       </template>
 
       <a-table
-        :columns="columns" :data-source="filteredData" :loading="loading" :pagination="false"
+        :columns="columns" :data-source="filteredData" :pagination="false"
         :row-class-name="(record) => isMaxSepPowerRow(record) ? 'optimal-row' : ''"
         :row-key="(record) => `${record.index}_${record.fileName}`" size="small" :scroll="{ x: 'max-content', y: 520 }" sticky
         :row-selection="rowSelection"

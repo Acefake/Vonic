@@ -18,9 +18,7 @@ export function useTake(): {
       ...scheme,
     })
 
-    console.log('fillFormFromScheme', designStore.formData)
-
-    app.message.success('已填充选中方案数据')
+    // app.message.success('已填充选中方案数据')
   }
 
   return {

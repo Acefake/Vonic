@@ -161,7 +161,7 @@ export function createSyncPlugin() {
           value: serializedState,
         })
       }
-    }, { flush: 'sync' })
+    }, { flush: 'post' })
 
     // 注册全局监听器（只注册一次）
     if (!isGlobalListenerRegistered) {

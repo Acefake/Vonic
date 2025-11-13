@@ -1,7 +1,8 @@
 import { Buffer } from 'node:buffer'
+import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import * as fs from 'node:fs'
-import { access, copyFile, readFile as fsReadFile, readdir, rm, unlink, writeFile } from 'node:fs/promises'
+import { access, copyFile, readFile as fsReadFile, readdir, rm, stat, unlink, writeFile } from 'node:fs/promises'
 import { dirname, extname, join } from 'node:path'
 import { app, ipcMain } from 'electron'
 import { getProductConfig } from '@/config/product.config'
@@ -29,6 +30,7 @@ export class FileManager {
     ipcMain.handle('file:read-dat', this.readFileDataIpc.bind(this))
     ipcMain.handle('file:write-dat', this.writeDatFileIpc.bind(this))
     ipcMain.handle('file:read-multi-schemes', this.readMultiSchemes.bind(this))
+    ipcMain.handle('file:get-out-fingerprint', this.getOutFingerprint.bind(this))
     ipcMain.handle('file:get-work-dir', this.getWorkDir.bind(this))
     ipcMain.handle('file:create-output-dir', this.createOutputDir.bind(this))
     ipcMain.handle('file:delete-dir', this.deleteDir.bind(this))
@@ -849,6 +851,54 @@ export class FileManager {
     catch (error) {
       console.error('读取多方案数据失败:', error)
       throw new Error(`读取多方案数据失败: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  private async getOutFingerprint(_: Electron.IpcMainInvokeEvent): Promise<string> {
+    try {
+      const isDev = fs.existsSync(join(process.cwd(), 'testFile'))
+      let targetDir: string
+      if (isDev) {
+        targetDir = join(process.cwd(), 'testFile')
+      }
+      else {
+        const exeDir = dirname(app.getPath('exe'))
+        targetDir = exeDir
+      }
+      const outDir = join(targetDir, 'out')
+      if (!fs.existsSync(outDir))
+        return ''
+      const entries = await readdir(outDir, { withFileTypes: true })
+      const outDirs = entries.filter(e => e.isDirectory() && e.name.startsWith('out_')).map(e => e.name).sort()
+      const productConfig = getProductConfig()
+      const outputFileName = productConfig.file?.outputFileName || 'Sep_power.dat'
+      const candidateOutputNames = new Set<string>([
+        (outputFileName || '').toLowerCase(),
+        'sep_power.dat',
+        'output.dat',
+      ].filter(Boolean))
+      let raw = `${outDirs.length}`
+      for (const name of outDirs) {
+        const subDir = join(outDir, name)
+        const ds = await stat(subDir)
+        raw += `|${name}:${Math.floor(ds.mtimeMs)}`
+        try {
+          const files = await readdir(subDir)
+          const matched = files.filter(f => candidateOutputNames.has(f.toLowerCase()))
+          for (const mf of matched) {
+            const fp = join(subDir, mf)
+            const fsStat = await stat(fp)
+            raw += `:${mf}:${Math.floor(fsStat.mtimeMs)}:${fsStat.size}`
+          }
+        }
+        catch {}
+      }
+      const hash = createHash('sha1').update(raw).digest('hex')
+      return hash
+    }
+    catch (error) {
+      console.warn('获取 out 指纹失败:', error)
+      return ''
     }
   }
 

@@ -328,6 +328,8 @@ export interface FileAPI {
   }>>
   /** 获取工作目录 */
   getWorkDir: () => Promise<string>
+  /** 获取 out 目录指纹 */
+  getOutFingerprint: () => Promise<string>
   createOutputDir: (baseDir: string) => Promise<string>
   /** 删除目录（递归删除） */
   deleteDir: (dirPath: string) => Promise<void>
