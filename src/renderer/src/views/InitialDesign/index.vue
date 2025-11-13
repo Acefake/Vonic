@@ -9,10 +9,11 @@ import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useTake } from '../../hooks/useTake'
 import { useSchemeOptimizationStore } from '../../store'
-import { FEEDING_METHOD_MAP, useDesignStore } from '../../store/designStore'
 import { useLogStore } from '../../store/logStore'
+import { FEEDING_METHOD_MAP, useMPhysSimDesignStore } from '../../store/mPhysSimDesignStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { FIELD_LABELS, getFieldLabel } from '../../utils/field-labels'
+import { createPairConstraintRules, createPositiveFieldRules, handleFieldChange } from '../../utils/form-validation'
 import { findValue, parseSepPowerFile } from '../../utils/parseSepPower'
 
 const props = defineProps({
@@ -33,7 +34,7 @@ const emit = defineEmits<{
 
 const { fillFormFromScheme } = useTake()
 
-const designStore = useDesignStore()
+const designStore = useMPhysSimDesignStore()
 const logStore = useLogStore()
 const settingsStore = useSettingsStore()
 const schemeOptStore = useSchemeOptimizationStore()
@@ -43,6 +44,7 @@ const { isMultiScheme, formData, outputResults } = storeToRefs(designStore)
 const { designFactors: optDesignFactors } = storeToRefs(schemeOptStore)
 
 function getFieldKeyByLabel(label: string): string | null {
+  // 首先尝试通过中文标签查找文件字段名
   for (const [key, map] of Object.entries(FIELD_LABELS)) {
     if (map['zh-CN'] === label)
       return key
@@ -50,13 +52,16 @@ function getFieldKeyByLabel(label: string): string | null {
   return null
 }
 
+// 移除旧的字段名映射函数，现在统一使用文件字段名
+
 // 需要禁用的字段集合：由“方案优化”里已添加的设计因子名称反查得到
 const disabledKeys = computed(() => {
   const set = new Set<string>()
   optDesignFactors.value.forEach((f) => {
     const key = getFieldKeyByLabel(f.name)
-    if (key)
+    if (key) {
       set.add(key)
+    }
   })
   return set
 })
@@ -65,6 +70,8 @@ function isFactorDisabledByKey(key: string): boolean {
   // 在方案修正页面（showButton=false）不禁用任何字段
   if (!props.showButton)
     return false
+
+  // 现在统一使用文件字段名，直接检查
   return disabledKeys.value.has(key)
 }
 
@@ -116,116 +123,82 @@ const formModel = reactive({
 })
 const prevModel = reactive({ ...formModel })
 
-function isPositiveReal(v: unknown): v is number {
-  return typeof v === 'number' && Number.isFinite(v) && v > 0
+/**
+ * 同步 store 数据到表单模型
+ */
+function syncFormFromStore(): void {
+  Object.assign(formModel, {
+    ...formData.value,
+  })
+  Object.assign(prevModel, formModel)
 }
 
-function msgOf(key: string) {
-  return `${getFieldLabel(key as any, fieldLabelMode.value)}应输入大于0的实数，请重新输入！`
-}
-
-// 需要进行「> 0 的实数」校验的字段列表
+// 需要进行「> 0 的实数」校验的字段列表（使用文件字段名）
 const positiveFields = [
-  'angularVelocity',
-  'rotorRadius',
-  'rotorShoulderLength',
-  'rotorSidewallPressure',
-  'gasDiffusionCoefficient',
-  'feedFlowRate',
-  'splitRatio',
-  'depletedEndCapTemperature',
-  'enrichedEndCapTemperature',
-  'feedAxialDisturbance',
-  'feedAngularDisturbance',
-  'depletedMechanicalDriveAmount',
-  'extractionChamberHeight',
-  'enrichedBaffleHoleDiameter',
-  'feedBoxShockDiskHeight',
-  'depletedExtractionArmRadius',
-  'depletedExtractionPortInnerDiameter',
-  'depletedBaffleInnerHoleOuterDiameter',
-  'enrichedBaffleHoleDistributionCircleDiameter',
-  'depletedExtractionPortOuterDiameter',
-  'depletedBaffleOuterHoleInnerDiameter',
-  'minAxialDistance',
-  'depletedBaffleAxialPosition',
-  'depletedBaffleOuterHoleOuterDiameter',
+  'DegSpeed',
+  'RotorRadius',
+  'RotorLength',
+  'RotorPressure',
+  'GasParam',
+  'FeedFlow',
+  'SplitRatio',
+  'PoorCoverTemp',
+  'RichCoverTemp',
+  'FeedAxialDist',
+  'FeedDegDist',
+  'PoorDrive',
+  'TackHeight',
+  'RichBaffleHoleDiam',
+  'FeedBoxHeight',
+  'PoorArmRadius',
+  'PoorTackInnerRadius',
+  'PoorBaffleInnerHoleOuterRadius',
+  'RichBaffleArrayHoleDiam',
+  'PoorTackOuterRadius',
+  'PoorBaffleOuterHoleInnerRadius',
+  'FeedBoxAndPoorInterval',
+  'PoorBaffleAxialSpace',
+  'PoorBaffleOuterHoleOuterRadius',
 ]
 
-const rules: Record<string, any[]> = {}
-positiveFields.forEach((key) => {
-  rules[key] = [
-    {
-      validator: (_: any, v: any) => {
-        // 不允许空值
-        if (v === null || v === undefined || v === '')
-          return Promise.reject(msgOf(key))
-        // 处理字符串 '0' 的情况
-        const numValue = typeof v === 'string' ? Number(v) : v
-        // 如果输入了0（无论是数字0还是字符串'0'），必须拒绝
-        if (numValue === 0)
-          return Promise.reject(msgOf(key))
-        // 验证是否为正数
-        return isPositiveReal(numValue) ? Promise.resolve() : Promise.reject(msgOf(key))
-      },
-      trigger: 'blur',
-    },
-  ]
+// 创建校验规则
+const rules: Record<string, any[]> = createPositiveFieldRules(positiveFields, fieldLabelMode.value)
+
+// 添加成对约束规则（合并到已有的正数校验规则）
+const pairRules1 = createPairConstraintRules(
+  'PoorTackInnerRadius',
+  'PoorTackOuterRadius',
+  '贫料取料口内径',
+  '贫料取料口外径',
+  formModel,
+)
+
+const pairRules2 = createPairConstraintRules(
+  'PoorBaffleOuterHoleInnerRadius',
+  'PoorBaffleOuterHoleOuterRadius',
+  '贫料挡板外孔内径',
+  '贫料挡板外孔外径',
+  formModel,
+)
+
+// 合并规则，确保正数校验规则不被覆盖
+Object.keys(pairRules1).forEach((key) => {
+  if (rules[key]) {
+    rules[key] = [...rules[key], ...pairRules1[key]]
+  }
+  else {
+    rules[key] = pairRules1[key]
+  }
 })
 
-// 成对约束：贫取料口部「内径 < 外径」
-rules.depletedExtractionPortInnerDiameter = [
-  ...(rules.depletedExtractionPortInnerDiameter || []),
-  {
-    validator: (_: any, v: any) => {
-      const outer = formModel.depletedExtractionPortOuterDiameter
-      if (!isPositiveReal(v) || !isPositiveReal(outer))
-        return Promise.resolve()
-      return v < outer ? Promise.resolve() : Promise.reject(new Error('贫取料口部内径应小于贫取料口部外径，请重新输入！'))
-    },
-    trigger: 'change',
-  },
-]
-
-rules.depletedExtractionPortOuterDiameter = [
-  ...(rules.depletedExtractionPortOuterDiameter || []),
-  {
-    validator: (_: any, v: any) => {
-      const inner = formModel.depletedExtractionPortInnerDiameter
-      if (!isPositiveReal(v) || !isPositiveReal(inner))
-        return Promise.resolve()
-      return v > inner ? Promise.resolve() : Promise.reject(new Error('贫取料口部外径应大于贫取料口部内径，请重新输入！'))
-    },
-    trigger: 'change',
-  },
-]
-
-// 成对约束：贫料挡板外孔「内径 < 外径」
-rules.depletedBaffleOuterHoleInnerDiameter = [
-  ...(rules.depletedBaffleOuterHoleInnerDiameter || []),
-  {
-    validator: (_: any, v: any) => {
-      const outer = formModel.depletedBaffleOuterHoleOuterDiameter
-      if (!isPositiveReal(v) || !isPositiveReal(outer))
-        return Promise.resolve()
-      return v < outer ? Promise.resolve() : Promise.reject(new Error('贫料挡板外孔内径应小于贫料挡板外孔外径，请重新输入！'))
-    },
-    trigger: 'change',
-  },
-]
-
-rules.depletedBaffleOuterHoleOuterDiameter = [
-  ...(rules.depletedBaffleOuterHoleOuterDiameter || []),
-  {
-    validator: (_: any, v: any) => {
-      const inner = formModel.depletedBaffleOuterHoleInnerDiameter
-      if (!isPositiveReal(v) || !isPositiveReal(inner))
-        return Promise.resolve()
-      return v > inner ? Promise.resolve() : Promise.reject(new Error('贫料挡板外孔外径应大于贫料挡板外孔内径，请重新输入！'))
-    },
-    trigger: 'change',
-  },
-]
+Object.keys(pairRules2).forEach((key) => {
+  if (rules[key]) {
+    rules[key] = [...rules[key], ...pairRules2[key]]
+  }
+  else {
+    rules[key] = pairRules2[key]
+  }
+})
 
 function updateStoreByField(name: string, val: number | null) {
   if (val == null)
@@ -233,48 +206,32 @@ function updateStoreByField(name: string, val: number | null) {
   designStore.updateFormData({ [name]: val } as any)
 }
 
-async function onFieldChange(name: string, val: number | null) {
-  const prev = (prevModel as any)[name]
-    ; (formModel as any)[name] = val
-  try {
-    await formRef.value?.validateFields([name])
-    ; (prevModel as any)[name] = val
-    updateStoreByField(name, val)
-    // 变更一方后，联动校验另一方，清除或更新其错误提示
-    const PAIR_PARTNER: Record<string, string> = {
-      depletedExtractionPortInnerDiameter: 'depletedExtractionPortOuterDiameter',
-      depletedExtractionPortOuterDiameter: 'depletedExtractionPortInnerDiameter',
-      depletedBaffleOuterHoleInnerDiameter: 'depletedBaffleOuterHoleOuterDiameter',
-      depletedBaffleOuterHoleOuterDiameter: 'depletedBaffleOuterHoleInnerDiameter',
-    }
-    const partner = PAIR_PARTNER[name]
-    if (partner) {
-      // 如果对方字段有值，才进行联动验证
-      const partnerValue = formModel[partner]
-      if (partnerValue !== null && partnerValue !== undefined && partnerValue !== '') {
-        try {
-          await formRef.value?.validateFields([partner])
-        }
-        catch {
-          // 不在此处回退另一字段，保持用户对另一字段的控制；仅更新其错误状态
-        }
-      }
-      else {
-        // 如果对方字段为空，清除其验证错误
-        formRef.value?.clearValidate([partner])
-      }
-    }
-  }
-  catch {
-    // 去掉轻提示，只保留表单字段的错误提示
-    ; (formModel as any)[name] = prev
-  }
+// 成对约束字段映射
+const PAIR_PARTNERS: Record<string, string> = {
+  PoorTackInnerRadius: 'PoorTackOuterRadius',
+  PoorTackOuterRadius: 'PoorTackInnerRadius',
+  PoorBaffleOuterHoleInnerRadius: 'PoorBaffleOuterHoleOuterRadius',
+  PoorBaffleOuterHoleOuterRadius: 'PoorBaffleOuterHoleInnerRadius',
+}
+
+async function onFieldChange(name: string, val: number | null): Promise<void> {
+  await handleFieldChange(
+    name,
+    val,
+    formModel,
+    prevModel,
+    formRef.value,
+    updateStoreByField,
+    PAIR_PARTNERS,
+  )
 }
 
 /**
  * 仿真计算
  */
 async function simulateCalculation(): Promise<void> {
+  syncFormFromStore()
+
   try {
     await formRef.value?.validate()
   }
@@ -339,6 +296,8 @@ async function executeSimulateCalculation(): Promise<void> {
  * 提交设计
  */
 async function submitDesign(): Promise<void> {
+  syncFormFromStore()
+
   if (!outputResults.value.separationPower || !outputResults.value.separationFactor) {
     message.error('请先进行仿真计算，获取分离功率和分离系数')
     return
@@ -352,38 +311,39 @@ async function submitDesign(): Promise<void> {
     return
   }
   // 生成 output.txt（key=value）内容
-  const ORDERED_KEYS: Array<{ key: string, field: string }> = [
-    { key: 'DegSpeed', field: 'angularVelocity' },
-    { key: 'RotorRadius', field: 'rotorRadius' },
-    { key: 'RotorLength', field: 'rotorShoulderLength' },
-    { key: 'FeedMethod', field: 'feedingMethod' },
-    { key: 'RotorPressure', field: 'rotorSidewallPressure' },
-    { key: 'GasParam', field: 'gasDiffusionCoefficient' },
-    { key: 'FeedFlow', field: 'feedFlowRate' },
-    { key: 'SplitRatio', field: 'splitRatio' },
-    { key: 'PoorCoverTemp', field: 'depletedEndCapTemperature' },
-    { key: 'RichCoverTemp', field: 'enrichedEndCapTemperature' },
-    { key: 'FeedAxialDist', field: 'feedAxialDisturbance' },
-    { key: 'FeedDegDist', field: 'feedAngularDisturbance' },
-    { key: 'PoorDrive', field: 'depletedMechanicalDriveAmount' },
-    { key: 'TackHeight', field: 'extractionChamberHeight' },
-    { key: 'RichBaffleHoleDiam', field: 'enrichedBaffleHoleDiameter' },
-    { key: 'FeedBoxHeight', field: 'feedBoxShockDiskHeight' },
-    { key: 'PoorArmRadius', field: 'depletedExtractionArmRadius' },
-    { key: 'PoorTackInnerRadius', field: 'depletedExtractionPortInnerDiameter' },
-    { key: 'PoorTackOuterRadius', field: 'depletedExtractionPortOuterDiameter' },
-    { key: 'PoorBaffleInnerHoleOuterRadius', field: 'depletedBaffleInnerHoleOuterDiameter' },
-    { key: 'PoorBaffleOuterHoleInnerRadius', field: 'depletedBaffleOuterHoleInnerDiameter' },
-    { key: 'PoorBaffleOuterHoleOuterRadius', field: 'depletedBaffleOuterHoleOuterDiameter' },
-    { key: 'RichBaffleArrayHoleDiam', field: 'enrichedBaffleHoleDistributionCircleDiameter' },
-    { key: 'FeedBoxAndPoorInterval', field: 'minAxialDistance' },
-    { key: 'PoorBaffleAxialSpace', field: 'depletedBaffleAxialPosition' },
+  // 现在直接使用文件字段名，不需要映射
+  const ORDERED_KEYS: Array<string> = [
+    'DegSpeed',
+    'RotorRadius',
+    'RotorLength',
+    'FeedMethod',
+    'RotorPressure',
+    'GasParam',
+    'FeedFlow',
+    'SplitRatio',
+    'PoorCoverTemp',
+    'RichCoverTemp',
+    'FeedAxialDist',
+    'FeedDegDist',
+    'PoorDrive',
+    'TackHeight',
+    'RichBaffleHoleDiam',
+    'FeedBoxHeight',
+    'PoorArmRadius',
+    'PoorTackInnerRadius',
+    'PoorTackOuterRadius',
+    'PoorBaffleInnerHoleOuterRadius',
+    'PoorBaffleOuterHoleInnerRadius',
+    'PoorBaffleOuterHoleOuterRadius',
+    'RichBaffleArrayHoleDiam',
+    'FeedBoxAndPoorInterval',
+    'PoorBaffleAxialSpace',
   ]
 
-  const lines: string[] = ORDERED_KEYS.map(({ key, field }) => {
-    const v: any = (formData.value as any)[field]
-    // feedingMethod：保证输出为数字 0/1
-    if (field === 'feedingMethod') {
+  const lines: string[] = ORDERED_KEYS.map((key) => {
+    const v: any = (formData.value as any)[key]
+    // FeedMethod：保证输出为数字 0/1
+    if (key === 'FeedMethod') {
       const n = Number(v)
       return `${key}=${Number.isFinite(n) ? n : 0}`
     }
@@ -427,6 +387,7 @@ function replaceSepPowerParams(content: string): void {
       separationPower,
       separationFactor,
     })
+    syncFormFromStore()
     logStore.info(`成功读取结果值: 分离功率=${separationPower ?? '未找到'}, 分离系数=${separationFactor ?? '未找到'}`)
   }
   else {
@@ -463,34 +424,34 @@ async function parseDatContent(content: string): Promise<void> {
     .split(',')
     .map(Number)
 
-  designStore.updateFormData({ angularVelocity, rotorRadius, rotorShoulderLength, rotorSidewallPressure, gasDiffusionCoefficient } as any)
+  designStore.updateFormData({ DegSpeed: angularVelocity, RotorRadius: rotorRadius, RotorLength: rotorShoulderLength, RotorPressure: rotorSidewallPressure, GasParam: gasDiffusionCoefficient } as any)
 
   const paramKeys = [
-    'depletedEndCapTemperature',
-    'enrichedEndCapTemperature',
-    'depletedMechanicalDriveAmount',
-    'depletedExtractionArmRadius',
+    'PoorCoverTemp',
+    'RichCoverTemp',
+    'PoorDrive',
+    'PoorArmRadius',
     'innerBoundaryMirrorPosition',
     'gridGenerationMethod',
-    'enrichedBaffleHoleDistributionCircleDiameter',
-    'enrichedBaffleHoleDiameter',
-    'depletedExtractionPortInnerDiameter',
-    'depletedExtractionPortOuterDiameter',
-    'minAxialDistance',
-    'feedBoxShockDiskHeight',
-    'feedFlowRate',
-    'splitRatio',
-    'feedAngularDisturbance',
-    'feedAxialDisturbance',
-    'depletedBaffleInnerHoleOuterDiameter',
-    'depletedBaffleOuterHoleInnerDiameter',
-    'depletedBaffleOuterHoleOuterDiameter',
-    'depletedBaffleAxialPosition',
+    'RichBaffleArrayHoleDiam',
+    'RichBaffleHoleDiam',
+    'PoorTackInnerRadius',
+    'PoorTackOuterRadius',
+    'FeedBoxAndPoorInterval',
+    'FeedBoxHeight',
+    'FeedFlow',
+    'SplitRatio',
+    'FeedDegDist',
+    'FeedAxialDist',
+    'PoorBaffleInnerHoleOuterRadius',
+    'PoorBaffleOuterHoleInnerRadius',
+    'PoorBaffleOuterHoleOuterRadius',
+    'PoorBaffleAxialSpace',
     'bwgRadialProtrusionHeight',
     'bwgAxialHeight',
     'bwgAxialPosition',
     'radialGridRatio',
-    'feedingMethod',
+    'FeedMethod',
     'compensationCoefficient',
     'streamlineData',
   ]
@@ -507,6 +468,7 @@ async function parseDatContent(content: string): Promise<void> {
     designStore.updateFormData({ [paramKeys[i]]: val } as any)
   }
   // 解析完毕后，同步到表单模型，保证成对约束读到最新值
+  syncFormFromStore()
 }
 
 /**
@@ -514,41 +476,7 @@ async function parseDatContent(content: string): Promise<void> {
  * 映射关系来源于产品字段清单：将英文键映射到扁平化的表单字段
  */
 function parseTxtContent(content: string): void {
-  // 使用字符串键映射到扁平化字段名
-  const KEY_MAP: Record<string, string> = {
-    // 顶层参数
-    DegSpeed: 'angularVelocity',
-    RotorRadius: 'rotorRadius',
-    RotorLength: 'rotorShoulderLength',
-
-    // 运行参数
-    FeedMethod: 'feedingMethod',
-    RotorPressure: 'rotorSidewallPressure',
-    GasParam: 'gasDiffusionCoefficient',
-    FeedFlow: 'feedFlowRate',
-    SplitRatio: 'splitRatio',
-
-    // 驱动参数
-    PoorCoverTemp: 'depletedEndCapTemperature',
-    RichCoverTemp: 'enrichedEndCapTemperature',
-    FeedAxialDist: 'feedAxialDisturbance',
-    FeedDegDist: 'feedAngularDisturbance',
-    PoorDrive: 'depletedMechanicalDriveAmount',
-
-    // 分离部件
-    TackHeight: 'extractionChamberHeight',
-    RichBaffleHoleDiam: 'enrichedBaffleHoleDiameter',
-    FeedBoxHeight: 'feedBoxShockDiskHeight',
-    PoorArmRadius: 'depletedExtractionArmRadius',
-    PoorTackInnerRadius: 'depletedExtractionPortInnerDiameter',
-    PoorTackOuterRadius: 'depletedExtractionPortOuterDiameter',
-    PoorBaffleInnerHoleOuterRadius: 'depletedBaffleInnerHoleOuterDiameter',
-    PoorBaffleOuterHoleInnerRadius: 'depletedBaffleOuterHoleInnerDiameter',
-    PoorBaffleOuterHoleOuterRadius: 'depletedBaffleOuterHoleOuterDiameter',
-    RichBaffleArrayHoleDiam: 'enrichedBaffleHoleDistributionCircleDiameter',
-    FeedBoxAndPoorInterval: 'minAxialDistance',
-    PoorBaffleAxialSpace: 'depletedBaffleAxialPosition',
-  }
+  // 现在直接使用文件字段名，不需要映射
 
   const updates: Record<string, any> = {}
 
@@ -563,13 +491,10 @@ function parseTxtContent(content: string): void {
       if (!rawKey)
         return
       const key = removeInvisible(rawKey.trim())
-      const mapped = KEY_MAP[key]
-      if (!mapped)
-        return
       const valStr = removeInvisible((rawVal ?? '').trim())
       const num = Number(valStr)
       let val: any = Number.isFinite(num) ? num : valStr
-      if (mapped === 'feedingMethod') {
+      if (key === 'FeedMethod') {
         // 供料方式：支持数值(0/1)或中文枚举
         if (typeof val === 'number') {
           val = val === 1 ? 1 : 0
@@ -578,11 +503,12 @@ function parseTxtContent(content: string): void {
           val = val.includes('均') ? 1 : 0
         }
       }
-      updates[mapped] = val
+      updates[key] = val
     })
 
   if (Object.keys(updates).length > 0) {
     designStore.updateFormData(updates)
+    syncFormFromStore()
 
     message.success('读取文件内容成功')
     logStore.info('读取文件内容成功')
@@ -625,20 +551,54 @@ async function handleExeClose(_: Electron.IpcRendererEvent, exeName: string, res
 }
 
 watch(() => props.selectedScheme, (newScheme) => {
-  console.log(newScheme)
-
   if (newScheme) {
-    fillFormFromScheme(newScheme)
+    // 🔧 修复：只有在设计 Store 数据为空或不完整时才填充选中方案数据
+    // 这样可以避免覆盖已经修正的数据
+    const hasValidStoreData = Object.values(formData.value).some(value =>
+      value !== undefined && value !== null && String(value).trim() !== '',
+    )
+
+    if (!hasValidStoreData) {
+      fillFormFromScheme(newScheme)
+    }
+    // 同步到表单模型
+    syncFormFromStore()
   }
 }, { immediate: true })
+
+// 注释掉自动路由跳转逻辑，用户不希望自动跳转
+// watch(() => isMultiScheme.value, (newValue) => {
+//   if (props.showButton) {
+//     // 只有在主页面（showButton=true）时才更新路由
+//     const currentRoute = router.currentRoute.value
+//     if (newValue && currentRoute.name !== 'MultiScheme') {
+//       // 切换到多方案页面
+//       router.push({ name: 'MultiScheme' })
+//     } else if (!newValue && currentRoute.name === 'MultiScheme') {
+//       // 切换回初始设计页面
+//       router.push({ name: 'InitialDesign' })
+//     }
+//   }
+// })
 
 onMounted(() => {
   window.electron.ipcRenderer.removeAllListeners?.('exe-closed')
   window.electron.ipcRenderer.on('exe-closed', handleExeClose)
 
-  /** 如果表单没有值，则读取文件内容 */
-  if (!designStore.isFormValid()) {
-    readTakeData()
+  // 初始化一次表单模型与前次合法值
+  syncFormFromStore()
+
+  /** 只有在多方案模式且表单完全为空时，才从文件读取数据 */
+  /** 这样可以避免覆盖从多方案修正页面传来的数据 */
+  if (isMultiScheme.value && !designStore.isFormValid()) {
+    // 检查是否有任何字段有值，如果有值说明是从多方案修正来的，不要重新加载
+    const hasAnyValue = Object.values(formData.value).some(value =>
+      value !== undefined && value !== null && value !== 0,
+    )
+
+    if (!hasAnyValue) {
+      readTakeData()
+    }
   }
 })
 
@@ -688,35 +648,37 @@ defineExpose({
           <div class="section-content">
             <div class="form-row">
               <a-form-item
-                name="angularVelocity" :label="getFieldLabel('angularVelocity', fieldLabelMode)"
+                name="DegSpeed" :label="getFieldLabel('DegSpeed', fieldLabelMode)"
                 class="form-col"
               >
                 <a-input-number
-                  :value="formData.angularVelocity"
-                  :placeholder="`请输入${getFieldLabel('angularVelocity', fieldLabelMode)}`" style="width: 100%"
-                  addon-after="Hz" :disabled="isFactorDisabledByKey('angularVelocity')"
-                  @update:value="(val) => onFieldChange('angularVelocity', val as number | null)"
-                />
-              </a-form-item>
-
-              <a-form-item name="rotorRadius" :label="getFieldLabel('rotorRadius', fieldLabelMode)" class="form-col">
-                <a-input-number
-                  :value="formData.rotorRadius"
-                  :placeholder="`请输入${getFieldLabel('rotorRadius', fieldLabelMode)}`" style="width: 100%"
-                  addon-after="mm" :disabled="isFactorDisabledByKey('rotorRadius')"
-                  @update:value="(val) => onFieldChange('rotorRadius', val as number | null)"
+                  :value="formData.DegSpeed"
+                  :placeholder="`请输入${getFieldLabel('DegSpeed', fieldLabelMode)}`" style="width: 100%"
+                  addon-after="Hz" :disabled="isFactorDisabledByKey('DegSpeed')"
+                  @update:value="(val) => onFieldChange('DegSpeed', val as number | null)"
                 />
               </a-form-item>
 
               <a-form-item
-                name="rotorShoulderLength" :label="getFieldLabel('rotorShoulderLength', fieldLabelMode)"
+                name="RotorRadius" :label="getFieldLabel('RotorRadius', fieldLabelMode)" class="form-col"
+              >
+                <a-input-number
+                  :value="formData.RotorRadius"
+                  :placeholder="`请输入${getFieldLabel('RotorRadius', fieldLabelMode)}`" style="width: 100%"
+                  addon-after="mm" :disabled="isFactorDisabledByKey('RotorRadius')"
+                  @update:value="(val) => onFieldChange('RotorRadius', val as number | null)"
+                />
+              </a-form-item>
+
+              <a-form-item
+                name="RotorLength" :label="getFieldLabel('RotorLength', fieldLabelMode)"
                 class="form-col"
               >
                 <a-input-number
-                  :value="formData.rotorShoulderLength"
-                  :placeholder="`请输入${getFieldLabel('rotorShoulderLength', fieldLabelMode)}`" style="width: 100%"
-                  addon-after="mm" :disabled="isFactorDisabledByKey('rotorShoulderLength')"
-                  @update:value="(val) => onFieldChange('rotorShoulderLength', val as number | null)"
+                  :value="formData.RotorLength"
+                  :placeholder="`请输入${getFieldLabel('RotorLength', fieldLabelMode)}`" style="width: 100%"
+                  addon-after="mm" :disabled="isFactorDisabledByKey('RotorLength')"
+                  @update:value="(val) => onFieldChange('RotorLength', val as number | null)"
                 />
               </a-form-item>
             </div>
@@ -730,44 +692,44 @@ defineExpose({
           <div class="section-content">
             <div class="form-row">
               <a-form-item
-                name="rotorSidewallPressure" :label="getFieldLabel('rotorSidewallPressure', fieldLabelMode)"
+                name="RotorPressure" :label="getFieldLabel('RotorPressure', fieldLabelMode)"
                 class="form-col"
               >
                 <a-input-number
-                  :value="formData.rotorSidewallPressure"
-                  :placeholder="`请输入${getFieldLabel('rotorSidewallPressure', fieldLabelMode)}`" style="width: 100%"
-                  addon-after="Pa" :disabled="isFactorDisabledByKey('rotorSidewallPressure')"
-                  @update:value="(val) => onFieldChange('rotorSidewallPressure', val as number | null)"
+                  :value="formData.RotorPressure"
+                  :placeholder="`请输入${getFieldLabel('RotorPressure', fieldLabelMode)}`" style="width: 100%"
+                  addon-after="Pa" :disabled="isFactorDisabledByKey('RotorPressure')"
+                  @update:value="(val) => onFieldChange('RotorPressure', val as number | null)"
                 />
               </a-form-item>
 
               <a-form-item
-                name="gasDiffusionCoefficient"
-                :label="getFieldLabel('gasDiffusionCoefficient', fieldLabelMode)" class="form-col"
+                name="GasParam"
+                :label="getFieldLabel('GasParam', fieldLabelMode)" class="form-col"
               >
                 <a-input-number
-                  :value="formData.gasDiffusionCoefficient"
-                  :placeholder="`请输入${getFieldLabel('gasDiffusionCoefficient', fieldLabelMode)}`" style="width: 100%"
-                  :disabled="isFactorDisabledByKey('gasDiffusionCoefficient')"
-                  @update:value="(val) => onFieldChange('gasDiffusionCoefficient', val as number | null)"
+                  :value="formData.GasParam"
+                  :placeholder="`请输入${getFieldLabel('GasParam', fieldLabelMode)}`" style="width: 100%"
+                  :disabled="isFactorDisabledByKey('GasParam')"
+                  @update:value="(val) => onFieldChange('GasParam', val as number | null)"
                 />
               </a-form-item>
 
-              <a-form-item name="feedFlowRate" :label="getFieldLabel('feedFlowRate', fieldLabelMode)" class="form-col">
+              <a-form-item name="FeedFlow" :label="getFieldLabel('FeedFlow', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="formData.feedFlowRate"
-                  :placeholder="`请输入${getFieldLabel('feedFlowRate', fieldLabelMode)}`" style="width: 100%"
-                  addon-after="Kg/s" :disabled="isFactorDisabledByKey('feedFlowRate')"
-                  @update:value="(val) => onFieldChange('feedFlowRate', val as number | null)"
+                  :value="formData.FeedFlow"
+                  :placeholder="`请输入${getFieldLabel('FeedFlow', fieldLabelMode)}`" style="width: 100%"
+                  addon-after="Kg/s" :disabled="isFactorDisabledByKey('FeedFlow')"
+                  @update:value="(val) => onFieldChange('FeedFlow', val as number | null)"
                 />
               </a-form-item>
 
-              <a-form-item :label="getFieldLabel('feedingMethod', fieldLabelMode)" class="form-col">
+              <a-form-item :label="getFieldLabel('FeedMethod', fieldLabelMode)" class="form-col">
                 <a-select
-                  :value="formData.feedingMethod"
-                  :placeholder="`请选择${getFieldLabel('feedingMethod', fieldLabelMode)}`" style="width: 100%"
-                  :disabled="isFactorDisabledByKey('feedingMethod')"
-                  @update:value="(val) => designStore.updateFormData({ feedingMethod: val as FeedingMethod })"
+                  :value="formData.FeedMethod"
+                  :placeholder="`请选择${getFieldLabel('FeedMethod', fieldLabelMode)}`" style="width: 100%"
+                  :disabled="isFactorDisabledByKey('FeedMethod')"
+                  @update:value="(val) => designStore.updateFormData({ FeedMethod: val as FeedingMethod })"
                 >
                   <a-select-option v-for="option in FEEDING_METHOD_MAP" :key="option.value" :value="option.value">
                     {{ option.label }}
@@ -775,12 +737,12 @@ defineExpose({
                 </a-select>
               </a-form-item>
 
-              <a-form-item name="splitRatio" :label="getFieldLabel('splitRatio', fieldLabelMode)" class="form-col">
+              <a-form-item name="SplitRatio" :label="getFieldLabel('SplitRatio', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="formData.splitRatio"
-                  :placeholder="`请输入${getFieldLabel('splitRatio', fieldLabelMode)}`" style="width: 100%"
-                  :disabled="isFactorDisabledByKey('splitRatio')"
-                  @update:value="(val) => onFieldChange('splitRatio', val as number | null)"
+                  :value="formData.SplitRatio"
+                  :placeholder="`请输入${getFieldLabel('SplitRatio', fieldLabelMode)}`" style="width: 100%"
+                  :disabled="isFactorDisabledByKey('SplitRatio')"
+                  @update:value="(val) => onFieldChange('SplitRatio', val as number | null)"
                 />
               </a-form-item>
             </div>
@@ -794,63 +756,63 @@ defineExpose({
           <div class="section-content">
             <div class="form-row">
               <a-form-item
-                name="depletedEndCapTemperature"
-                :label="getFieldLabel('depletedEndCapTemperature', fieldLabelMode)" class="form-col"
+                name="PoorCoverTemp"
+                :label="getFieldLabel('PoorCoverTemp', fieldLabelMode)" class="form-col"
               >
                 <a-input-number
-                  :value="formData.depletedEndCapTemperature"
-                  :placeholder="`请输入${getFieldLabel('depletedEndCapTemperature', fieldLabelMode)}`" style="width: 100%"
-                  addon-after="K" :disabled="isFactorDisabledByKey('depletedEndCapTemperature')"
-                  @update:value="(val) => onFieldChange('depletedEndCapTemperature', val as number | null)"
+                  :value="formData.PoorCoverTemp"
+                  :placeholder="`请输入${getFieldLabel('PoorCoverTemp', fieldLabelMode)}`" style="width: 100%"
+                  addon-after="K" :disabled="isFactorDisabledByKey('PoorCoverTemp')"
+                  @update:value="(val) => onFieldChange('PoorCoverTemp', val as number | null)"
                 />
               </a-form-item>
 
               <a-form-item
-                name="enrichedEndCapTemperature"
-                :label="getFieldLabel('enrichedEndCapTemperature', fieldLabelMode)" class="form-col"
+                name="RichCoverTemp"
+                :label="getFieldLabel('RichCoverTemp', fieldLabelMode)" class="form-col"
               >
                 <a-input-number
-                  :value="formData.enrichedEndCapTemperature"
-                  :placeholder="`请输入${getFieldLabel('enrichedEndCapTemperature', fieldLabelMode)}`" style="width: 100%"
-                  addon-after="K" :disabled="isFactorDisabledByKey('enrichedEndCapTemperature')"
-                  @update:value="(val) => onFieldChange('enrichedEndCapTemperature', val as number | null)"
+                  :value="formData.RichCoverTemp"
+                  :placeholder="`请输入${getFieldLabel('RichCoverTemp', fieldLabelMode)}`" style="width: 100%"
+                  addon-after="K" :disabled="isFactorDisabledByKey('RichCoverTemp')"
+                  @update:value="(val) => onFieldChange('RichCoverTemp', val as number | null)"
                 />
               </a-form-item>
 
               <a-form-item
-                name="feedAxialDisturbance" :label="getFieldLabel('feedAxialDisturbance', fieldLabelMode)"
+                name="FeedAxialDist" :label="getFieldLabel('FeedAxialDist', fieldLabelMode)"
                 class="form-col"
               >
                 <a-input-number
-                  :value="formData.feedAxialDisturbance"
-                  :placeholder="`请输入${getFieldLabel('feedAxialDisturbance', fieldLabelMode)}`" style="width: 100%"
-                  addon-after="mm" :disabled="isFactorDisabledByKey('feedAxialDisturbance')"
-                  @update:value="(val) => onFieldChange('feedAxialDisturbance', val as number | null)"
+                  :value="formData.FeedAxialDist"
+                  :placeholder="`请输入${getFieldLabel('FeedAxialDist', fieldLabelMode)}`" style="width: 100%"
+                  addon-after="mm" :disabled="isFactorDisabledByKey('FeedAxialDist')"
+                  @update:value="(val) => onFieldChange('FeedAxialDist', val as number | null)"
                 />
               </a-form-item>
 
               <a-form-item
-                name="feedAngularDisturbance"
-                :label="getFieldLabel('feedAngularDisturbance', fieldLabelMode)" class="form-col"
+                name="FeedDegDist"
+                :label="getFieldLabel('FeedDegDist', fieldLabelMode)" class="form-col"
               >
                 <a-input-number
-                  :value="formData.feedAngularDisturbance"
-                  :placeholder="`请输入${getFieldLabel('feedAngularDisturbance', fieldLabelMode)}`" style="width: 100%"
-                  addon-after="mm" :disabled="isFactorDisabledByKey('feedAngularDisturbance')"
-                  @update:value="(val) => onFieldChange('feedAngularDisturbance', val as number | null)"
+                  :value="formData.FeedDegDist"
+                  :placeholder="`请输入${getFieldLabel('FeedDegDist', fieldLabelMode)}`" style="width: 100%"
+                  addon-after="mm" :disabled="isFactorDisabledByKey('FeedDegDist')"
+                  @update:value="(val) => onFieldChange('FeedDegDist', val as number | null)"
                 />
               </a-form-item>
 
               <a-form-item
-                name="depletedMechanicalDriveAmount"
-                :label="getFieldLabel('depletedMechanicalDriveAmount', fieldLabelMode)" class="form-col"
+                name="PoorDrive"
+                :label="getFieldLabel('PoorDrive', fieldLabelMode)" class="form-col"
               >
                 <a-input-number
-                  :value="formData.depletedMechanicalDriveAmount"
-                  :placeholder="`请输入${getFieldLabel('depletedMechanicalDriveAmount', fieldLabelMode)}`"
+                  :value="formData.PoorDrive"
+                  :placeholder="`请输入${getFieldLabel('PoorDrive', fieldLabelMode)}`"
                   style="width: 100%" addon-after="mm"
-                  :disabled="isFactorDisabledByKey('depletedMechanicalDriveAmount')"
-                  @update:value="(val) => onFieldChange('depletedMechanicalDriveAmount', val as number | null)"
+                  :disabled="isFactorDisabledByKey('PoorDrive')"
+                  @update:value="(val) => onFieldChange('PoorDrive', val as number | null)"
                 />
               </a-form-item>
             </div>
@@ -864,152 +826,152 @@ defineExpose({
           <div class="section-content">
             <div class="form-row">
               <a-form-item
-                name="extractionChamberHeight"
-                :label="getFieldLabel('extractionChamberHeight', fieldLabelMode)" class="form-col"
-              >
-                <a-input-number
-                  :value="formData.extractionChamberHeight"
-                  :placeholder="`请输入${getFieldLabel('extractionChamberHeight', fieldLabelMode)}`" style="width: 100%"
-                  addon-after="mm" :disabled="isFactorDisabledByKey('extractionChamberHeight')"
-                  @update:value="(val) => onFieldChange('extractionChamberHeight', val as number | null)"
-                />
-              </a-form-item>
-
-              <a-form-item
-                name="enrichedBaffleHoleDiameter"
-                :label="getFieldLabel('enrichedBaffleHoleDiameter', fieldLabelMode)" class="form-col"
-              >
-                <a-input-number
-                  :value="formData.enrichedBaffleHoleDiameter"
-                  :placeholder="`请输入${getFieldLabel('enrichedBaffleHoleDiameter', fieldLabelMode)}`" style="width: 100%"
-                  addon-after="mm" :disabled="isFactorDisabledByKey('enrichedBaffleHoleDiameter')"
-                  @update:value="(val) => onFieldChange('enrichedBaffleHoleDiameter', val as number | null)"
-                />
-              </a-form-item>
-
-              <a-form-item
-                name="feedBoxShockDiskHeight"
-                :label="getFieldLabel('feedBoxShockDiskHeight', fieldLabelMode)" class="form-col"
-              >
-                <a-input-number
-                  :value="formData.feedBoxShockDiskHeight"
-                  :placeholder="`请输入${getFieldLabel('feedBoxShockDiskHeight', fieldLabelMode)}`" style="width: 100%"
-                  addon-after="mm" :disabled="isFactorDisabledByKey('feedBoxShockDiskHeight')"
-                  @update:value="(val) => onFieldChange('feedBoxShockDiskHeight', val as number | null)"
-                />
-              </a-form-item>
-
-              <a-form-item
-                name="depletedExtractionArmRadius"
-                :label="getFieldLabel('depletedExtractionArmRadius', fieldLabelMode)" class="form-col"
-              >
-                <a-input-number
-                  :value="formData.depletedExtractionArmRadius"
-                  :placeholder="`请输入${getFieldLabel('depletedExtractionArmRadius', fieldLabelMode)}`"
-                  style="width: 100%" addon-after="mm" :disabled="isFactorDisabledByKey('depletedExtractionArmRadius')"
-                  @update:value="(val) => onFieldChange('depletedExtractionArmRadius', val as number | null)"
-                />
-              </a-form-item>
-
-              <a-form-item
-                name="depletedExtractionPortInnerDiameter"
-                :label="getFieldLabel('depletedExtractionPortInnerDiameter', fieldLabelMode)" class="form-col"
-              >
-                <a-input-number
-                  :value="formData.depletedExtractionPortInnerDiameter"
-                  :placeholder="`请输入${getFieldLabel('depletedExtractionPortInnerDiameter', fieldLabelMode)}`"
-                  style="width: 100%" addon-after="mm"
-                  :disabled="isFactorDisabledByKey('depletedExtractionPortInnerDiameter')"
-                  @update:value="(val) => onFieldChange('depletedExtractionPortInnerDiameter', val as number | null)"
-                />
-              </a-form-item>
-
-              <a-form-item
-                name="depletedBaffleInnerHoleOuterDiameter"
-                :label="getFieldLabel('depletedBaffleInnerHoleOuterDiameter', fieldLabelMode)" class="form-col"
-              >
-                <a-input-number
-                  :value="formData.depletedBaffleInnerHoleOuterDiameter"
-                  :placeholder="`请输入${getFieldLabel('depletedBaffleInnerHoleOuterDiameter', fieldLabelMode)}`"
-                  style="width: 100%" addon-after="mm"
-                  :disabled="isFactorDisabledByKey('depletedBaffleInnerHoleOuterDiameter')"
-                  @update:value="(val) => onFieldChange('depletedBaffleInnerHoleOuterDiameter', val as number | null)"
-                />
-              </a-form-item>
-
-              <a-form-item
-                name="enrichedBaffleHoleDistributionCircleDiameter"
-                :label="getFieldLabel('enrichedBaffleHoleDistributionCircleDiameter', fieldLabelMode)" class="form-col"
-              >
-                <a-input-number
-                  :value="formData.enrichedBaffleHoleDistributionCircleDiameter"
-                  :placeholder="`请输入${getFieldLabel('enrichedBaffleHoleDistributionCircleDiameter', fieldLabelMode)}`"
-                  style="width: 100%" addon-after="mm"
-                  :disabled="isFactorDisabledByKey('enrichedBaffleHoleDistributionCircleDiameter')"
-                  @update:value="(val) => onFieldChange('enrichedBaffleHoleDistributionCircleDiameter', val as number | null)"
-                />
-              </a-form-item>
-
-              <a-form-item
-                name="depletedExtractionPortOuterDiameter"
-                :label="getFieldLabel('depletedExtractionPortOuterDiameter', fieldLabelMode)" class="form-col"
-              >
-                <a-input-number
-                  :value="formData.depletedExtractionPortOuterDiameter"
-                  :placeholder="`请输入${getFieldLabel('depletedExtractionPortOuterDiameter', fieldLabelMode)}`"
-                  style="width: 100%" addon-after="mm"
-                  :disabled="isFactorDisabledByKey('depletedExtractionPortOuterDiameter')"
-                  @update:value="(val) => onFieldChange('depletedExtractionPortOuterDiameter', val as number | null)"
-                />
-              </a-form-item>
-
-              <a-form-item
-                name="depletedBaffleOuterHoleInnerDiameter"
-                :label="getFieldLabel('depletedBaffleOuterHoleInnerDiameter', fieldLabelMode)" class="form-col"
-              >
-                <a-input-number
-                  :value="formData.depletedBaffleOuterHoleInnerDiameter"
-                  :placeholder="`请输入${getFieldLabel('depletedBaffleOuterHoleInnerDiameter', fieldLabelMode)}`"
-                  style="width: 100%" addon-after="mm"
-                  :disabled="isFactorDisabledByKey('depletedBaffleOuterHoleInnerDiameter')"
-                  @update:value="(val) => onFieldChange('depletedBaffleOuterHoleInnerDiameter', val as number | null)"
-                />
-              </a-form-item>
-
-              <a-form-item
-                name="minAxialDistance" :label="getFieldLabel('minAxialDistance', fieldLabelMode)"
+                name="TackHeight" :label="getFieldLabel('TackHeight', fieldLabelMode)"
                 class="form-col"
               >
                 <a-input-number
-                  :value="formData.minAxialDistance"
-                  :placeholder="`请输入${getFieldLabel('minAxialDistance', fieldLabelMode)}`" style="width: 100%"
-                  addon-after="mm" :disabled="isFactorDisabledByKey('minAxialDistance')"
-                  @update:value="(val) => onFieldChange('minAxialDistance', val as number | null)"
+                  :value="formData.TackHeight"
+                  :placeholder="`请输入${getFieldLabel('TackHeight', fieldLabelMode)}`" style="width: 100%"
+                  addon-after="mm" :disabled="isFactorDisabledByKey('TackHeight')"
+                  @update:value="(val) => onFieldChange('TackHeight', val as number | null)"
                 />
               </a-form-item>
 
               <a-form-item
-                name="depletedBaffleAxialPosition"
-                :label="getFieldLabel('depletedBaffleAxialPosition', fieldLabelMode)" class="form-col"
+                name="RichBaffleHoleDiam"
+                :label="getFieldLabel('RichBaffleHoleDiam', fieldLabelMode)" class="form-col"
               >
                 <a-input-number
-                  :value="formData.depletedBaffleAxialPosition"
-                  :placeholder="`请输入${getFieldLabel('depletedBaffleAxialPosition', fieldLabelMode)}`"
-                  style="width: 100%" addon-after="mm" :disabled="isFactorDisabledByKey('depletedBaffleAxialPosition')"
-                  @update:value="(val) => onFieldChange('depletedBaffleAxialPosition', val as number | null)"
+                  :value="formData.RichBaffleHoleDiam"
+                  :placeholder="`请输入${getFieldLabel('RichBaffleHoleDiam', fieldLabelMode)}`"
+                  style="width: 100%" addon-after="mm" :disabled="isFactorDisabledByKey('RichBaffleHoleDiam')"
+                  @update:value="(val) => onFieldChange('RichBaffleHoleDiam', val as number | null)"
                 />
               </a-form-item>
 
               <a-form-item
-                name="depletedBaffleOuterHoleOuterDiameter"
-                :label="getFieldLabel('depletedBaffleOuterHoleOuterDiameter', fieldLabelMode)" class="form-col"
+                name="FeedBoxHeight"
+                :label="getFieldLabel('FeedBoxHeight', fieldLabelMode)" class="form-col"
               >
                 <a-input-number
-                  :value="formData.depletedBaffleOuterHoleOuterDiameter"
-                  :placeholder="`请输入${getFieldLabel('depletedBaffleOuterHoleOuterDiameter', fieldLabelMode)}`"
+                  :value="formData.FeedBoxHeight"
+                  :placeholder="`请输入${getFieldLabel('FeedBoxHeight', fieldLabelMode)}`" style="width: 100%"
+                  addon-after="mm" :disabled="isFactorDisabledByKey('FeedBoxHeight')"
+                  @update:value="(val) => onFieldChange('FeedBoxHeight', val as number | null)"
+                />
+              </a-form-item>
+
+              <a-form-item
+                name="PoorArmRadius"
+                :label="getFieldLabel('PoorArmRadius', fieldLabelMode)" class="form-col"
+              >
+                <a-input-number
+                  :value="formData.PoorArmRadius"
+                  :placeholder="`请输入${getFieldLabel('PoorArmRadius', fieldLabelMode)}`"
+                  style="width: 100%" addon-after="mm" :disabled="isFactorDisabledByKey('PoorArmRadius')"
+                  @update:value="(val) => onFieldChange('PoorArmRadius', val as number | null)"
+                />
+              </a-form-item>
+
+              <a-form-item
+                name="PoorTackInnerRadius"
+                :label="getFieldLabel('PoorTackInnerRadius', fieldLabelMode)" class="form-col"
+              >
+                <a-input-number
+                  :value="formData.PoorTackInnerRadius"
+                  :placeholder="`请输入${getFieldLabel('PoorTackInnerRadius', fieldLabelMode)}`"
                   style="width: 100%" addon-after="mm"
-                  :disabled="isFactorDisabledByKey('depletedBaffleOuterHoleOuterDiameter')"
-                  @update:value="(val) => onFieldChange('depletedBaffleOuterHoleOuterDiameter', val as number | null)"
+                  :disabled="isFactorDisabledByKey('PoorTackInnerRadius')"
+                  @update:value="(val) => onFieldChange('PoorTackInnerRadius', val as number | null)"
+                />
+              </a-form-item>
+
+              <a-form-item
+                name="PoorBaffleInnerHoleOuterRadius"
+                :label="getFieldLabel('PoorBaffleInnerHoleOuterRadius', fieldLabelMode)" class="form-col"
+              >
+                <a-input-number
+                  :value="formData.PoorBaffleInnerHoleOuterRadius"
+                  :placeholder="`请输入${getFieldLabel('PoorBaffleInnerHoleOuterRadius', fieldLabelMode)}`"
+                  style="width: 100%" addon-after="mm"
+                  :disabled="isFactorDisabledByKey('PoorBaffleInnerHoleOuterRadius')"
+                  @update:value="(val) => onFieldChange('PoorBaffleInnerHoleOuterRadius', val as number | null)"
+                />
+              </a-form-item>
+
+              <a-form-item
+                name="RichBaffleArrayHoleDiam"
+                :label="getFieldLabel('RichBaffleArrayHoleDiam', fieldLabelMode)" class="form-col"
+              >
+                <a-input-number
+                  :value="formData.RichBaffleArrayHoleDiam"
+                  :placeholder="`请输入${getFieldLabel('RichBaffleArrayHoleDiam', fieldLabelMode)}`"
+                  style="width: 100%" addon-after="mm"
+                  :disabled="isFactorDisabledByKey('RichBaffleArrayHoleDiam')"
+                  @update:value="(val) => onFieldChange('RichBaffleArrayHoleDiam', val as number | null)"
+                />
+              </a-form-item>
+
+              <a-form-item
+                name="PoorTackOuterRadius"
+                :label="getFieldLabel('PoorTackOuterRadius', fieldLabelMode)" class="form-col"
+              >
+                <a-input-number
+                  :value="formData.PoorTackOuterRadius"
+                  :placeholder="`请输入${getFieldLabel('PoorTackOuterRadius', fieldLabelMode)}`"
+                  style="width: 100%" addon-after="mm"
+                  :disabled="isFactorDisabledByKey('PoorTackOuterRadius')"
+                  @update:value="(val) => onFieldChange('PoorTackOuterRadius', val as number | null)"
+                />
+              </a-form-item>
+
+              <a-form-item
+                name="PoorBaffleOuterHoleInnerRadius"
+                :label="getFieldLabel('PoorBaffleOuterHoleInnerRadius', fieldLabelMode)" class="form-col"
+              >
+                <a-input-number
+                  :value="formData.PoorBaffleOuterHoleInnerRadius"
+                  :placeholder="`请输入${getFieldLabel('PoorBaffleOuterHoleInnerRadius', fieldLabelMode)}`"
+                  style="width: 100%" addon-after="mm"
+                  :disabled="isFactorDisabledByKey('PoorBaffleOuterHoleInnerRadius')"
+                  @update:value="(val) => onFieldChange('PoorBaffleOuterHoleInnerRadius', val as number | null)"
+                />
+              </a-form-item>
+
+              <a-form-item
+                name="FeedBoxAndPoorInterval" :label="getFieldLabel('FeedBoxAndPoorInterval', fieldLabelMode)"
+                class="form-col"
+              >
+                <a-input-number
+                  :value="formData.FeedBoxAndPoorInterval"
+                  :placeholder="`请输入${getFieldLabel('FeedBoxAndPoorInterval', fieldLabelMode)}`" style="width: 100%"
+                  addon-after="mm" :disabled="isFactorDisabledByKey('FeedBoxAndPoorInterval')"
+                  @update:value="(val) => onFieldChange('FeedBoxAndPoorInterval', val as number | null)"
+                />
+              </a-form-item>
+
+              <a-form-item
+                name="PoorBaffleAxialSpace"
+                :label="getFieldLabel('PoorBaffleAxialSpace', fieldLabelMode)" class="form-col"
+              >
+                <a-input-number
+                  :value="formData.PoorBaffleAxialSpace"
+                  :placeholder="`请输入${getFieldLabel('PoorBaffleAxialSpace', fieldLabelMode)}`"
+                  style="width: 100%" addon-after="mm" :disabled="isFactorDisabledByKey('PoorBaffleAxialSpace')"
+                  @update:value="(val) => onFieldChange('PoorBaffleAxialSpace', val as number | null)"
+                />
+              </a-form-item>
+
+              <a-form-item
+                name="PoorBaffleOuterHoleOuterRadius"
+                :label="getFieldLabel('PoorBaffleOuterHoleOuterRadius', fieldLabelMode)" class="form-col"
+              >
+                <a-input-number
+                  :value="formData.PoorBaffleOuterHoleOuterRadius"
+                  :placeholder="`请输入${getFieldLabel('PoorBaffleOuterHoleOuterRadius', fieldLabelMode)}`"
+                  style="width: 100%" addon-after="mm"
+                  :disabled="isFactorDisabledByKey('PoorBaffleOuterHoleOuterRadius')"
+                  @update:value="(val) => onFieldChange('PoorBaffleOuterHoleOuterRadius', val as number | null)"
                 />
               </a-form-item>
             </div>

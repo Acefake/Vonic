@@ -136,13 +136,13 @@ function buildInputDatContent(designData: any): string {
   const axialGridCount = getVal(designData, 'axialGridCount', 12)
   const l1 = line([radialGridCount, axialGridCount], '径向与轴向网格数')
 
-  // 行 2：六个主参数（为兼容 Fortran 格式，包含取料腔高度；解析时多出的值会被忽略）
-  const angularVelocity = getVal(designData, 'angularVelocity', 0)
-  const rotorRadius = getVal(designData, 'rotorRadius', 0)
-  const rotorShoulderLength = getVal(designData, 'rotorShoulderLength', 0)
-  const extractionChamberHeight = getVal(designData, 'extractionChamberHeight', 0)
-  const rotorSidewallPressure = getVal(designData, 'rotorSidewallPressure', 0)
-  const gasDiffusionCoefficient = getVal(designData, 'gasDiffusionCoefficient', 0)
+  // 行 2：六个主参数（使用文件字段名）
+  const angularVelocity = getVal(designData, 'DegSpeed', 0)
+  const rotorRadius = getVal(designData, 'RotorRadius', 0)
+  const rotorShoulderLength = getVal(designData, 'RotorLength', 0)
+  const extractionChamberHeight = getVal(designData, 'TackHeight', 0)
+  const rotorSidewallPressure = getVal(designData, 'RotorPressure', 0)
+  const gasDiffusionCoefficient = getVal(designData, 'GasParam', 0)
   const l2 = line([
     angularVelocity,
     rotorRadius,
@@ -152,34 +152,34 @@ function buildInputDatContent(designData: any): string {
     gasDiffusionCoefficient,
   ], '角速度HZ,半径mm,两肩长mm,取料腔高度mm,侧壁压力Pa,扩散系数')
 
-  // 后续参数行（与界面表单字段一一对应，顺序与解析逻辑保持一致）
-  const l3 = line([getVal(designData, 'depletedEndCapTemperature', 0)], '贫料端盖温度K')
-  const l4 = line([getVal(designData, 'enrichedEndCapTemperature', 0)], '精料盖温度K')
-  const l5 = line([getVal(designData, 'depletedMechanicalDriveAmount', 0)], '贫料机械驱动mm')
-  const l6 = line([getVal(designData, 'depletedExtractionArmRadius', 0)], '贫料取料支臂半径mm')
+  // 后续参数行（使用文件字段名）
+  const l3 = line([getVal(designData, 'PoorCoverTemp', 0)], '贫料端盖温度K')
+  const l4 = line([getVal(designData, 'RichCoverTemp', 0)], '精料盖温度K')
+  const l5 = line([getVal(designData, 'PoorDrive', 0)], '贫料机械驱动mm')
+  const l6 = line([getVal(designData, 'PoorArmRadius', 0)], '贫料取料支臂半径mm')
   const l7 = line([getVal(designData, 'innerBoundaryMirrorPosition', 0)], '内边界镜像位置mm')
   const l8 = line([getVal(designData, 'gridGenerationMethod', 0)], '网格生成方式')
-  const l9 = line([getVal(designData, 'enrichedBaffleHoleDistributionCircleDiameter', 0)], '精挡板孔分布圆直径mm')
-  const l10 = line([getVal(designData, 'enrichedBaffleHoleDiameter', 0)], '精挡板孔直径mm')
-  const l11 = line([getVal(designData, 'depletedExtractionPortInnerDiameter', 0)], '贫取料口部内径mm')
-  const l12 = line([getVal(designData, 'depletedExtractionPortOuterDiameter', 0)], '贫取料口部外径mm')
-  const l13 = line([getVal(designData, 'minAxialDistance', 0)], '供料箱与贫取料器最近轴向间距mm')
-  const l14 = line([getVal(designData, 'feedBoxShockDiskHeight', 0)], '供料箱激波盘高度mm')
-  const l15 = line([getVal(designData, 'feedFlowRate', 0)], '供料流量kg/s')
-  const l16 = line([getVal(designData, 'splitRatio', 0)], '分流比')
-  const l17 = line([getVal(designData, 'feedAngularDisturbance', 0)], '供料角向扰动')
-  const l18 = line([getVal(designData, 'feedAxialDisturbance', 0)], '供料轴向扰动')
-  const l19 = line([getVal(designData, 'depletedBaffleInnerHoleOuterDiameter', 0)], '贫料挡板内孔外径mm')
-  const l20 = line([getVal(designData, 'depletedBaffleOuterHoleInnerDiameter', 0)], '贫料挡板外孔内径mm')
-  const l21 = line([getVal(designData, 'depletedBaffleOuterHoleOuterDiameter', 0)], '贫料挡板外孔外径mm')
-  const l22 = line([getVal(designData, 'depletedBaffleAxialPosition', 0)], '贫料挡板轴向位置mm')
+  const l9 = line([getVal(designData, 'RichBaffleArrayHoleDiam', 0)], '精挡板孔分布圆直径mm')
+  const l10 = line([getVal(designData, 'RichBaffleHoleDiam', 0)], '精挡板孔直径mm')
+  const l11 = line([getVal(designData, 'PoorTackInnerRadius', 0)], '贫取料口部内径mm')
+  const l12 = line([getVal(designData, 'PoorTackOuterRadius', 0)], '贫取料口部外径mm')
+  const l13 = line([getVal(designData, 'FeedBoxAndPoorInterval', 0)], '供料箱与贫取料器最近轴向间跚mm')
+  const l14 = line([getVal(designData, 'FeedBoxHeight', 0)], '供料箱激波盘高度mm')
+  const l15 = line([getVal(designData, 'FeedFlow', 0)], '供料流量kg/s')
+  const l16 = line([getVal(designData, 'SplitRatio', 0)], '分流比')
+  const l17 = line([getVal(designData, 'FeedDegDist', 0)], '供料角向扰动')
+  const l18 = line([getVal(designData, 'FeedAxialDist', 0)], '供料轴向扰动')
+  const l19 = line([getVal(designData, 'PoorBaffleInnerHoleOuterRadius', 0)], '贫料挡板内孔外径mm')
+  const l20 = line([getVal(designData, 'PoorBaffleOuterHoleInnerRadius', 0)], '贫料挡板外孔内径mm')
+  const l21 = line([getVal(designData, 'PoorBaffleOuterHoleOuterRadius', 0)], '贫料挡板外孔外径mm')
+  const l22 = line([getVal(designData, 'PoorBaffleAxialSpace', 0)], '贫料挡板轴向位置mm')
   const l23 = line([getVal(designData, 'bwgRadialProtrusionHeight', 0)], 'BWG径向凸起高度mm')
   const l24 = line([getVal(designData, 'bwgAxialHeight', 0)], 'BWG轴向高度mm')
   const l25 = line([getVal(designData, 'bwgAxialPosition', 0)], 'BWG轴向位置mm从贫取料器至BWG中间')
   const l26 = line([getVal(designData, 'radialGridRatio', 0)], '径向网格比')
 
-  // 供料方式：可能是字符串或枚举，尝试输出数字，无法转换则原样输出
-  let feedingMethod = getVal(designData, 'feedingMethod', 0)
+  // 供料方式：使用文件字段名
+  let feedingMethod = getVal(designData, 'FeedMethod', 0)
   const feedingMethodNum = Number(feedingMethod)
   feedingMethod = Number.isFinite(feedingMethodNum) ? feedingMethodNum : feedingMethod
   const l27 = line([feedingMethod], '供料方式')
@@ -221,7 +221,7 @@ function buildInputDatContent(designData: any): string {
 }
 
 /**
- * 构建 powerAnalysis 的 input2.txt 内容（key=value，每行一个参数）
+ * 构建 powerAnalysis 的 input.txt 内容（key=value，每行一个参数）
  * 对于缺省值输出为空值，以便与示例格式一致（例如 PoorTackInnerRadius=）
  */
 function buildInput2TxtContent(designData: any): string {
@@ -249,30 +249,8 @@ function buildInput2TxtContent(designData: any): string {
     'RichBaffleArrayHoleDiam',
   ]
 
-  // 将 input2.txt 所需键映射到前端表单字段名
-  const srcFieldByKey: Record<string, string> = {
-    DegSpeed: 'angularVelocity',
-    RotorRadius: 'rotorRadius',
-    Temperature: 'averageTemperature',
-    RichBaffleTemp: 'enrichedBaffleTemperature',
-    RotorPressure: 'rotorSidewallPressure',
-    PowerFlow: 'feedFlowRate',
-    PoorTackInnerRadius: 'depletedExtractionPortInnerDiameter',
-    PoorTackOuterRadius: 'depletedExtractionPortOuterDiameter',
-    PoorTackRootOuterRadius: 'depletedExtractionRootOuterDiameter',
-    PoorTackDistance: 'depletedExtractionCenterDistance',
-    RichTackDistance: 'enrichedExtractionCenterDistance',
-    EvenSectionPipeLength: 'constantSectionStraightPipeLength',
-    ChangeSectionPipeLength: 'variableSectionStraightPipeLength',
-    PipeRadius: 'bendRadiusOfCurvature',
-    TackSurfaceRoughness: 'extractorSurfaceRoughness',
-    TackAttkAngle: 'extractorAngleOfAttack',
-    TackChamferAngle: 'extractorCuttingAngle',
-    TackTaperAngle: 'extractorTaperAngle',
-    TackHeight: 'extractionChamberHeight',
-    RichBaffleHoleDiam: 'enrichedBaffleHoleDiameter',
-    RichBaffleArrayHoleDiam: 'enrichedBaffleHoleDistributionCircleDiameter',
-  }
+  // 直接使用文件字段名，不需要映射
+  const srcFieldByKey: Record<string, string> = {}
 
   const getOptional = (obj: any, key: string): string => {
     if (!obj)
@@ -325,48 +303,48 @@ function buildInputPTxtContent(designData: any): string {
 
   const lines: string[] = []
   // 1. 半径
-  lines.push(`${val('rotorRadius')}    !半径`)
+  lines.push(`${val('RotorRadius')}    !半径`)
   // 2. 转速
-  lines.push(`${val('angularVelocity')}    !转速`)
+  lines.push(`${val('DegSpeed')}    !转速`)
   // 3. T0
-  lines.push(`${val('averageTemperature')}    !T0`)
+  lines.push(`${val('Temperature')}    !T0`)
   // 4. 精料挡板温度
-  lines.push(`${val('enrichedBaffleTemperature')}    !精料挡板温度`)
+  lines.push(`${val('RichBaffleTemp')}    !精料挡板温度`)
   // 5. Pw_w
-  lines.push(`${val('rotorSidewallPressure')}    !Pw_w`)
+  lines.push(`${val('RotorPressure')}    !Pw_w`)
   // 6. 供料流量
-  lines.push(`${val('feedFlowRate')}    !供料流量`)
+  lines.push(`${val('PowerFlow')}    !供料流量`)
   // 7. 贫料流量（无此字段，置 0）
   lines.push(`0    !贫料流量`)
   // 8. ds
-  lines.push(`${val('depletedExtractionPortInnerDiameter')}    !ds`)
+  lines.push(`${val('PoorTackInnerRadius')}    !ds`)
   // 9. ds1
-  lines.push(`${val('depletedExtractionPortOuterDiameter')}    !ds1`)
+  lines.push(`${val('PoorTackOuterRadius')}    !ds1`)
   // 10. ds0
-  lines.push(`${val('depletedExtractionRootOuterDiameter')}    !ds0`)
+  lines.push(`${val('PoorTackRootOuterRadius')}    !ds0`)
   // 11. rw
-  lines.push(`${val('depletedExtractionCenterDistance')}    !rw`)
+  lines.push(`${val('PoorTackDistance')}    !rw`)
   // 12. rp
-  lines.push(`${val('enrichedExtractionCenterDistance')}    !rp`)
+  lines.push(`${val('RichTackDistance')}    !rp`)
   // 13. Ls
-  lines.push(`${val('constantSectionStraightPipeLength')}    !Ls`)
+  lines.push(`${val('EvenSectionPipeLength')}    !Ls`)
   // 14. Lss
-  lines.push(`${val('variableSectionStraightPipeLength')}    !Lss`)
+  lines.push(`${val('ChangeSectionPipeLength')}    !Lss`)
   // 15. rss
-  lines.push(`${val('bendRadiusOfCurvature')}    !rss`)
-  // 16. Hr_Scoop=roughness 取料器镀镍后的表面粗糙度
-  lines.push(`${val('extractorSurfaceRoughness')}    !Hr_Scoop=roughness 取料器镀镍后的表面粗糙度`)
+  lines.push(`${val('PipeRadius')}    !rss`)
+  // 16. Hr_Scoop=roughness 取料器镀镁后的表面粗糙度
+  lines.push(`${val('TackSurfaceRoughness')}    !Hr_Scoop=roughness 取料器镀镁后的表面粗糙度`)
   // 17. angle_angle(1)
-  lines.push(`${val('extractorAngleOfAttack')}    !angle_angle(1)`)
+  lines.push(`${val('TackAttkAngle')}    !angle_angle(1)`)
   // 18. angle_angle(2)
-  lines.push(`${val('extractorCuttingAngle')}    !angle_angle(2)`)
+  lines.push(`${val('TackChamferAngle')}    !angle_angle(2)`)
   // 19. angle_angle(3)
-  lines.push(`${val('extractorTaperAngle')}    !angle_angle(3)`)
+  lines.push(`${val('TackTaperAngle')}    !angle_angle(3)`)
   // 20. hs 取料腔高度的一半
-  const fullHeight = val('extractionChamberHeight')
+  const fullHeight = val('TackHeight')
   lines.push(`${fullHeight / 2}    !hs取料腔高度的一半`)
   // 21. holedia_p
-  const holeDia = val('enrichedBaffleHoleDiameter')
+  const holeDia = val('RichBaffleHoleDiam')
   lines.push(`${holeDia}    !holedia_p`)
   // 22. sigma_p 单孔面积
   const sigmaP = holeDia > 0 ? Math.PI * (holeDia / 2) ** 2 : 0
@@ -374,7 +352,7 @@ function buildInputPTxtContent(designData: any): string {
   // 23. ka 参数k（未知，置 0）
   lines.push(`0    !ka最大流量公式对应的值域与气体料类有关的参数k`)
   // 24. rk_p 精料挡板孔的中心距
-  lines.push(`${val('enrichedBaffleHoleDistributionCircleDiameter')}    !rk_p精料挡板空的中心距`)
+  lines.push(`${val('RichBaffleArrayHoleDiam')}    !rk_p精料挡板空的中心距`)
   // 25. Ma_x 孔板气体马赫数
   lines.push(`0    !Ma_x孔板气体马赫数`)
   // 26. w_prot

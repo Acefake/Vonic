@@ -2,27 +2,24 @@
 import type { ChartConfig, ProcessedChartData, SeriesData, TableColumn, TableDataRow } from '../ExperimentalData/types'
 import { FilterOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
-import { computed, onMounted, ref, toRefs, watch } from 'vue'
-import app from '../../app/index'
-import { useDesignStore, useExperimentalDataStore, useLogStore, useSchemeOptimizationStore } from '../../store'
+import { storeToRefs } from 'pinia'
+import { computed, onMounted, ref } from 'vue'
+import { useMultiSchemeStore } from '@/renderer/store/msStore'
+
+import { useExperimentalDataStore } from '../../store'
+import { useMPhysSimDesignStore } from '../../store/mPhysSimDesignStore'
 import { getFieldLabel } from '../../utils/field-labels'
 
 import DataChart from '../ExperimentalData/DataChart.vue'
 
 const experimentalDataStore = useExperimentalDataStore()
-const { tableColumns, tableData } = toRefs(experimentalDataStore)
-const designStore = useDesignStore()
-const { formData, isMultiScheme } = toRefs(designStore)
-const schemeOptimizationStore = useSchemeOptimizationStore()
-const { sampleSpaceData } = toRefs(schemeOptimizationStore)
-console.log(sampleSpaceData.value, 'sampleSpaceData---------------')
-const logStore = useLogStore()
-console.log(tableColumns.value, 'tableColumns')
-console.log(tableData.value, 'tableData')
-console.log(formData.value, 'formData')
-// =====================
-// 数据状态
-// =====================
+const { tableColumns, tableData } = storeToRefs(experimentalDataStore)
+const designStore = useMPhysSimDesignStore()
+const { formData, isMultiScheme } = storeToRefs(designStore)
+
+const multiSchemeStore = useMultiSchemeStore()
+const { schemes } = storeToRefs(multiSchemeStore)
+
 // 试验数据（从 store 获取）
 const experimentalTableColumns = tableColumns
 
@@ -38,154 +35,61 @@ const experimentalTableData = computed(() => {
   })
 })
 
-// 存储多方案的结果数据（分离功率和分离系数）
-const multiSchemeResultsData = ref<Array<{ sepPower: number | null, sepFactor: number | null }>>([])
-
-/**
- * 多方案仿真数据的表格列配置（基于样本空间数据，添加分离功率和分离系数）
- */
-const multiSchemeSimulationColumns = computed<TableColumn[]>(() => {
-  // 如果没有样本空间数据，返回空数组（不显示任何列）
-  if (!sampleSpaceData.value || sampleSpaceData.value.length === 0) {
-    return []
-  }
-
-  const columns: TableColumn[] = [
-    { title: '序号', dataIndex: '序号', key: '序号', width: 80 },
-  ]
-
-  // 从样本空间数据中提取字段作为列（去除空格）
-  const firstSample = sampleSpaceData.value[0]
-  Object.keys(firstSample).forEach((key) => {
-    const trimmedKey = key.trim()
-    if (trimmedKey !== 'id' && trimmedKey !== '序号') {
-      columns.push({
-        title: trimmedKey,
-        dataIndex: trimmedKey,
-        key: trimmedKey,
-        width: calculateColumnWidth(trimmedKey),
-      })
-    }
-  })
-
-  // 添加分离功率和分离系数列（只有成功加载数据且有有效值时才添加）
-  const hasValidResults = multiSchemeResultsData.value.length > 0
-    && multiSchemeResultsData.value.some(item => item.sepPower !== null || item.sepFactor !== null)
-
-  if (hasValidResults) {
-    columns.push(
-      {
-        title: '分离功率',
-        dataIndex: '分离功率',
-        key: '分离功率',
-        width: 120,
-      },
-      {
-        title: '分离系数',
-        dataIndex: '分离系数',
-        key: '分离系数',
-        width: 120,
-      },
-    )
-  }
-
-  return columns
-})
-
 // 数据对比内容选择
 const selectedCompareFields = ref<string[]>([])
 
 // 保存仿真表格的筛选条件（用于多方案表格筛选）- 改为数组支持多选
 const simulationTableFilters = ref<Record<string, string[]>>({})
 
+// 不需要在表格中显示的字段列表
+const EXCLUDE_FIELDS = [
+  'index',
+  'fileName',
+  'originalIndex',
+  'isOptimalCopy',
+  'radialGridCount',
+  'axialGridCount',
+  'innerBoundaryMirrorPosition',
+  'gridGenerationMethod',
+  'radialGridRatio',
+  'compensationCoefficient',
+  'streamlineData',
+  'bwgRadialProtrusionHeight',
+  'bwgAxialHeight',
+  'bwgAxialPosition',
+]
+
 /**
- * 多方案仿真数据的表格数据（基于样本空间数据，合并分离功率和分离系数）
+ * 多方案仿真数据的表格数据（直接使用多方案 Store 的数据）
  */
 const multiSchemeSimulationData = computed<TableDataRow[]>(() => {
-  return sampleSpaceData.value.map((sample, index) => {
-    // 创建新对象，字段名去除空格
-    const row: TableDataRow = {
-      key: `sample-${sample.id}`,
-      序号: index + 1,
-    }
-
-    // 将原始数据的字段名去除空格后添加
-    Object.keys(sample).forEach((key) => {
-      const trimmedKey = key.trim()
-      if (trimmedKey !== 'id') {
-        row[trimmedKey] = sample[key]
-      }
-    })
-
-    // 合并分离功率和分离系数（从 multiSchemeResultsData 中获取对应索引的数据）
-    const resultData = multiSchemeResultsData.value[index]
-    if (resultData) {
-      row['分离功率'] = resultData.sepPower !== null ? resultData.sepPower : undefined
-      row['分离系数'] = resultData.sepFactor !== null ? resultData.sepFactor : undefined
-    }
-
-    return row
-  })
-})
-
-/**
- * 加载多方案结果数据（分离功率和分离系数）
- */
-async function loadMultiSchemeResults() {
-  // 非多方案模式时，清空结果数据
-  if (!isMultiScheme.value) {
-    multiSchemeResultsData.value = []
-    return
-  }
-
-  // 如果没有样本空间数据，清空结果数据
-  if (!sampleSpaceData.value || sampleSpaceData.value.length === 0) {
-    multiSchemeResultsData.value = []
-    return
-  }
-
-  try {
-    const data = await app.file.readMultiSchemes()
-    // 提取分离功率和分离系数，去掉最优方案行（index === -1）
-    multiSchemeResultsData.value = data
-      .filter(item => item.index !== -1)
-      .map(item => ({
-        sepPower: item.sepPower,
-        sepFactor: item.sepFactor,
-      }))
-    console.log('多方案结果数据加载成功:', multiSchemeResultsData.value)
-  }
-  catch (error) {
-    console.error('加载多方案结果数据失败:', error)
-    multiSchemeResultsData.value = []
-  }
-}
-
-/**
- * 获取每列的唯一值（用于多方案仿真数据表格的筛选）
- */
-function getColumnUniqueValues(columnKey: string): string[] {
-  if (!isMultiScheme.value || !multiSchemeSimulationData.value || multiSchemeSimulationData.value.length === 0) {
+  if (!schemes.value || schemes.value.length === 0) {
     return []
   }
 
-  // 提取该列的所有值
-  const values = multiSchemeSimulationData.value
-    .map(row => row[columnKey])
-    .filter(val => val !== undefined && val !== null && val !== '')
-    .map(val => String(val))
+  return schemes.value
+    .filter(scheme => scheme.index !== -1) // 过滤掉最优方案行
+    .map((scheme, index) => {
+      const row: TableDataRow = {
+        key: `scheme-${scheme.index || index}`,
+        序号: index + 1,
+      }
 
-  // 去重并排序
-  return [...new Set(values)].sort((a, b) => {
-    // 尝试转为数字比较，如果不是数字则按字符串比较
-    const numA = Number(a)
-    const numB = Number(b)
-    if (!Number.isNaN(numA) && !Number.isNaN(numB)) {
-      return numA - numB
-    }
-    return a.localeCompare(b)
-  })
-}
+      // 复制所有字段（排除内部字段和不需要显示的仿真字段）
+      // 同时创建中文标签映射，以便与列配置匹配
+      Object.keys(scheme).forEach((key) => {
+        if (!EXCLUDE_FIELDS.includes(key)) {
+          const label = getFieldLabel(key) || key
+          row[key] = scheme[key] // 保留原始字段名
+          row[label] = scheme[key] // 添加中文标签映射
+        }
+      })
+
+      return row
+    })
+})
+
+// 已删除 loadMultiSchemeResults 函数，直接使用多方案 Store 数据
 
 /**
  * 图表配置
@@ -202,62 +106,6 @@ const chartConfig = ref<ChartConfig>({
   titleFont: '宋体',
 })
 
-// 监听方案类型切换
-watch(isMultiScheme, (newValue) => {
-  const schemeType = newValue ? '多方案' : '单方案'
-  logStore.info('切换方案类型', `当前方案类型: ${schemeType}`)
-
-  // 如果切换到多方案，加载结果数据
-  if (newValue) {
-    loadMultiSchemeResults()
-  }
-  else {
-    // 切换到单方案时，清空多方案结果数据
-    multiSchemeResultsData.value = []
-  }
-})
-
-// 监听样本空间数据变化
-watch(() => sampleSpaceData.value, (newData) => {
-  if (isMultiScheme.value) {
-    // 如果样本空间数据被清空，也清空结果数据
-    if (!newData || newData.length === 0) {
-      multiSchemeResultsData.value = []
-    }
-    else {
-      // 有新数据时，重新加载结果数据
-      loadMultiSchemeResults()
-    }
-  }
-}, { deep: true })
-
-// 监听数据对比字段选择
-watch(selectedCompareFields, (newFields) => {
-  if (newFields.length > 0) {
-    logStore.info('选择对比字段', `字段: ${newFields.join(', ')}`)
-  }
-})
-
-// 监听图表配置变化
-watch(() => chartConfig.value.chartType, (newType) => {
-  logStore.info('切换图表类型', `类型: ${newType}`)
-})
-
-watch(() => chartConfig.value.xAxis, (newAxis) => {
-  if (newAxis) {
-    logStore.info('选择X轴', `X轴: ${newAxis}`)
-  }
-})
-
-watch(() => chartConfig.value.yAxis, (newAxis) => {
-  if (newAxis) {
-    logStore.info('选择Y轴', `Y轴: ${newAxis}`)
-  }
-})
-
-// =====================
-// 计算属性
-// =====================
 /**
  * 合并设计参数数据
  * 将 topLevelParams、operatingParams、drivingParams、separationComponents、outputResults 合并成一个对象
@@ -291,12 +139,8 @@ function calculateColumnWidth(text: string): number {
  */
 const singleSchemeSimulationColumns = computed<TableColumn[]>(() => {
   const data = mergedDesignData.value
-  console.log(data, 'data---------------')
-
-  // 检查是否有任何有效数据
   const hasValidData = Object.values(data).some(value => value !== undefined && value !== null)
 
-  // 如果没有有效数据，返回空数组（不显示任何列，包括序号列）
   if (!hasValidData) {
     return []
   }
@@ -305,15 +149,17 @@ const singleSchemeSimulationColumns = computed<TableColumn[]>(() => {
     { title: '序号', dataIndex: '序号', key: '序号', width: 80 },
   ]
 
-  // 为每个参数创建一列，根据表头文字长度自动计算列宽
   Object.keys(data).forEach((key) => {
-    const title = getFieldLabel(key) // 使用中文标签作为列标题
-    columns.push({
-      title,
-      dataIndex: key,
-      key,
-      width: calculateColumnWidth(title), // 根据表头文字长度计算宽度
-    })
+    // 过滤掉不需要显示的字段
+    if (!EXCLUDE_FIELDS.includes(key)) {
+      const title = getFieldLabel(key)
+      columns.push({
+        title,
+        dataIndex: key,
+        key,
+        width: calculateColumnWidth(title),
+      })
+    }
   })
 
   return columns
@@ -334,12 +180,18 @@ const singleSchemeSimulationData = computed<TableDataRow[]>(() => {
     return []
   }
 
-  // 创建一条数据行，包含所有参数
+  // 创建一条数据行，只包含需要显示的参数
   const row: TableDataRow = {
     key: 'design-params-row-1',
     序号: 1,
-    ...data, // 将所有参数展开到一行中
   }
+
+  // 只添加不在排除列表中的字段
+  Object.keys(data).forEach((key) => {
+    if (!EXCLUDE_FIELDS.includes(key)) {
+      row[key] = data[key]
+    }
+  })
 
   return [row] // 只返回一条数据
 })
@@ -347,44 +199,33 @@ const singleSchemeSimulationData = computed<TableDataRow[]>(() => {
 // 数据对比内容选项
 const compareFieldOptions = computed(() => {
   if (isMultiScheme.value) {
-    // 多方案：样本空间表头 + 试验数据表头 + 分离功率 + 分离系数，去重
-    // 从样本空间数据中提取字段名（排除 id，并去除空格）
-    const sampleFields: string[] = []
-    if (sampleSpaceData.value.length > 0) {
-      const firstSample = sampleSpaceData.value[0]
-      Object.keys(firstSample).forEach((key) => {
-        const trimmedKey = key.trim()
-        if (trimmedKey !== 'id' && trimmedKey !== '序号') {
-          sampleFields.push(trimmedKey)
-        }
-      })
+    // 多方案：从多方案数据和试验数据中提取字段
+    const allFields = new Set<string>()
+
+    // 从多方案数据中提取字段（转换为中文标签）
+    if (schemes.value && schemes.value.length > 0) {
+      const firstScheme = schemes.value.find(scheme => scheme.index !== -1)
+      if (firstScheme) {
+        Object.keys(firstScheme).forEach((key) => {
+          if (!EXCLUDE_FIELDS.includes(key)) {
+            const label = getFieldLabel(key) || key
+            allFields.add(label) // 使用中文标签
+          }
+        })
+      }
     }
 
-    // 试验数据表头（去除空格）
-    const experimentalFields = experimentalTableColumns.value
+    // 从试验数据中提取字段
+    experimentalTableColumns.value
       .filter(col => col.dataIndex !== '序号')
-      .map(col => (typeof col.dataIndex === 'string' ? col.dataIndex.trim() : col.dataIndex))
+      .forEach((col) => {
+        const fieldName = typeof col.dataIndex === 'string' ? col.dataIndex.trim() : String(col.dataIndex)
+        allFields.add(fieldName)
+      })
 
-    // 合并去重（都已经去除空格）
-    const allFields = [...new Set([...sampleFields, ...experimentalFields])]
-
-    // 添加分离功率和分离系数（只有成功加载数据且有有效值时才添加）
-    const hasValidResults = multiSchemeResultsData.value.length > 0
-      && multiSchemeResultsData.value.some(item => item.sepPower !== null || item.sepFactor !== null)
-
-    console.log('多方案结果数据检查:', {
-      length: multiSchemeResultsData.value.length,
-      data: multiSchemeResultsData.value,
-      hasValidResults,
-    })
-
-    if (hasValidResults) {
-      allFields.push('分离功率', '分离系数')
-    }
-
-    return allFields.map(field => ({
-      label: field,
-      value: field,
+    return Array.from(allFields).map(field => ({
+      label: field, // 直接使用中文标签作为显示
+      value: field, // 使用中文标签作为值
     }))
   }
   else {
@@ -433,34 +274,57 @@ const filteredSimulationColumns = computed<TableColumn[]>(() => {
     ]
   }
 
-  // 多方案：使用样本空间数据的列配置和过滤逻辑
-  const baseColumns = selectedCompareFields.value.length === 0
-    ? multiSchemeSimulationColumns.value
-    : [
-        multiSchemeSimulationColumns.value[0], // 序号列
-        ...multiSchemeSimulationColumns.value.filter(col =>
-          selectedCompareFields.value.includes(col.dataIndex),
-        ),
-      ]
+  // 多方案：基于多方案 Store 数据动态生成列配置
+  if (!schemes.value || schemes.value.length === 0) {
+    return []
+  }
 
-  // 多方案时，为非序号列添加筛选功能（复选框列表）
-  return baseColumns.map((col) => {
-    if (col.dataIndex === '序号') {
-      return col
-    }
+  const columns: TableColumn[] = [
+    { title: '序号', dataIndex: '序号', key: '序号', width: 80 },
+  ]
 
-    const dataIndex = col.dataIndex as string
+  // 从第一个方案中提取字段作为列（排除内部字段和不需要显示的仿真字段）
+  const firstScheme = schemes.value.find(scheme => scheme.index !== -1)
+  if (firstScheme) {
+    Object.keys(firstScheme).forEach((key) => {
+      if (!EXCLUDE_FIELDS.includes(key)) {
+        const title = getFieldLabel(key) || key // 使用中文标签或原字段名
 
-    return {
-      ...col,
-      customFilterDropdown: true,
-      filteredValue: simulationTableFilters.value[dataIndex] || null,
-      onFilter: (value: string, record: TableDataRow) => {
-        const recordValue = String(record[dataIndex] || '')
-        return recordValue === value
-      },
-    }
-  })
+        // 为非序号列添加筛选功能
+        const columnConfig: any = {
+          title,
+          dataIndex: title, // 使用中文标签作为 dataIndex，与数据行键名一致
+          key,
+          width: calculateColumnWidth(title),
+        }
+
+        // 添加筛选功能（复选框列表）
+        if (key !== '序号') {
+          columnConfig.customFilterDropdown = true
+          columnConfig.filteredValue = simulationTableFilters.value[title] || null
+          columnConfig.onFilter = (value: string, record: any) => {
+            const recordValue = String(record[title] || '')
+            return recordValue === value
+          }
+        }
+
+        columns.push(columnConfig)
+      }
+    })
+  }
+
+  // 如果选择了特定字段，只显示选中的字段
+  if (selectedCompareFields.value.length > 0) {
+    const sequenceCol = columns.find(col => col.dataIndex === '序号')
+    const selectedCols = columns.filter((col) => {
+      const dataIndex = col.dataIndex as string
+      // 现在 dataIndex 就是中文标签，直接匹配
+      return selectedCompareFields.value.includes(dataIndex)
+    })
+    return sequenceCol ? [sequenceCol, ...selectedCols] : selectedCols
+  }
+
+  return columns
 })
 
 /**
@@ -483,13 +347,26 @@ const filteredSimulationData = computed(() => {
     const filteredRow: TableDataRow = { key: row.key, 序号: row.序号 }
 
     selectedCompareFields.value.forEach((field) => {
-      filteredRow[field] = row[field] !== undefined ? row[field] : ''
+      // 支持中文标签匹配，需要在多方案数据和试验数据中查找
+      let value = row[field] // 先尝试直接匹配（适用于试验数据的中文字段）
+
+      if (value === undefined) {
+        // 如果直接匹配失败，尝试通过中文标签反向查找英文字段名（适用于多方案数据）
+        const matchedKey = Object.keys(row).find((key) => {
+          const label = getFieldLabel(key)
+          return label === field
+        })
+        if (matchedKey) {
+          value = row[matchedKey]
+        }
+      }
+
+      filteredRow[field] = value !== undefined ? value : ''
     })
 
     return filteredRow
   })
 })
-console.log(filteredSimulationData.value, '仿真数据表格数据---------------')
 
 // 保存仿真表格实际显示的数据（应用了复选框筛选后的数据）
 const actualSimulationTableData = computed<TableDataRow[]>(() => {
@@ -503,27 +380,53 @@ const actualSimulationTableData = computed<TableDataRow[]>(() => {
   const hasFilters = Object.keys(filters).some(key => filters[key] && filters[key].length > 0)
 
   if (!hasFilters) {
-    // 没有筛选条件，返回所有数据
     return filteredSimulationData.value
   }
 
-  // 应用筛选条件（多选复选框）
   return filteredSimulationData.value.filter((row) => {
-    // 检查每个筛选条件
     for (const [columnKey, filterValues] of Object.entries(filters)) {
-      if (!filterValues || filterValues.length === 0)
-        continue // 跳过空筛选值
+      if (!filterValues || filterValues.length === 0) {
+        continue
+      }
 
-      const cellValue = String(row[columnKey] || '')
-
-      // 该列的值必须在选中的筛选值列表中
+      const cellValue = String(row[columnKey] || '').trim()
       if (!filterValues.includes(cellValue)) {
-        return false // 不匹配，过滤掉这一行
+        return false
       }
     }
-    return true // 所有筛选条件都匹配
+    return true
   })
 })
+
+/**
+ * 获取每列的唯一值（用于多方案仿真数据表格的筛选）
+ */
+function getColumnUniqueValues(columnKey: string): string[] {
+  if (!isMultiScheme.value || !actualSimulationTableData.value || actualSimulationTableData.value.length === 0) {
+    return []
+  }
+
+  const uniqueValues = new Set<string>()
+
+  actualSimulationTableData.value.forEach((row) => {
+    const value = row[columnKey]
+    if (value !== undefined && value !== null && value !== '') {
+      const stringValue = String(value).trim()
+      if (stringValue) {
+        uniqueValues.add(stringValue)
+      }
+    }
+  })
+
+  return Array.from(uniqueValues).sort((a, b) => {
+    const numA = Number(a)
+    const numB = Number(b)
+    if (!Number.isNaN(numA) && !Number.isNaN(numB)) {
+      return numA - numB
+    }
+    return a.localeCompare(b, 'zh-CN', { numeric: true, sensitivity: 'base' })
+  })
+}
 
 // 过滤后的试验数据表格列
 const filteredExperimentalColumns = computed(() => {
@@ -613,13 +516,6 @@ const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
   const simulationData = actualSimulationTableData.value
   const simulationColumns = filteredSimulationColumns.value
 
-  console.log('[图表数据] 使用的数据源:', {
-    isMultiScheme: isMultiScheme.value,
-    filters: simulationTableFilters.value,
-    simulationDataLength: simulationData.length,
-    data: simulationData,
-  })
-
   const simXCol = simulationColumns.find((col) => {
     const dataIndex = typeof col.dataIndex === 'string' ? col.dataIndex.trim() : col.dataIndex
     const title = typeof col.title === 'string' ? col.title.trim() : col.title
@@ -695,13 +591,6 @@ const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
   }
 })
 
-// =====================
-// 事件处理函数
-// =====================
-
-// =====================
-// 数据检查
-// =====================
 /**
  * 检查数据完整性并给出提示
  */
@@ -727,16 +616,7 @@ function checkDataCompleteness() {
   }
 }
 
-// =====================
-// 生命周期钩子
-// =====================
 onMounted(() => {
-  // 如果初始状态是多方案，加载结果数据
-  if (isMultiScheme.value) {
-    loadMultiSchemeResults()
-  }
-
-  // 进入页面时检查数据完整性并提示
   setTimeout(() => {
     checkDataCompleteness()
   }, 500)
@@ -775,7 +655,7 @@ onMounted(() => {
           </div>
           <a-table
             :columns="filteredSimulationColumns"
-            :data-source="filteredSimulationData"
+            :data-source="actualSimulationTableData"
             :scroll="{ x: 'max-content', y: 400 }"
             :pagination="false"
             bordered

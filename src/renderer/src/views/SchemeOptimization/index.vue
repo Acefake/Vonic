@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DesignFactor, SampleData, SampleSpaceData } from './type'
+import type { DesignFactor, FactorType, SampleData, SampleSpaceData } from './type'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { debounce } from 'lodash'
 import { storeToRefs } from 'pinia'
@@ -7,7 +7,7 @@ import { computed, ref } from 'vue'
 import { getProductConfig } from '../../../../config/product.config'
 import app from '../../app/index'
 import { useLogStore, useSchemeOptimizationStore } from '../../store'
-import { useDesignStore } from '../../store/designStore'
+import { useMPhysSimDesignStore } from '../../store/mPhysSimDesignStore'
 import { usePowerAnalysisDesignStore } from '../../store/powerAnalysisDesignStore'
 import { FIELD_LABELS } from '../../utils/field-labels'
 import { parseOutput } from '../../utils/parseOutinpu'
@@ -29,7 +29,7 @@ import {
 } from './validation'
 
 const logStore = useLogStore()
-const designStore = app.productConfig.id === 'powerAnalysis' ? usePowerAnalysisDesignStore() : useDesignStore()
+const designStore = app.productConfig.id === 'powerAnalysis' ? usePowerAnalysisDesignStore() : useMPhysSimDesignStore()
 const schemeOptimizationStore = useSchemeOptimizationStore()
 const { designFactors, sampleSpaceData, optimizationAlgorithm, samplePointCount, samplingCriterion, factorCount, samplePointCountforRes } = storeToRefs(schemeOptimizationStore)
 
@@ -127,6 +127,107 @@ async function addDesignFactor(): Promise<void> {
       }
     },
   )
+}
+
+/**
+ * 调试功能：一键添加所有设计因子
+ */
+async function debugAddAllFactors(): Promise<void> {
+  const productConfig = getProductConfig()
+  const productId = productConfig.id
+
+  // 根据产品类型获取所有字段
+  let allFields: Array<{ key: string, label: string }> = []
+
+  if (productId === 'mPhysSim') {
+    // mPhysSim 产品的所有字段
+    const mPhysSimFields = [
+      'DegSpeed',
+      'RotorRadius',
+      'RotorLength',
+      'RotorPressure',
+      'GasParam',
+      'FeedFlow',
+      'FeedMethod',
+      'SplitRatio',
+      'PoorCoverTemp',
+      'RichCoverTemp',
+      'FeedAxialDist',
+      'FeedDegDist',
+      'PoorDrive',
+      'TackHeight',
+      'RichBaffleHoleDiam',
+      'FeedBoxHeight',
+      'PoorArmRadius',
+      'PoorTackInnerRadius',
+      'PoorTackOuterRadius',
+      'PoorBaffleInnerHoleOuterRadius',
+      'PoorBaffleOuterHoleInnerRadius',
+      'PoorBaffleOuterHoleOuterRadius',
+      'RichBaffleArrayHoleDiam',
+      'FeedBoxAndPoorInterval',
+      'PoorBaffleAxialSpace',
+    ]
+    allFields = mPhysSimFields.map(key => ({
+      key,
+      label: FIELD_LABELS[key]?.['zh-CN'] || key,
+    }))
+  }
+  else if (productId === 'powerAnalysis') {
+    // PowerAnalysis 产品的所有字段
+    const powerAnalysisFields = [
+      'DegSpeed',
+      'RotorRadius',
+      'Temperature',
+      'RichBaffleTemp',
+      'RotorPressure',
+      'PowerFlow',
+      'PoorTackInnerRadius',
+      'PoorTackOuterRadius',
+      'PoorTackRootOuterRadius',
+      'TackAttkAngle',
+      'TackHeight',
+      'PoorTackDistance',
+      'RichTackDistance',
+      'EvenSectionPipeLength',
+      'TackChamferAngle',
+      'RichBaffleHoleDiam',
+      'ChangeSectionPipeLength',
+      'PipeRadius',
+      'TackSurfaceRoughness',
+      'TackTaperAngle',
+      'RichBaffleArrayHoleDiam',
+    ]
+    allFields = powerAnalysisFields.map(key => ({
+      key,
+      label: FIELD_LABELS[key]?.['zh-CN'] || key,
+    }))
+  }
+
+  // 模拟从弹窗返回所有字段
+  const prevByName = new Map<string, DesignFactor>(
+    designFactors.value.map(f => [f.name, f]),
+  )
+
+  const newFactors: DesignFactor[] = allFields.map((field, index) => {
+    const existing = prevByName.get(field.label)
+    return existing || {
+      id: Date.now() + index, // 简单的 ID 生成
+      name: field.label,
+      type: '实数' as FactorType,
+      lowerLimit: 1,
+      upperLimit: 100,
+      levelCount: 3,
+      values: '',
+    }
+  })
+
+  designFactors.value = newFactors
+
+  // 清空样本空间数据
+  sampleSpaceData.value = []
+
+  app.message.success(`已添加 ${newFactors.length} 个设计因子`)
 }
 
 /**
@@ -1444,6 +1545,9 @@ async function executeSampleSpace(params: any) {
                     <PlusOutlined />
                   </template>
                   添加参数
+                </a-button>
+                <a-button size="small" type="dashed" @click="debugAddAllFactors">
+                  🚀 一键添加全部
                 </a-button>
                 <a-button
                   danger size="small" :disabled="selectedDesignFactorIds.length === 0"

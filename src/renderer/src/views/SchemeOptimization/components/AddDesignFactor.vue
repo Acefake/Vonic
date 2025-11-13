@@ -48,138 +48,138 @@ function createFieldGroups(): FieldGroup[] {
       {
         title: getFieldLabel('topLevelParams'),
         items: [
-          createFieldItem('angularVelocity'),
-          createFieldItem('rotorRadius'),
-          createFieldItem('rotorShoulderLength'),
+          createFieldItem('DegSpeed'),
+          createFieldItem('RotorRadius'),
+          createFieldItem('RotorLength'),
         ],
       },
       {
         title: getFieldLabel('operatingParams'),
         items: [
-          createFieldItem('rotorSidewallPressure'),
-          createFieldItem('gasDiffusionCoefficient'),
-          createFieldItem('feedFlowRate'),
-          createFieldItem('feedingMethod'),
-          createFieldItem('splitRatio'),
+          createFieldItem('RotorPressure'),
+          createFieldItem('GasParam'),
+          createFieldItem('FeedFlow'),
+          createFieldItem('FeedMethod'),
+          createFieldItem('SplitRatio'),
         ],
       },
       {
         title: getFieldLabel('drivingParams'),
         items: [
-          createFieldItem('depletedEndCapTemperature'),
-          createFieldItem('enrichedEndCapTemperature'),
-          createFieldItem('feedAxialDisturbance'),
-          createFieldItem('feedAngularDisturbance'),
-          createFieldItem('depletedMechanicalDriveAmount'),
+          createFieldItem('PoorCoverTemp'),
+          createFieldItem('RichCoverTemp'),
+          createFieldItem('FeedAxialDist'),
+          createFieldItem('FeedDegDist'),
+          createFieldItem('PoorDrive'),
         ],
       },
       {
         title: getFieldLabel('separationComponents'),
         items: [
-          createFieldItem('extractionChamberHeight'),
-          createFieldItem('enrichedBaffleHoleDiameter'),
-          createFieldItem('feedBoxShockDiskHeight'),
-          createFieldItem('depletedExtractionArmRadius'),
-          createFieldItem('depletedExtractionPortInnerDiameter'),
-          createFieldItem('depletedBaffleInnerHoleOuterDiameter'),
-          createFieldItem('enrichedBaffleHoleDistributionCircleDiameter'),
-          createFieldItem('depletedExtractionPortOuterDiameter'),
-          createFieldItem('depletedBaffleOuterHoleInnerDiameter'),
-          createFieldItem('minAxialDistance'),
-          createFieldItem('depletedBaffleAxialPosition'),
-          createFieldItem('depletedBaffleOuterHoleOuterDiameter'),
+          createFieldItem('TackHeight'),
+          createFieldItem('RichBaffleHoleDiam'),
+          createFieldItem('FeedBoxHeight'),
+          createFieldItem('PoorArmRadius'),
+          createFieldItem('PoorTackInnerRadius'),
+          createFieldItem('PoorBaffleInnerHoleOuterRadius'),
+          createFieldItem('RichBaffleArrayHoleDiam'),
+          createFieldItem('PoorTackOuterRadius'),
+          createFieldItem('PoorBaffleOuterHoleInnerRadius'),
+          createFieldItem('FeedBoxAndPoorInterval'),
+          createFieldItem('PoorBaffleAxialSpace'),
+          createFieldItem('PoorBaffleOuterHoleOuterRadius'),
         ],
       },
     ]
   }
 
-  // powerAnalysis 产品的参数组配置
+  // powerAnalysis 产品的参数组配置 - 使用文件字段名
   if (productId === 'powerAnalysis') {
     return [
       {
         title: getFieldLabel('topLevelParams'),
         items: [
-          createFieldItem('angularVelocity'),
-          createFieldItem('rotorRadius'),
+          createFieldItem('DegSpeed'),
+          createFieldItem('RotorRadius'),
         ],
       },
       {
         title: getFieldLabel('fluidParams'),
         items: [
-          createFieldItem('averageTemperature'),
-          createFieldItem('enrichedBaffleTemperature'),
-          createFieldItem('feedFlowRate'),
-          createFieldItem('rotorSidewallPressure'),
+          createFieldItem('Temperature'),
+          createFieldItem('RichBaffleTemp'),
+          createFieldItem('PowerFlow'),
+          createFieldItem('RotorPressure'),
         ],
       },
       {
         title: getFieldLabel('separationComponents'),
         items: [
-          createFieldItem('depletedExtractionPortInnerDiameter'),
-          createFieldItem('depletedExtractionPortOuterDiameter'),
-          createFieldItem('depletedExtractionRootOuterDiameter'),
-          createFieldItem('extractorAngleOfAttack'),
-          createFieldItem('extractionChamberHeight'),
-          createFieldItem('depletedExtractionCenterDistance'),
-          createFieldItem('enrichedExtractionCenterDistance'),
-          createFieldItem('constantSectionStraightPipeLength'),
-          createFieldItem('extractorCuttingAngle'),
-          createFieldItem('enrichedBaffleHoleDiameter'),
-          createFieldItem('variableSectionStraightPipeLength'),
-          createFieldItem('bendRadiusOfCurvature'),
-          createFieldItem('extractorSurfaceRoughness'),
-          createFieldItem('extractorTaperAngle'),
-          createFieldItem('enrichedBaffleHoleDistributionCircleDiameter'),
+          createFieldItem('PoorTackInnerRadius'),
+          createFieldItem('PoorTackOuterRadius'),
+          createFieldItem('PoorTackRootOuterRadius'),
+          createFieldItem('TackAttkAngle'),
+          createFieldItem('TackHeight'),
+          createFieldItem('PoorTackDistance'),
+          createFieldItem('RichTackDistance'),
+          createFieldItem('EvenSectionPipeLength'),
+          createFieldItem('TackChamferAngle'),
+          createFieldItem('RichBaffleHoleDiam'),
+          createFieldItem('ChangeSectionPipeLength'),
+          createFieldItem('PipeRadius'),
+          createFieldItem('TackSurfaceRoughness'),
+          createFieldItem('TackTaperAngle'),
+          createFieldItem('RichBaffleArrayHoleDiam'),
         ],
       },
     ]
   }
 
-  // 默认返回 mPhysSim 配置
+  // 默认返回 mPhysSim 配置 - 使用文件字段名
   return [
     {
       title: getFieldLabel('topLevelParams'),
       items: [
-        createFieldItem('angularVelocity'),
-        createFieldItem('rotorRadius'),
-        createFieldItem('rotorShoulderLength'),
+        createFieldItem('DegSpeed'),
+        createFieldItem('RotorRadius'),
+        createFieldItem('RotorLength'),
       ],
     },
     {
       title: getFieldLabel('operatingParams'),
       items: [
-        createFieldItem('rotorSidewallPressure'),
-        createFieldItem('gasDiffusionCoefficient'),
-        createFieldItem('feedFlowRate'),
-        createFieldItem('feedingMethod'),
-        createFieldItem('splitRatio'),
+        createFieldItem('RotorPressure'),
+        createFieldItem('GasParam'),
+        createFieldItem('FeedFlow'),
+        createFieldItem('FeedMethod'),
+        createFieldItem('SplitRatio'),
       ],
     },
     {
       title: getFieldLabel('drivingParams'),
       items: [
-        createFieldItem('depletedEndCapTemperature'),
-        createFieldItem('enrichedEndCapTemperature'),
-        createFieldItem('feedAxialDisturbance'),
-        createFieldItem('feedAngularDisturbance'),
-        createFieldItem('depletedMechanicalDriveAmount'),
+        createFieldItem('PoorCoverTemp'),
+        createFieldItem('RichCoverTemp'),
+        createFieldItem('FeedAxialDist'),
+        createFieldItem('FeedDegDist'),
+        createFieldItem('PoorDrive'),
       ],
     },
     {
       title: getFieldLabel('separationComponents'),
       items: [
-        createFieldItem('extractionChamberHeight'),
-        createFieldItem('enrichedBaffleHoleDiameter'),
-        createFieldItem('feedBoxShockDiskHeight'),
-        createFieldItem('depletedExtractionArmRadius'),
-        createFieldItem('depletedExtractionPortInnerDiameter'),
-        createFieldItem('depletedBaffleInnerHoleOuterDiameter'),
-        createFieldItem('enrichedBaffleHoleDistributionCircleDiameter'),
-        createFieldItem('depletedExtractionPortOuterDiameter'),
-        createFieldItem('depletedBaffleOuterHoleInnerDiameter'),
-        createFieldItem('minAxialDistance'),
-        createFieldItem('depletedBaffleAxialPosition'),
-        createFieldItem('depletedBaffleOuterHoleOuterDiameter'),
+        createFieldItem('TackHeight'),
+        createFieldItem('RichBaffleHoleDiam'),
+        createFieldItem('FeedBoxHeight'),
+        createFieldItem('PoorArmRadius'),
+        createFieldItem('PoorTackInnerRadius'),
+        createFieldItem('PoorBaffleInnerHoleOuterRadius'),
+        createFieldItem('RichBaffleArrayHoleDiam'),
+        createFieldItem('PoorTackOuterRadius'),
+        createFieldItem('PoorBaffleOuterHoleInnerRadius'),
+        createFieldItem('FeedBoxAndPoorInterval'),
+        createFieldItem('PoorBaffleAxialSpace'),
+        createFieldItem('PoorBaffleOuterHoleOuterRadius'),
       ],
     },
   ]
@@ -219,6 +219,28 @@ function onConfirm(): void {
 function onCancel(): void {
   app.window.current.close()
 }
+
+/**
+ * 调试功能：一键选择所有参数
+ */
+function onDebugSelectAll(): void {
+  fieldGroups.value.forEach((group) => {
+    group.items.forEach((item) => {
+      item.checked = true
+    })
+  })
+}
+
+/**
+ * 调试功能：清除所有选择
+ */
+function onDebugClearAll(): void {
+  fieldGroups.value.forEach((group) => {
+    group.items.forEach((item) => {
+      item.checked = false
+    })
+  })
+}
 </script>
 
 <template>
@@ -244,6 +266,17 @@ function onCancel(): void {
 
       <div class="actions">
         <a-space>
+          <!-- 调试按钮组 -->
+          <a-space :size="0">
+            <a-button size="small" @click="onDebugSelectAll">
+              全选
+            </a-button>
+            <a-button size="small" @click="onDebugClearAll">
+              清空
+            </a-button>
+          </a-space>
+
+          <!-- 主要操作按钮 -->
           <a-button type="primary" @click="onConfirm">
             确认并关闭
           </a-button>

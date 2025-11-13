@@ -15,7 +15,6 @@ import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { computed, watch } from 'vue'
 import VChart from 'vue-echarts'
-import { useLogStore } from '../../store/logStore'
 
 /**
  * 字段选项类型
@@ -52,7 +51,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<Emits>()
 
-const logStore = useLogStore()
+// const logStore = useLogStore()
 
 // 监控 chartData 变化（调试用）
 watch(() => props.chartData, (newData) => {
@@ -120,19 +119,19 @@ function updateChartConfig(key: keyof ChartConfig, value: string | number): void
   console.log(`[DataChart] 更新配置: ${key} = ${value}`)
 
   // 记录关键配置变化到日志
-  const logMessages: Record<string, string> = {
-    chartType: '图表类型',
-    xAxis: 'X轴',
-    yAxis: 'Y轴',
-    lineColor: '试验曲线颜色',
-    simulationLineColor: '仿真曲线颜色',
-    titleText: '标题文本',
-    titleColor: '标题颜色',
-    titleFont: '标题字体',
-  }
+  // const logMessages: Record<string, string> = {
+  //   chartType: '图表类型',
+  //   xAxis: 'X轴',
+  //   yAxis: 'Y轴',
+  //   lineColor: '试验曲线颜色',
+  //   simulationLineColor: '仿真曲线颜色',
+  //   titleText: '标题文本',
+  //   titleColor: '标题颜色',
+  //   titleFont: '标题字体',
+  // }
 
-  const logMsg = logMessages[key] || key
-  logStore.info(`更新图表配置`, `${logMsg}: ${value}`)
+  // const logMsg = logMessages[key] || key
+  // logStore.info(`更新图表配置`, `${logMsg}: ${value}`)
 
   const newConfig = {
     ...props.chartConfig,

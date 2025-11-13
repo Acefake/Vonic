@@ -149,38 +149,38 @@ export const useDesignStore = defineStore('design', () => {
    * 只检查必需的字段，不包括输出结果和可选字段
    */
   function isFormValid(): boolean {
-    // 必需的顶层参数
-    const requiredTopLevel = ['angularVelocity', 'rotorRadius', 'rotorShoulderLength'] as const
+    // 必需的顶层参数 - 使用文件字段名
+    const requiredTopLevel = ['DegSpeed', 'RotorRadius', 'RotorLength'] as const
     const topLevelValid = requiredTopLevel.every(key => formData.value[key] !== undefined && formData.value[key] !== null)
 
-    // 必需的运行参数（feedingMethod 有默认值，不需要检查）
-    const requiredOperating = ['rotorSidewallPressure', 'gasDiffusionCoefficient', 'feedFlowRate', 'splitRatio'] as const
+    // 必需的运行参数 - 使用文件字段名（FeedMethod 有默认值，不需要检查）
+    const requiredOperating = ['RotorPressure', 'GasParam', 'FeedFlow', 'SplitRatio'] as const
     const operatingValid = requiredOperating.every(key => formData.value[key] !== undefined && formData.value[key] !== null)
 
-    // 必需的驱动参数
+    // 必需的驱动参数 - 使用文件字段名
     const requiredDriving = [
-      'depletedEndCapTemperature',
-      'enrichedEndCapTemperature',
-      'feedAxialDisturbance',
-      'feedAngularDisturbance',
-      'depletedMechanicalDriveAmount',
+      'PoorCoverTemp',
+      'RichCoverTemp',
+      'FeedAxialDist',
+      'FeedDegDist',
+      'PoorDrive',
     ] as const
     const drivingValid = requiredDriving.every(key => formData.value[key] !== undefined && formData.value[key] !== null)
 
-    // 必需的分离部件参数（排除可选字段）
+    // 必需的分离部件参数 - 使用文件字段名（排除可选字段）
     const requiredSeparation = [
-      'extractionChamberHeight',
-      'enrichedBaffleHoleDiameter',
-      'feedBoxShockDiskHeight',
-      'depletedExtractionArmRadius',
-      'depletedExtractionPortInnerDiameter',
-      'depletedBaffleInnerHoleOuterDiameter',
-      'enrichedBaffleHoleDistributionCircleDiameter',
-      'depletedExtractionPortOuterDiameter',
-      'depletedBaffleOuterHoleInnerDiameter',
-      'minAxialDistance',
-      'depletedBaffleAxialPosition',
-      'depletedBaffleOuterHoleOuterDiameter',
+      'TackHeight',
+      'RichBaffleHoleDiam',
+      'FeedBoxHeight',
+      'PoorArmRadius',
+      'PoorTackInnerRadius',
+      'PoorBaffleInnerHoleOuterRadius',
+      'RichBaffleArrayHoleDiam',
+      'PoorTackOuterRadius',
+      'PoorBaffleOuterHoleInnerRadius',
+      'FeedBoxAndPoorInterval',
+      'PoorBaffleAxialSpace',
+      'PoorBaffleOuterHoleOuterRadius',
     ] as const
     const separationValid = requiredSeparation.every(key => formData.value[key] !== undefined && formData.value[key] !== null)
 

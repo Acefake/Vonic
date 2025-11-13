@@ -7,17 +7,18 @@ import { useSchemeOptimizationStore } from './schemeOptimizationStore'
 
 const fieldConfigs = computed(() => {
   const isPowerAnalysis = app.productConfig.id === 'powerAnalysis'
-  // 共同字段（两种产品都有的字段）
+
+  // 共同字段（两种产品都有的字段）- 使用文件字段名
   const commonFields = [
-    { key: 'angularVelocity', label: getFieldLabel('angularVelocity'), width: 120, unit: 'Hz' },
-    { key: 'rotorRadius', label: getFieldLabel('rotorRadius'), width: 120, unit: 'mm' },
-    { key: 'extractionChamberHeight', label: getFieldLabel('extractionChamberHeight'), width: 140, unit: 'mm' },
-    { key: 'rotorSidewallPressure', label: getFieldLabel('rotorSidewallPressure'), width: 140, unit: 'Pa' },
-    { key: 'feedFlowRate', label: getFieldLabel('feedFlowRate'), width: 120, unit: 'kg/s' },
-    { key: 'enrichedBaffleHoleDistributionCircleDiameter', label: getFieldLabel('enrichedBaffleHoleDistributionCircleDiameter'), width: 180, unit: 'mm' },
-    { key: 'enrichedBaffleHoleDiameter', label: getFieldLabel('enrichedBaffleHoleDiameter'), width: 140, unit: 'mm' },
-    { key: 'depletedExtractionPortInnerDiameter', label: getFieldLabel('depletedExtractionPortInnerDiameter'), width: 160, unit: 'mm' },
-    { key: 'depletedExtractionPortOuterDiameter', label: getFieldLabel('depletedExtractionPortOuterDiameter'), width: 160, unit: 'mm' },
+    { key: 'DegSpeed', label: getFieldLabel('DegSpeed'), width: 120, unit: 'Hz' },
+    { key: 'RotorRadius', label: getFieldLabel('RotorRadius'), width: 120, unit: 'mm' },
+    { key: 'TackHeight', label: getFieldLabel('TackHeight'), width: 140, unit: 'mm' },
+    { key: 'RotorPressure', label: getFieldLabel('RotorPressure'), width: 140, unit: 'Pa' },
+    { key: 'FeedFlow', label: getFieldLabel('FeedFlow'), width: 120, unit: 'kg/s' },
+    { key: 'RichBaffleArrayHoleDiam', label: getFieldLabel('RichBaffleArrayHoleDiam'), width: 180, unit: 'mm' },
+    { key: 'RichBaffleHoleDiam', label: getFieldLabel('RichBaffleHoleDiam'), width: 140, unit: 'mm' },
+    { key: 'PoorTackInnerRadius', label: getFieldLabel('PoorTackInnerRadius'), width: 160, unit: 'mm' },
+    { key: 'PoorTackOuterRadius', label: getFieldLabel('PoorTackOuterRadius'), width: 160, unit: 'mm' },
   ]
 
   // 功率分析特有字段
@@ -36,30 +37,30 @@ const fieldConfigs = computed(() => {
     { key: 'extractorTaperAngle', label: getFieldLabel('extractorTaperAngle'), width: 140, unit: 'rad' },
   ]
 
-  // 多物理场数值模拟仿真计算特有字段
+  // 多物理场数值模拟仿真计算特有字段 - 使用文件字段名
   const mPhysSimFields = [
-    { key: 'rotorShoulderLength', label: getFieldLabel('rotorShoulderLength'), width: 140, unit: 'mm' },
-    { key: 'gasDiffusionCoefficient', label: getFieldLabel('gasDiffusionCoefficient'), width: 140 },
-    { key: 'depletedEndCapTemperature', label: getFieldLabel('depletedEndCapTemperature'), width: 140, unit: 'K' },
-    { key: 'enrichedEndCapTemperature', label: getFieldLabel('enrichedEndCapTemperature'), width: 140, unit: 'K' },
-    { key: 'depletedMechanicalDriveAmount', label: getFieldLabel('depletedMechanicalDriveAmount'), width: 160, unit: 'mm' },
-    { key: 'depletedExtractionArmRadius', label: getFieldLabel('depletedExtractionArmRadius'), width: 160, unit: 'mm' },
+    { key: 'RotorLength', label: getFieldLabel('RotorLength'), width: 140, unit: 'mm' },
+    { key: 'GasParam', label: getFieldLabel('GasParam'), width: 140 },
+    { key: 'PoorCoverTemp', label: getFieldLabel('PoorCoverTemp'), width: 140, unit: 'K' },
+    { key: 'RichCoverTemp', label: getFieldLabel('RichCoverTemp'), width: 140, unit: 'K' },
+    { key: 'PoorDrive', label: getFieldLabel('PoorDrive'), width: 160, unit: 'mm' },
+    { key: 'PoorArmRadius', label: getFieldLabel('PoorArmRadius'), width: 160, unit: 'mm' },
     { key: 'innerBoundaryMirrorPosition', label: '内边界镜像位置', width: 140, unit: 'mm' },
     { key: 'gridGenerationMethod', label: '网格生成方式', width: 120 },
-    { key: 'minAxialDistance', label: getFieldLabel('minAxialDistance'), width: 200, unit: 'mm' },
-    { key: 'feedBoxShockDiskHeight', label: getFieldLabel('feedBoxShockDiskHeight'), width: 160, unit: 'mm' },
-    { key: 'splitRatio', label: getFieldLabel('splitRatio'), width: 100 },
-    { key: 'feedAngularDisturbance', label: getFieldLabel('feedAngularDisturbance'), width: 140, unit: 'mm' },
-    { key: 'feedAxialDisturbance', label: getFieldLabel('feedAxialDisturbance'), width: 140, unit: 'mm' },
-    { key: 'depletedBaffleInnerHoleOuterDiameter', label: getFieldLabel('depletedBaffleInnerHoleOuterDiameter'), width: 200, unit: 'mm' },
-    { key: 'depletedBaffleOuterHoleInnerDiameter', label: getFieldLabel('depletedBaffleOuterHoleInnerDiameter'), width: 200, unit: 'mm' },
-    { key: 'depletedBaffleOuterHoleOuterDiameter', label: getFieldLabel('depletedBaffleOuterHoleOuterDiameter'), width: 200, unit: 'mm' },
-    { key: 'depletedBaffleAxialPosition', label: getFieldLabel('depletedBaffleAxialPosition'), width: 160, unit: 'mm' },
+    { key: 'FeedBoxAndPoorInterval', label: getFieldLabel('FeedBoxAndPoorInterval'), width: 200, unit: 'mm' },
+    { key: 'FeedBoxHeight', label: getFieldLabel('FeedBoxHeight'), width: 160, unit: 'mm' },
+    { key: 'SplitRatio', label: getFieldLabel('SplitRatio'), width: 100 },
+    { key: 'FeedDegDist', label: getFieldLabel('FeedDegDist'), width: 140, unit: 'mm' },
+    { key: 'FeedAxialDist', label: getFieldLabel('FeedAxialDist'), width: 140, unit: 'mm' },
+    { key: 'PoorBaffleInnerHoleOuterRadius', label: getFieldLabel('PoorBaffleInnerHoleOuterRadius'), width: 200, unit: 'mm' },
+    { key: 'PoorBaffleOuterHoleInnerRadius', label: getFieldLabel('PoorBaffleOuterHoleInnerRadius'), width: 200, unit: 'mm' },
+    { key: 'PoorBaffleOuterHoleOuterRadius', label: getFieldLabel('PoorBaffleOuterHoleOuterRadius'), width: 200, unit: 'mm' },
+    { key: 'PoorBaffleAxialSpace', label: getFieldLabel('PoorBaffleAxialSpace'), width: 160, unit: 'mm' },
     { key: 'bwgRadialProtrusionHeight', label: 'BWG径向凸起高度', width: 140, unit: 'mm' },
     { key: 'bwgAxialHeight', label: 'BWG轴向高度', width: 120, unit: 'mm' },
     { key: 'bwgAxialPosition', label: 'BWG轴向位置', width: 140, unit: 'mm' },
     { key: 'radialGridRatio', label: '径向网格比', width: 120 },
-    { key: 'feedingMethod', label: getFieldLabel('feedingMethod'), width: 120 },
+    { key: 'FeedMethod', label: getFieldLabel('FeedMethod'), width: 120 },
     { key: 'compensationCoefficient', label: '补偿系数', width: 120 },
     { key: 'streamlineData', label: '流线数据', width: 120 },
   ]

@@ -93,29 +93,29 @@ function msgOf(key: string) {
   return `${getFieldLabel(key as any, fieldLabelMode.value)}应输入大于0的实数，请重新输入！`
 }
 
-// 需要进行「>0 实数」校验的字段列表
+// 需要进行「>0 实数」校验的字段列表 - 使用文件字段名
 const positiveFields = [
-  'angularVelocity',
-  'rotorRadius',
-  'averageTemperature',
-  'enrichedBaffleTemperature',
-  'feedFlowRate',
-  'rotorSidewallPressure',
-  'depletedExtractionPortInnerDiameter',
-  'depletedExtractionPortOuterDiameter',
-  'depletedExtractionRootOuterDiameter',
-  'extractorAngleOfAttack',
-  'extractionChamberHeight',
-  'depletedExtractionCenterDistance',
-  'enrichedExtractionCenterDistance',
-  'constantSectionStraightPipeLength',
-  'extractorCuttingAngle',
-  'enrichedBaffleHoleDiameter',
-  'variableSectionStraightPipeLength',
-  'bendRadiusOfCurvature',
-  'extractorSurfaceRoughness',
-  'extractorTaperAngle',
-  'enrichedBaffleHoleDistributionCircleDiameter',
+  'DegSpeed',
+  'RotorRadius',
+  'Temperature',
+  'RichBaffleTemp',
+  'PowerFlow',
+  'RotorPressure',
+  'PoorTackInnerRadius',
+  'PoorTackOuterRadius',
+  'PoorTackRootOuterRadius',
+  'TackAttkAngle',
+  'TackHeight',
+  'PoorTackDistance',
+  'RichTackDistance',
+  'EvenSectionPipeLength',
+  'TackChamferAngle',
+  'RichBaffleHoleDiam',
+  'ChangeSectionPipeLength',
+  'PipeRadius',
+  'TackSurfaceRoughness',
+  'TackTaperAngle',
+  'RichBaffleArrayHoleDiam',
 ]
 
 const rules: Record<string, any[]> = {}
@@ -139,12 +139,12 @@ positiveFields.forEach((key) => {
   ]
 })
 
-// 成对约束：贫取料口部「内径 < 外径」
-rules.depletedExtractionPortInnerDiameter = [
-  ...(rules.depletedExtractionPortInnerDiameter || []),
+// 成对约束：贫取料口部「内径 < 外径」- 使用文件字段名
+rules.PoorTackInnerRadius = [
+  ...(rules.PoorTackInnerRadius || []),
   {
     validator: (_: any, v: any) => {
-      const outer = formModel.depletedExtractionPortOuterDiameter
+      const outer = formModel.PoorTackOuterRadius
       if (!isPositiveReal(v) || !isPositiveReal(outer))
         return Promise.resolve()
       return v < outer ? Promise.resolve() : Promise.reject(new Error('贫取料口部内径应小于贫取料口部外径，请重新输入！'))
@@ -153,11 +153,11 @@ rules.depletedExtractionPortInnerDiameter = [
   },
 ]
 
-rules.depletedExtractionPortOuterDiameter = [
-  ...(rules.depletedExtractionPortOuterDiameter || []),
+rules.PoorTackOuterRadius = [
+  ...(rules.PoorTackOuterRadius || []),
   {
     validator: (_: any, v: any) => {
-      const inner = formModel.depletedExtractionPortInnerDiameter
+      const inner = formModel.PoorTackInnerRadius
       if (!isPositiveReal(v) || !isPositiveReal(inner))
         return Promise.resolve()
       return v > inner ? Promise.resolve() : Promise.reject(new Error('贫取料口部外径应大于贫取料口部内径，请重新输入！'))
@@ -179,10 +179,10 @@ async function onFieldChange(name: string, val: number | null) {
     await formRef.value?.validateFields([name])
     ;(prevModel as any)[name] = val
     updateStoreByField(name, val)
-    // 变更一方后，联动校验另一方，清除或更新其错误提示
+    // 变更一方后，联动校验另一方，清除或更新其错误提示 - 使用文件字段名
     const PAIR_PARTNER: Record<string, string> = {
-      depletedExtractionPortInnerDiameter: 'depletedExtractionPortOuterDiameter',
-      depletedExtractionPortOuterDiameter: 'depletedExtractionPortInnerDiameter',
+      PoorTackInnerRadius: 'PoorTackOuterRadius',
+      PoorTackOuterRadius: 'PoorTackInnerRadius',
     }
     const partner = PAIR_PARTNER[name]
     if (partner) {
@@ -228,54 +228,54 @@ function buildInputTxtContent(data: typeof formData.value): string {
   const lines: string[] = []
 
   // 1. 半径
-  lines.push(`${getVal('rotorRadius')}    !半径`)
+  lines.push(`${getVal('RotorRadius')}    !半径`)
   // 2. 转速
-  lines.push(`${getVal('angularVelocity')}    !转速`)
+  lines.push(`${getVal('DegSpeed')}    !转速`)
   // 3. T0
-  lines.push(`${getVal('averageTemperature')}    !T0`)
+  lines.push(`${getVal('Temperature')}    !T0`)
   // 4. 精料挡板温度
-  lines.push(`${getVal('enrichedBaffleTemperature')}    !精料挡板温度`)
+  lines.push(`${getVal('RichBaffleTemp')}    !精料挡板温度`)
   // 5. Pw_w
-  lines.push(`${getVal('rotorSidewallPressure')}    !Pw_w`)
+  lines.push(`${getVal('RotorPressure')}    !Pw_w`)
   // 6. 供料流量
-  lines.push(`${getVal('feedFlowRate')}    !供料流量`)
+  lines.push(`${getVal('PowerFlow')}    !供料流量`)
   // 7. 贫料流量（表单中没有，设为0）
   lines.push(`0    !贫料流量`)
   // 8. ds
-  lines.push(`${getVal('depletedExtractionPortInnerDiameter')}    !ds`)
+  lines.push(`${getVal('PoorTackInnerRadius')}    !ds`)
   // 9. ds1
-  lines.push(`${getVal('depletedExtractionPortOuterDiameter')}    !ds1`)
+  lines.push(`${getVal('PoorTackOuterRadius')}    !ds1`)
   // 10. ds0
-  lines.push(`${getVal('depletedExtractionRootOuterDiameter')}    !ds0`)
+  lines.push(`${getVal('PoorTackRootOuterRadius')}    !ds0`)
   // 11. rw
-  lines.push(`${getVal('depletedExtractionCenterDistance')}    !rw`)
+  lines.push(`${getVal('PoorTackDistance')}    !rw`)
   // 12. rp
-  lines.push(`${getVal('enrichedExtractionCenterDistance')}    !rp`)
+  lines.push(`${getVal('RichTackDistance')}    !rp`)
   // 13. Ls
-  lines.push(`${getVal('constantSectionStraightPipeLength')}    !Ls`)
+  lines.push(`${getVal('EvenSectionPipeLength')}    !Ls`)
   // 14. Lss
-  lines.push(`${getVal('variableSectionStraightPipeLength')}    !Lss`)
+  lines.push(`${getVal('ChangeSectionPipeLength')}    !Lss`)
   // 15. rss
-  lines.push(`${getVal('bendRadiusOfCurvature')}    !rss`)
+  lines.push(`${getVal('PipeRadius')}    !rss`)
   // 16. Hr_Scoop=roughness 取料器镀镍后的表面粗糙度
-  lines.push(`${getVal('extractorSurfaceRoughness')}    !Hr_Scoop=roughness 取料器镀镍后的表面粗糙度`)
+  lines.push(`${getVal('TackSurfaceRoughness')}    !Hr_Scoop=roughness 取料器镀镍后的表面粗糙度`)
   // 17,18,19. angle_angle(1:3) - 三个角度
-  lines.push(`${getVal('extractorAngleOfAttack')}    !angle_angle(1)`)
-  lines.push(`${getVal('extractorCuttingAngle')}    !angle_angle(2)`)
-  lines.push(`${getVal('extractorTaperAngle')}    !angle_angle(3)`)
+  lines.push(`${getVal('TackAttkAngle')}    !angle_angle(1)`)
+  lines.push(`${getVal('TackChamferAngle')}    !angle_angle(2)`)
+  lines.push(`${getVal('TackTaperAngle')}    !angle_angle(3)`)
   // 20. hs取料腔高度的一半
-  const extractionChamberHeight = getVal('extractionChamberHeight')
+  const extractionChamberHeight = getVal('TackHeight')
   lines.push(`${extractionChamberHeight / 2}    !hs取料腔高度的一半`)
   // 21. holedia_p
-  lines.push(`${getVal('enrichedBaffleHoleDiameter')}    !holedia_p`)
+  lines.push(`${getVal('RichBaffleHoleDiam')}    !holedia_p`)
   // 22. sigma_p精料挡板孔的面积(单个) - 计算或设为0
-  const holeDiameter = getVal('enrichedBaffleHoleDiameter')
+  const holeDiameter = getVal('RichBaffleHoleDiam')
   const sigmaP = holeDiameter > 0 ? Math.PI * (holeDiameter / 2) ** 2 : 0
   lines.push(`${sigmaP}    !sigma_p精料挡板孔的面积(单个)`)
   // 23. ka最大流量公式对应的值域与气体料类有关的参数k
   lines.push(`0    !ka最大流量公式对应的值域与气体料类有关的参数k`)
   // 24. rk_p精料挡板空的中心距
-  lines.push(`${getVal('enrichedBaffleHoleDistributionCircleDiameter')}    !rk_p精料挡板空的中心距`)
+  lines.push(`${getVal('RichBaffleArrayHoleDiam')}    !rk_p精料挡板空的中心距`)
   // 25. Ma_x孔板气体马赫数
   lines.push(`0    !Ma_x孔板气体马赫数`)
   // 26. w_prot
@@ -365,29 +365,29 @@ async function submitDesign(): Promise<void> {
   // 生成 output.txt（key=value）内容（字段名与需求图片一致）
   const ORDERED_KEYS: Array<{ key: string, field: string }> = [
     // 顶层参数
-    { key: 'DegSpeed', field: 'angularVelocity' },
-    { key: 'RotorRadius', field: 'rotorRadius' },
+    { key: 'DegSpeed', field: 'DegSpeed' },
+    { key: 'RotorRadius', field: 'RotorRadius' },
     // 流体参数
-    { key: 'Temperature', field: 'averageTemperature' },
-    { key: 'RichBaffleTemp', field: 'enrichedBaffleTemperature' },
-    { key: 'RotorPressure', field: 'rotorSidewallPressure' },
-    { key: 'PowerFlow', field: 'feedFlowRate' },
+    { key: 'Temperature', field: 'Temperature' },
+    { key: 'RichBaffleTemp', field: 'RichBaffleTemp' },
+    { key: 'RotorPressure', field: 'RotorPressure' },
+    { key: 'PowerFlow', field: 'PowerFlow' },
     // 分离部件
-    { key: 'PoorTackInnerRadius', field: 'depletedExtractionPortInnerDiameter' },
-    { key: 'PoorTackOuterRadius', field: 'depletedExtractionPortOuterDiameter' },
-    { key: 'PoorTackRootOuterRadius', field: 'depletedExtractionRootOuterDiameter' },
-    { key: 'PoorTackDistance', field: 'depletedExtractionCenterDistance' },
-    { key: 'RichTackDistance', field: 'enrichedExtractionCenterDistance' },
-    { key: 'EvenSectionPipeLength', field: 'constantSectionStraightPipeLength' },
-    { key: 'ChangeSectionPipeLength', field: 'variableSectionStraightPipeLength' },
-    { key: 'PipeRadius', field: 'bendRadiusOfCurvature' },
-    { key: 'TackSurfaceRoughness', field: 'extractorSurfaceRoughness' },
-    { key: 'TackAttkAngle', field: 'extractorAngleOfAttack' },
-    { key: 'TackChamferAngle', field: 'extractorCuttingAngle' },
-    { key: 'TackTaperAngle', field: 'extractorTaperAngle' },
-    { key: 'TackHeight', field: 'extractionChamberHeight' },
-    { key: 'RichBaffleHoleDiam', field: 'enrichedBaffleHoleDiameter' },
-    { key: 'RichBaffleArrayHoleDiam', field: 'enrichedBaffleHoleDistributionCircleDiameter' },
+    { key: 'PoorTackInnerRadius', field: 'PoorTackInnerRadius' },
+    { key: 'PoorTackOuterRadius', field: 'PoorTackOuterRadius' },
+    { key: 'PoorTackRootOuterRadius', field: 'PoorTackRootOuterRadius' },
+    { key: 'PoorTackDistance', field: 'PoorTackDistance' },
+    { key: 'RichTackDistance', field: 'RichTackDistance' },
+    { key: 'EvenSectionPipeLength', field: 'EvenSectionPipeLength' },
+    { key: 'ChangeSectionPipeLength', field: 'ChangeSectionPipeLength' },
+    { key: 'PipeRadius', field: 'PipeRadius' },
+    { key: 'TackSurfaceRoughness', field: 'TackSurfaceRoughness' },
+    { key: 'TackAttkAngle', field: 'TackAttkAngle' },
+    { key: 'TackChamferAngle', field: 'TackChamferAngle' },
+    { key: 'TackTaperAngle', field: 'TackTaperAngle' },
+    { key: 'TackHeight', field: 'TackHeight' },
+    { key: 'RichBaffleHoleDiam', field: 'RichBaffleHoleDiam' },
+    { key: 'RichBaffleArrayHoleDiam', field: 'RichBaffleArrayHoleDiam' },
   ]
 
   const lines: string[] = ORDERED_KEYS.map(({ key, field }) => {
@@ -483,17 +483,17 @@ async function parseDatContent(content: string): Promise<void> {
     .split(',')
     .map(Number)
 
-  designStore.updateFormData({ angularVelocity, rotorRadius, extractionChamberHeight, rotorSidewallPressure } as any)
+  designStore.updateFormData({ DegSpeed: angularVelocity, RotorRadius: rotorRadius, TackHeight: extractionChamberHeight, RotorPressure: rotorSidewallPressure } as any)
 
-  // 后续字段（从第3行开始），只解析功率分析需要的部分
+  // 后续字段（从第3行开始），只解析功率分析需要的部分 - 使用文件字段名
   const paramKeys = [
-    'enrichedBaffleHoleDistributionCircleDiameter', // 第9行
-    'enrichedBaffleHoleDiameter', // 第10行
-    'depletedExtractionPortInnerDiameter', // 第11行
-    'depletedExtractionPortOuterDiameter', // 第12行
+    'RichBaffleArrayHoleDiam', // 第9行
+    'RichBaffleHoleDiam', // 第10行
+    'PoorTackInnerRadius', // 第11行
+    'PoorTackOuterRadius', // 第12行
     'minAxialDistance', // 第13行（可选，仅同步，不用于校验）
     'feedBoxShockDiskHeight', // 第14行（可选，仅同步，不用于校验）
-    'feedFlowRate', // 第15行
+    'PowerFlow', // 第15行
   ]
 
   for (let i = 0; i < paramKeys.length; i++) {
@@ -514,30 +514,28 @@ async function parseDatContent(content: string): Promise<void> {
  */
 function parseTxtContent(content: string): void {
   const KEY_MAP: Record<string, string> = {
-    // 顶层参数
-    DegSpeed: 'angularVelocity',
-    RotorRadius: 'rotorRadius',
-    // 流体参数
-    Temperature: 'averageTemperature',
-    RichBaffleTemp: 'enrichedBaffleTemperature',
-    RotorPressure: 'rotorSidewallPressure',
-    PowerFlow: 'feedFlowRate',
-    // 分离部件
-    PoorTackInnerRadius: 'depletedExtractionPortInnerDiameter',
-    PoorTackOuterRadius: 'depletedExtractionPortOuterDiameter',
-    PoorTackRootOuterRadius: 'depletedExtractionRootOuterDiameter',
-    PoorTackDistance: 'depletedExtractionCenterDistance',
-    RichTackDistance: 'enrichedExtractionCenterDistance',
-    EvenSectionPipeLength: 'constantSectionStraightPipeLength',
-    ChangeSectionPipeLength: 'variableSectionStraightPipeLength',
-    PipeRadius: 'bendRadiusOfCurvature',
-    TackSurfaceRoughness: 'extractorSurfaceRoughness',
-    TackAttkAngle: 'extractorAngleOfAttack',
-    TackChamferAngle: 'extractorCuttingAngle',
-    TackTaperAngle: 'extractorTaperAngle',
-    TackHeight: 'extractionChamberHeight',
-    RichBaffleHoleDiam: 'enrichedBaffleHoleDiameter',
-    RichBaffleArrayHoleDiam: 'enrichedBaffleHoleDistributionCircleDiameter',
+    // 直接映射到文件字段名（不再需要转换）
+    DegSpeed: 'DegSpeed',
+    RotorRadius: 'RotorRadius',
+    Temperature: 'Temperature',
+    RichBaffleTemp: 'RichBaffleTemp',
+    RotorPressure: 'RotorPressure',
+    PowerFlow: 'PowerFlow',
+    PoorTackInnerRadius: 'PoorTackInnerRadius',
+    PoorTackOuterRadius: 'PoorTackOuterRadius',
+    PoorTackRootOuterRadius: 'PoorTackRootOuterRadius',
+    PoorTackDistance: 'PoorTackDistance',
+    RichTackDistance: 'RichTackDistance',
+    EvenSectionPipeLength: 'EvenSectionPipeLength',
+    ChangeSectionPipeLength: 'ChangeSectionPipeLength',
+    PipeRadius: 'PipeRadius',
+    TackSurfaceRoughness: 'TackSurfaceRoughness',
+    TackAttkAngle: 'TackAttkAngle',
+    TackChamferAngle: 'TackChamferAngle',
+    TackTaperAngle: 'TackTaperAngle',
+    TackHeight: 'TackHeight',
+    RichBaffleHoleDiam: 'RichBaffleHoleDiam',
+    RichBaffleArrayHoleDiam: 'RichBaffleArrayHoleDiam',
   }
 
   const RESULT_KEY_MAP: Record<string, string> = {
@@ -658,23 +656,23 @@ defineExpose({
 
           <div class="section-content">
             <div class="form-row">
-              <a-form-item name="angularVelocity" :label="getFieldLabel('angularVelocity', fieldLabelMode)" class="form-col">
+              <a-form-item name="DegSpeed" :label="getFieldLabel('DegSpeed', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="formData.angularVelocity"
-                  :placeholder="`请输入${getFieldLabel('angularVelocity', fieldLabelMode)}`"
+                  :value="formData.DegSpeed"
+                  :placeholder="`请输入${getFieldLabel('DegSpeed', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="Hz"
-                  @update:value="(val) => onFieldChange('angularVelocity', val as number | null)"
+                  @update:value="(val) => onFieldChange('DegSpeed', val as number | null)"
                 />
               </a-form-item>
 
-              <a-form-item name="rotorRadius" :label="getFieldLabel('rotorRadius', fieldLabelMode)" class="form-col">
+              <a-form-item name="RotorRadius" :label="getFieldLabel('RotorRadius', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="formData.rotorRadius"
-                  :placeholder="`请输入${getFieldLabel('rotorRadius', fieldLabelMode)}`"
+                  :value="formData.RotorRadius"
+                  :placeholder="`请输入${getFieldLabel('RotorRadius', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
-                  @update:value="(val) => onFieldChange('rotorRadius', val as number | null)"
+                  @update:value="(val) => onFieldChange('RotorRadius', val as number | null)"
                 />
               </a-form-item>
             </div>
@@ -687,43 +685,43 @@ defineExpose({
 
           <div class="section-content">
             <div class="form-row">
-              <a-form-item name="averageTemperature" :label="getFieldLabel('averageTemperature', fieldLabelMode)" class="form-col">
+              <a-form-item name="Temperature" :label="getFieldLabel('Temperature', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="formData.averageTemperature"
-                  :placeholder="`请输入${getFieldLabel('averageTemperature', fieldLabelMode)}`"
+                  :value="formData.Temperature"
+                  :placeholder="`请输入${getFieldLabel('Temperature', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="K"
-                  @update:value="(val) => onFieldChange('averageTemperature', val as number | null)"
+                  @update:value="(val) => onFieldChange('Temperature', val as number | null)"
                 />
               </a-form-item>
 
-              <a-form-item name="enrichedBaffleTemperature" :label="getFieldLabel('enrichedBaffleTemperature', fieldLabelMode)" class="form-col">
+              <a-form-item name="RichBaffleTemp" :label="getFieldLabel('RichBaffleTemp', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="formData.enrichedBaffleTemperature"
-                  :placeholder="`请输入${getFieldLabel('enrichedBaffleTemperature', fieldLabelMode)}`"
+                  :value="formData.RichBaffleTemp"
+                  :placeholder="`请输入${getFieldLabel('RichBaffleTemp', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="K"
-                  @update:value="(val) => onFieldChange('enrichedBaffleTemperature', val as number | null)"
+                  @update:value="(val) => onFieldChange('RichBaffleTemp', val as number | null)"
                 />
               </a-form-item>
 
-              <a-form-item name="feedFlowRate" :label="getFieldLabel('feedFlowRate', fieldLabelMode)" class="form-col">
+              <a-form-item name="PowerFlow" :label="getFieldLabel('PowerFlow', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="formData.feedFlowRate"
-                  :placeholder="`请输入${getFieldLabel('feedFlowRate', fieldLabelMode)}`"
+                  :value="formData.PowerFlow"
+                  :placeholder="`请输入${getFieldLabel('PowerFlow', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="Kg/s"
-                  @update:value="(val) => onFieldChange('feedFlowRate', val as number | null)"
+                  @update:value="(val) => onFieldChange('PowerFlow', val as number | null)"
                 />
               </a-form-item>
 
-              <a-form-item name="rotorSidewallPressure" :label="getFieldLabel('rotorSidewallPressure', fieldLabelMode)" class="form-col">
+              <a-form-item name="RotorPressure" :label="getFieldLabel('RotorPressure', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="formData.rotorSidewallPressure"
-                  :placeholder="`请输入${getFieldLabel('rotorSidewallPressure', fieldLabelMode)}`"
+                  :value="formData.RotorPressure"
+                  :placeholder="`请输入${getFieldLabel('RotorPressure', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="Pa"
-                  @update:value="(val) => onFieldChange('rotorSidewallPressure', val as number | null)"
+                  @update:value="(val) => onFieldChange('RotorPressure', val as number | null)"
                 />
               </a-form-item>
             </div>
@@ -737,188 +735,188 @@ defineExpose({
           <div class="section-content">
             <div class="form-row">
               <a-form-item
-                name="depletedExtractionPortInnerDiameter"
-                :label="getFieldLabel('depletedExtractionPortInnerDiameter', fieldLabelMode)"
+                name="PoorTackInnerRadius"
+                :label="getFieldLabel('PoorTackInnerRadius', fieldLabelMode)"
                 class="form-col"
               >
                 <a-input-number
-                  :value="formData.depletedExtractionPortInnerDiameter"
-                  :placeholder="`请输入${getFieldLabel('depletedExtractionPortInnerDiameter', fieldLabelMode)}`"
+                  :value="formData.PoorTackInnerRadius"
+                  :placeholder="`请输入${getFieldLabel('PoorTackInnerRadius', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
-                  @update:value="(val) => onFieldChange('depletedExtractionPortInnerDiameter', val as number | null)"
+                  @update:value="(val) => onFieldChange('PoorTackInnerRadius', val as number | null)"
                 />
               </a-form-item>
 
               <a-form-item
-                name="depletedExtractionPortOuterDiameter"
-                :label="getFieldLabel('depletedExtractionPortOuterDiameter', fieldLabelMode)"
+                name="PoorTackOuterRadius"
+                :label="getFieldLabel('PoorTackOuterRadius', fieldLabelMode)"
                 class="form-col"
               >
                 <a-input-number
-                  :value="formData.depletedExtractionPortOuterDiameter"
-                  :placeholder="`请输入${getFieldLabel('depletedExtractionPortOuterDiameter', fieldLabelMode)}`"
+                  :value="formData.PoorTackOuterRadius"
+                  :placeholder="`请输入${getFieldLabel('PoorTackOuterRadius', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
-                  @update:value="(val) => onFieldChange('depletedExtractionPortOuterDiameter', val as number | null)"
+                  @update:value="(val) => onFieldChange('PoorTackOuterRadius', val as number | null)"
                 />
               </a-form-item>
 
               <a-form-item
-                name="depletedExtractionRootOuterDiameter"
-                :label="getFieldLabel('depletedExtractionRootOuterDiameter', fieldLabelMode)"
+                name="PoorTackRootOuterRadius"
+                :label="getFieldLabel('PoorTackRootOuterRadius', fieldLabelMode)"
                 class="form-col"
               >
                 <a-input-number
-                  :value="formData.depletedExtractionRootOuterDiameter"
-                  :placeholder="`请输入${getFieldLabel('depletedExtractionRootOuterDiameter', fieldLabelMode)}`"
+                  :value="formData.PoorTackRootOuterRadius"
+                  :placeholder="`请输入${getFieldLabel('PoorTackRootOuterRadius', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
-                  @update:value="(val) => onFieldChange('depletedExtractionRootOuterDiameter', val as number | null)"
+                  @update:value="(val) => onFieldChange('PoorTackRootOuterRadius', val as number | null)"
                 />
               </a-form-item>
 
               <a-form-item
-                name="extractorAngleOfAttack"
-                :label="getFieldLabel('extractorAngleOfAttack', fieldLabelMode)"
+                name="TackAttkAngle"
+                :label="getFieldLabel('TackAttkAngle', fieldLabelMode)"
                 class="form-col"
               >
                 <a-input-number
-                  :value="formData.extractorAngleOfAttack"
-                  :placeholder="`请输入${getFieldLabel('extractorAngleOfAttack', fieldLabelMode)}`"
+                  :value="formData.TackAttkAngle"
+                  :placeholder="`请输入${getFieldLabel('TackAttkAngle', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="rad"
-                  @update:value="(val) => onFieldChange('extractorAngleOfAttack', val as number | null)"
+                  @update:value="(val) => onFieldChange('TackAttkAngle', val as number | null)"
                 />
               </a-form-item>
 
-              <a-form-item name="extractionChamberHeight" :label="getFieldLabel('extractionChamberHeight', fieldLabelMode)" class="form-col">
+              <a-form-item name="TackHeight" :label="getFieldLabel('TackHeight', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="formData.extractionChamberHeight"
-                  :placeholder="`请输入${getFieldLabel('extractionChamberHeight', fieldLabelMode)}`"
+                  :value="formData.TackHeight"
+                  :placeholder="`请输入${getFieldLabel('TackHeight', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
-                  @update:value="(val) => onFieldChange('extractionChamberHeight', val as number | null)"
+                  @update:value="(val) => onFieldChange('TackHeight', val as number | null)"
                 />
               </a-form-item>
 
               <a-form-item
-                name="depletedExtractionCenterDistance"
-                :label="getFieldLabel('depletedExtractionCenterDistance', fieldLabelMode)"
+                name="PoorTackDistance"
+                :label="getFieldLabel('PoorTackDistance', fieldLabelMode)"
                 class="form-col"
               >
                 <a-input-number
-                  :value="formData.depletedExtractionCenterDistance"
-                  :placeholder="`请输入${getFieldLabel('depletedExtractionCenterDistance', fieldLabelMode)}`"
+                  :value="formData.PoorTackDistance"
+                  :placeholder="`请输入${getFieldLabel('PoorTackDistance', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
-                  @update:value="(val) => onFieldChange('depletedExtractionCenterDistance', val as number | null)"
+                  @update:value="(val) => onFieldChange('PoorTackDistance', val as number | null)"
                 />
               </a-form-item>
 
               <a-form-item
-                name="enrichedExtractionCenterDistance"
-                :label="getFieldLabel('enrichedExtractionCenterDistance', fieldLabelMode)"
+                name="RichTackDistance"
+                :label="getFieldLabel('RichTackDistance', fieldLabelMode)"
                 class="form-col"
               >
                 <a-input-number
-                  :value="formData.enrichedExtractionCenterDistance"
-                  :placeholder="`请输入${getFieldLabel('enrichedExtractionCenterDistance', fieldLabelMode)}`"
+                  :value="formData.RichTackDistance"
+                  :placeholder="`请输入${getFieldLabel('RichTackDistance', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
-                  @update:value="(val) => onFieldChange('enrichedExtractionCenterDistance', val as number | null)"
+                  @update:value="(val) => onFieldChange('RichTackDistance', val as number | null)"
                 />
               </a-form-item>
 
               <a-form-item
-                name="constantSectionStraightPipeLength"
-                :label="getFieldLabel('constantSectionStraightPipeLength', fieldLabelMode)"
+                name="EvenSectionPipeLength"
+                :label="getFieldLabel('EvenSectionPipeLength', fieldLabelMode)"
                 class="form-col"
               >
                 <a-input-number
-                  :value="formData.constantSectionStraightPipeLength"
-                  :placeholder="`请输入${getFieldLabel('constantSectionStraightPipeLength', fieldLabelMode)}`"
+                  :value="formData.EvenSectionPipeLength"
+                  :placeholder="`请输入${getFieldLabel('EvenSectionPipeLength', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
-                  @update:value="(val) => onFieldChange('constantSectionStraightPipeLength', val as number | null)"
+                  @update:value="(val) => onFieldChange('EvenSectionPipeLength', val as number | null)"
                 />
               </a-form-item>
 
-              <a-form-item name="extractorCuttingAngle" :label="getFieldLabel('extractorCuttingAngle', fieldLabelMode)" class="form-col">
+              <a-form-item name="TackChamferAngle" :label="getFieldLabel('TackChamferAngle', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="formData.extractorCuttingAngle"
-                  :placeholder="`请输入${getFieldLabel('extractorCuttingAngle', fieldLabelMode)}`"
+                  :value="formData.TackChamferAngle"
+                  :placeholder="`请输入${getFieldLabel('TackChamferAngle', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="rad"
-                  @update:value="(val) => onFieldChange('extractorCuttingAngle', val as number | null)"
+                  @update:value="(val) => onFieldChange('TackChamferAngle', val as number | null)"
                 />
               </a-form-item>
 
-              <a-form-item name="enrichedBaffleHoleDiameter" :label="getFieldLabel('enrichedBaffleHoleDiameter', fieldLabelMode)" class="form-col">
+              <a-form-item name="RichBaffleHoleDiam" :label="getFieldLabel('RichBaffleHoleDiam', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="formData.enrichedBaffleHoleDiameter"
-                  :placeholder="`请输入${getFieldLabel('enrichedBaffleHoleDiameter', fieldLabelMode)}`"
+                  :value="formData.RichBaffleHoleDiam"
+                  :placeholder="`请输入${getFieldLabel('RichBaffleHoleDiam', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
-                  @update:value="(val) => onFieldChange('enrichedBaffleHoleDiameter', val as number | null)"
+                  @update:value="(val) => onFieldChange('RichBaffleHoleDiam', val as number | null)"
                 />
               </a-form-item>
 
               <a-form-item
-                name="variableSectionStraightPipeLength"
-                :label="getFieldLabel('variableSectionStraightPipeLength', fieldLabelMode)"
+                name="ChangeSectionPipeLength"
+                :label="getFieldLabel('ChangeSectionPipeLength', fieldLabelMode)"
                 class="form-col"
               >
                 <a-input-number
-                  :value="formData.variableSectionStraightPipeLength"
-                  :placeholder="`请输入${getFieldLabel('variableSectionStraightPipeLength', fieldLabelMode)}`"
+                  :value="formData.ChangeSectionPipeLength"
+                  :placeholder="`请输入${getFieldLabel('ChangeSectionPipeLength', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
-                  @update:value="(val) => onFieldChange('variableSectionStraightPipeLength', val as number | null)"
+                  @update:value="(val) => onFieldChange('ChangeSectionPipeLength', val as number | null)"
                 />
               </a-form-item>
 
-              <a-form-item name="bendRadiusOfCurvature" :label="getFieldLabel('bendRadiusOfCurvature', fieldLabelMode)" class="form-col">
+              <a-form-item name="PipeRadius" :label="getFieldLabel('PipeRadius', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="formData.bendRadiusOfCurvature"
-                  :placeholder="`请输入${getFieldLabel('bendRadiusOfCurvature', fieldLabelMode)}`"
+                  :value="formData.PipeRadius"
+                  :placeholder="`请输入${getFieldLabel('PipeRadius', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
-                  @update:value="(val) => onFieldChange('bendRadiusOfCurvature', val as number | null)"
+                  @update:value="(val) => onFieldChange('PipeRadius', val as number | null)"
                 />
               </a-form-item>
 
-              <a-form-item name="extractorSurfaceRoughness" :label="getFieldLabel('extractorSurfaceRoughness', fieldLabelMode)" class="form-col">
+              <a-form-item name="TackSurfaceRoughness" :label="getFieldLabel('TackSurfaceRoughness', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="formData.extractorSurfaceRoughness"
-                  :placeholder="`请输入${getFieldLabel('extractorSurfaceRoughness', fieldLabelMode)}`"
+                  :value="formData.TackSurfaceRoughness"
+                  :placeholder="`请输入${getFieldLabel('TackSurfaceRoughness', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
-                  @update:value="(val) => onFieldChange('extractorSurfaceRoughness', val as number | null)"
+                  @update:value="(val) => onFieldChange('TackSurfaceRoughness', val as number | null)"
                 />
               </a-form-item>
 
-              <a-form-item name="extractorTaperAngle" :label="getFieldLabel('extractorTaperAngle', fieldLabelMode)" class="form-col">
+              <a-form-item name="TackTaperAngle" :label="getFieldLabel('TackTaperAngle', fieldLabelMode)" class="form-col">
                 <a-input-number
-                  :value="formData.extractorTaperAngle"
-                  :placeholder="`请输入${getFieldLabel('extractorTaperAngle', fieldLabelMode)}`"
+                  :value="formData.TackTaperAngle"
+                  :placeholder="`请输入${getFieldLabel('TackTaperAngle', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="rad"
-                  @update:value="(val) => onFieldChange('extractorTaperAngle', val as number | null)"
+                  @update:value="(val) => onFieldChange('TackTaperAngle', val as number | null)"
                 />
               </a-form-item>
 
               <a-form-item
-                name="enrichedBaffleHoleDistributionCircleDiameter"
-                :label="getFieldLabel('enrichedBaffleHoleDistributionCircleDiameter', fieldLabelMode)"
+                name="RichBaffleArrayHoleDiam"
+                :label="getFieldLabel('RichBaffleArrayHoleDiam', fieldLabelMode)"
                 class="form-col"
               >
                 <a-input-number
-                  :value="formData.enrichedBaffleHoleDistributionCircleDiameter"
-                  :placeholder="`请输入${getFieldLabel('enrichedBaffleHoleDistributionCircleDiameter', fieldLabelMode)}`"
+                  :value="formData.RichBaffleArrayHoleDiam"
+                  :placeholder="`请输入${getFieldLabel('RichBaffleArrayHoleDiam', fieldLabelMode)}`"
                   style="width: 100%"
                   addon-after="mm"
-                  @update:value="(val) => onFieldChange('enrichedBaffleHoleDistributionCircleDiameter', val as number | null)"
+                  @update:value="(val) => onFieldChange('RichBaffleArrayHoleDiam', val as number | null)"
                 />
               </a-form-item>
             </div>

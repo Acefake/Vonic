@@ -1,3 +1,4 @@
+import type { powerAnalysisConfigFormModel } from '../../../shared/form-model'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
@@ -222,41 +223,56 @@ export class FileManager {
     // 第1行：网格数
     radialGridCount: number
     axialGridCount: number
-    // 第2行：主要参数
-    angularVelocity: number
-    rotorRadius: number
-    rotorShoulderLength: number
-    extractionChamberHeight: number
-    rotorSidewallPressure: number
-    gasDiffusionCoefficient: number
-    // 第3-29行：其他参数
-    depletedEndCapTemperature: number
-    enrichedEndCapTemperature: number
-    depletedMechanicalDriveAmount: number
-    depletedExtractionArmRadius: number
-    innerBoundaryMirrorPosition: number
-    gridGenerationMethod: number
-    enrichedBaffleHoleDistributionCircleDiameter: number
-    enrichedBaffleHoleDiameter: number
-    depletedExtractionPortInnerDiameter: number
-    depletedExtractionPortOuterDiameter: number
-    minAxialDistance: number
-    feedBoxShockDiskHeight: number
-    feedFlowRate: number
-    splitRatio: number
-    feedAngularDisturbance: number
-    feedAxialDisturbance: number
-    depletedBaffleInnerHoleOuterDiameter: number
-    depletedBaffleOuterHoleInnerDiameter: number
-    depletedBaffleOuterHoleOuterDiameter: number
-    depletedBaffleAxialPosition: number
-    bwgRadialProtrusionHeight: number
-    bwgAxialHeight: number
-    bwgAxialPosition: number
-    radialGridRatio: number
-    feedingMethod: number
-    compensationCoefficient: number
-    streamlineData: number
+    // 使用文件字段名的主要参数
+    DegSpeed: number
+    RotorRadius: number
+    RotorLength?: number
+    TackHeight: number
+    RotorPressure: number
+    GasParam?: number
+    // mPhysSim 特有字段
+    PoorCoverTemp?: number
+    RichCoverTemp?: number
+    PoorDrive?: number
+    PoorArmRadius?: number
+    innerBoundaryMirrorPosition?: number
+    gridGenerationMethod?: number
+    FeedBoxAndPoorInterval?: number
+    FeedBoxHeight?: number
+    FeedFlow?: number
+    SplitRatio?: number
+    FeedDegDist?: number
+    FeedAxialDist?: number
+    PoorBaffleInnerHoleOuterRadius?: number
+    PoorBaffleOuterHoleInnerRadius?: number
+    PoorBaffleOuterHoleOuterRadius?: number
+    PoorBaffleAxialSpace?: number
+    bwgRadialProtrusionHeight?: number
+    bwgAxialHeight?: number
+    bwgAxialPosition?: number
+    radialGridRatio?: number
+    FeedMethod?: number
+    compensationCoefficient?: number
+    streamlineData?: number
+    // PowerAnalysis 特有字段
+    Temperature?: number
+    RichBaffleTemp?: number
+    PowerFlow?: number
+    PoorTackRootOuterRadius?: number
+    PoorTackDistance?: number
+    RichTackDistance?: number
+    EvenSectionPipeLength?: number
+    ChangeSectionPipeLength?: number
+    PipeRadius?: number
+    TackSurfaceRoughness?: number
+    TackAttkAngle?: number
+    TackChamferAngle?: number
+    TackTaperAngle?: number
+    // 共同字段
+    RichBaffleArrayHoleDiam: number
+    RichBaffleHoleDiam: number
+    PoorTackInnerRadius: number
+    PoorTackOuterRadius: number
     // 结果
     sepPower: number | null
     sepFactor: number | null
@@ -327,51 +343,7 @@ export class FileManager {
       }
 
       // 解析每个文件
-      const schemes: Array<{
-        index: number
-        fileName: string
-        // 第1行：网格数
-        radialGridCount: number
-        axialGridCount: number
-        // 第2行：主要参数
-        angularVelocity: number
-        rotorRadius: number
-        rotorShoulderLength: number
-        extractionChamberHeight: number
-        rotorSidewallPressure: number
-        gasDiffusionCoefficient: number
-        // 第3-29行：其他参数
-        depletedEndCapTemperature: number
-        enrichedEndCapTemperature: number
-        depletedMechanicalDriveAmount: number
-        depletedExtractionArmRadius: number
-        innerBoundaryMirrorPosition: number
-        gridGenerationMethod: number
-        enrichedBaffleHoleDistributionCircleDiameter: number
-        enrichedBaffleHoleDiameter: number
-        depletedExtractionPortInnerDiameter: number
-        depletedExtractionPortOuterDiameter: number
-        minAxialDistance: number
-        feedBoxShockDiskHeight: number
-        feedFlowRate: number
-        splitRatio: number
-        feedAngularDisturbance: number
-        feedAxialDisturbance: number
-        depletedBaffleInnerHoleOuterDiameter: number
-        depletedBaffleOuterHoleInnerDiameter: number
-        depletedBaffleOuterHoleOuterDiameter: number
-        depletedBaffleAxialPosition: number
-        bwgRadialProtrusionHeight: number
-        bwgAxialHeight: number
-        bwgAxialPosition: number
-        radialGridRatio: number
-        feedingMethod: number
-        compensationCoefficient: number
-        streamlineData: number
-        // 结果
-        sepPower: number | null
-        sepFactor: number | null
-      }> = []
+      const schemes: Array<any> = []
 
       // 通用的 key=value 结果解析器（兼容 D/E 科学计数法）
       const parseKeyValueResult = (content: string): Record<string, number> => {
@@ -429,15 +401,22 @@ export class FileManager {
             ? (foundInputPath.split(/[/\\]/).pop() || '').toLowerCase()
             : (inputFileName || '').toLowerCase()
 
-          // 从输入文件读取参数
+          // 从输入文件读取参数 - 只保留必要的字段
           const inputParams: Record<string, number> = {
+            // 网格数
             radialGridCount: 0,
             axialGridCount: 0,
+            // 基础参数（两种产品都有）
             angularVelocity: 0,
             rotorRadius: 0,
-            rotorShoulderLength: 0,
             extractionChamberHeight: 0,
             rotorSidewallPressure: 0,
+            enrichedBaffleHoleDistributionCircleDiameter: 0,
+            enrichedBaffleHoleDiameter: 0,
+            depletedExtractionPortInnerDiameter: 0,
+            depletedExtractionPortOuterDiameter: 0,
+            // mPhysSim 特有字段
+            rotorShoulderLength: 0,
             gasDiffusionCoefficient: 0,
             depletedEndCapTemperature: 0,
             enrichedEndCapTemperature: 0,
@@ -445,10 +424,6 @@ export class FileManager {
             depletedExtractionArmRadius: 0,
             innerBoundaryMirrorPosition: 0,
             gridGenerationMethod: 0,
-            enrichedBaffleHoleDistributionCircleDiameter: 0,
-            enrichedBaffleHoleDiameter: 0,
-            depletedExtractionPortInnerDiameter: 0,
-            depletedExtractionPortOuterDiameter: 0,
             minAxialDistance: 0,
             feedBoxShockDiskHeight: 0,
             feedFlowRate: 0,
@@ -468,33 +443,8 @@ export class FileManager {
             streamlineData: 0,
           }
 
-          // 仅 powerAnalysis: 解析 input2.txt 的 key=value，并映射到前端使用的字段名
-          const paParams: Record<string, number> = {
-            // 顶层参数
-            angularVelocity: 0,
-            rotorRadius: 0,
-            // 流体参数
-            averageTemperature: 0,
-            enrichedBaffleTemperature: 0,
-            feedFlowRate: 0,
-            rotorSidewallPressure: 0,
-            // 分离部件
-            depletedExtractionPortInnerDiameter: 0,
-            depletedExtractionPortOuterDiameter: 0,
-            depletedExtractionRootOuterDiameter: 0,
-            extractorAngleOfAttack: 0,
-            extractionChamberHeight: 0,
-            depletedExtractionCenterDistance: 0,
-            enrichedExtractionCenterDistance: 0,
-            constantSectionStraightPipeLength: 0,
-            extractorCuttingAngle: 0,
-            enrichedBaffleHoleDiameter: 0,
-            variableSectionStraightPipeLength: 0,
-            bendRadiusOfCurvature: 0,
-            extractorSurfaceRoughness: 0,
-            extractorTaperAngle: 0,
-            enrichedBaffleHoleDistributionCircleDiameter: 0,
-          }
+          // PowerAnalysis: 使用文件字段名存储数据
+          const paParams: Partial<powerAnalysisConfigFormModel> = {}
 
           try {
             if (fs.existsSync(inputPath)) {
@@ -514,35 +464,42 @@ export class FileManager {
                       kv[k] = v
                   }
                 }
-                // 映射为 powerAnalysis 前端字段
+
+                // 使用统一的字段映射转换文件数据
                 const toNum = (s: string | undefined): number => {
                   if (!s)
                     return 0
                   const n = Number.parseFloat(s)
                   return Number.isFinite(n) ? n : 0
                 }
-                paParams.angularVelocity = toNum(kv.DegSpeed)
-                paParams.rotorRadius = toNum(kv.RotorRadius)
-                paParams.averageTemperature = toNum(kv.Temperature)
-                paParams.enrichedBaffleTemperature = toNum(kv.RichBaffleTemp)
-                paParams.rotorSidewallPressure = toNum(kv.RotorPressure)
-                paParams.feedFlowRate = toNum(kv.PowerFlow)
-                paParams.depletedExtractionPortInnerDiameter = toNum(kv.PoorTackInnerRadius)
-                paParams.depletedExtractionPortOuterDiameter = toNum(kv.PoorTackOuterRadius)
-                paParams.depletedExtractionRootOuterDiameter = toNum(kv.PoorTackRootOuterRadius)
-                paParams.depletedExtractionCenterDistance = toNum(kv.PoorTackDistance)
-                paParams.enrichedExtractionCenterDistance = toNum(kv.RichTackDistance)
-                paParams.constantSectionStraightPipeLength = toNum(kv.EvenSectionPipeLength)
-                paParams.variableSectionStraightPipeLength = toNum(kv.ChangeSectionPipeLength)
-                paParams.bendRadiusOfCurvature = toNum(kv.PipeRadius)
-                paParams.extractorSurfaceRoughness = toNum(kv.TackSurfaceRoughness)
-                paParams.extractorAngleOfAttack = toNum(kv.TackAttkAngle)
-                paParams.extractorCuttingAngle = toNum(kv.TackChamferAngle)
-                paParams.extractorTaperAngle = toNum(kv.TackTaperAngle)
-                // 业务未给出明确映射，暂用取料腔高度
-                paParams.extractionChamberHeight = toNum(kv.TackHeight)
-                paParams.enrichedBaffleHoleDiameter = toNum(kv.RichBaffleHoleDiam)
-                paParams.enrichedBaffleHoleDistributionCircleDiameter = toNum(kv.RichBaffleArrayHoleDiam)
+
+                // 构建文件数据对象，只包含已知的 PowerAnalysis 字段
+                const fileData: Partial<powerAnalysisConfigFormModel> = {
+                  DegSpeed: toNum(kv.DegSpeed),
+                  RotorRadius: toNum(kv.RotorRadius),
+                  Temperature: toNum(kv.Temperature),
+                  RichBaffleTemp: toNum(kv.RichBaffleTemp),
+                  RotorPressure: toNum(kv.RotorPressure),
+                  PowerFlow: toNum(kv.PowerFlow),
+                  PoorTackInnerRadius: toNum(kv.PoorTackInnerRadius),
+                  PoorTackOuterRadius: toNum(kv.PoorTackOuterRadius),
+                  PoorTackRootOuterRadius: toNum(kv.PoorTackRootOuterRadius),
+                  PoorTackDistance: toNum(kv.PoorTackDistance),
+                  RichTackDistance: toNum(kv.RichTackDistance),
+                  EvenSectionPipeLength: toNum(kv.EvenSectionPipeLength),
+                  ChangeSectionPipeLength: toNum(kv.ChangeSectionPipeLength),
+                  PipeRadius: toNum(kv.PipeRadius),
+                  TackSurfaceRoughness: toNum(kv.TackSurfaceRoughness),
+                  TackAttkAngle: toNum(kv.TackAttkAngle),
+                  TackChamferAngle: toNum(kv.TackChamferAngle),
+                  TackTaperAngle: toNum(kv.TackTaperAngle),
+                  TackHeight: toNum(kv.TackHeight),
+                  RichBaffleHoleDiam: toNum(kv.RichBaffleHoleDiam),
+                  RichBaffleArrayHoleDiam: toNum(kv.RichBaffleArrayHoleDiam),
+                }
+
+                // 直接使用文件字段名，不需要转换
+                Object.assign(paParams, fileData)
 
                 // 若本方案目录 input2.txt 为空（全部解析为 0），回退到工作根目录的 input2.txt
                 const allZeroPA = Object.values(paParams).every(v => v === 0)
@@ -562,27 +519,32 @@ export class FileManager {
                             rootKv[k2] = v2
                         }
                       }
-                      paParams.angularVelocity = toNum(rootKv.DegSpeed)
-                      paParams.rotorRadius = toNum(rootKv.RotorRadius)
-                      paParams.averageTemperature = toNum(rootKv.Temperature)
-                      paParams.enrichedBaffleTemperature = toNum(rootKv.RichBaffleTemp)
-                      paParams.rotorSidewallPressure = toNum(rootKv.RotorPressure)
-                      paParams.feedFlowRate = toNum(rootKv.PowerFlow)
-                      paParams.depletedExtractionPortInnerDiameter = toNum(rootKv.PoorTackInnerRadius)
-                      paParams.depletedExtractionPortOuterDiameter = toNum(rootKv.PoorTackOuterRadius)
-                      paParams.depletedExtractionRootOuterDiameter = toNum(rootKv.PoorTackRootOuterRadius)
-                      paParams.depletedExtractionCenterDistance = toNum(rootKv.PoorTackDistance)
-                      paParams.enrichedExtractionCenterDistance = toNum(rootKv.RichTackDistance)
-                      paParams.constantSectionStraightPipeLength = toNum(rootKv.EvenSectionPipeLength)
-                      paParams.variableSectionStraightPipeLength = toNum(rootKv.ChangeSectionPipeLength)
-                      paParams.bendRadiusOfCurvature = toNum(rootKv.PipeRadius)
-                      paParams.extractorSurfaceRoughness = toNum(rootKv.TackSurfaceRoughness)
-                      paParams.extractorAngleOfAttack = toNum(rootKv.TackAttkAngle)
-                      paParams.extractorCuttingAngle = toNum(rootKv.TackChamferAngle)
-                      paParams.extractorTaperAngle = toNum(rootKv.TackTaperAngle)
-                      paParams.extractionChamberHeight = toNum(rootKv.TackHeight)
-                      paParams.enrichedBaffleHoleDiameter = toNum(rootKv.RichBaffleHoleDiam)
-                      paParams.enrichedBaffleHoleDistributionCircleDiameter = toNum(rootKv.RichBaffleArrayHoleDiam)
+                      // 使用统一的字段映射处理回退数据
+                      const rootFileData: Partial<powerAnalysisConfigFormModel> = {
+                        DegSpeed: toNum(rootKv.DegSpeed),
+                        RotorRadius: toNum(rootKv.RotorRadius),
+                        Temperature: toNum(rootKv.Temperature),
+                        RichBaffleTemp: toNum(rootKv.RichBaffleTemp),
+                        RotorPressure: toNum(rootKv.RotorPressure),
+                        PowerFlow: toNum(rootKv.PowerFlow),
+                        PoorTackInnerRadius: toNum(rootKv.PoorTackInnerRadius),
+                        PoorTackOuterRadius: toNum(rootKv.PoorTackOuterRadius),
+                        PoorTackRootOuterRadius: toNum(rootKv.PoorTackRootOuterRadius),
+                        PoorTackDistance: toNum(rootKv.PoorTackDistance),
+                        RichTackDistance: toNum(rootKv.RichTackDistance),
+                        EvenSectionPipeLength: toNum(rootKv.EvenSectionPipeLength),
+                        ChangeSectionPipeLength: toNum(rootKv.ChangeSectionPipeLength),
+                        PipeRadius: toNum(rootKv.PipeRadius),
+                        TackSurfaceRoughness: toNum(rootKv.TackSurfaceRoughness),
+                        TackAttkAngle: toNum(rootKv.TackAttkAngle),
+                        TackChamferAngle: toNum(rootKv.TackChamferAngle),
+                        TackTaperAngle: toNum(rootKv.TackTaperAngle),
+                        TackHeight: toNum(rootKv.TackHeight),
+                        RichBaffleHoleDiam: toNum(rootKv.RichBaffleHoleDiam),
+                        RichBaffleArrayHoleDiam: toNum(rootKv.RichBaffleArrayHoleDiam),
+                      }
+                      // 直接使用文件字段名，不需要转换
+                      Object.assign(paParams, rootFileData)
                     }
                     catch {
                       // 忽略回退失败
@@ -597,28 +559,33 @@ export class FileManager {
                   const num = Number.parseFloat(raw.replace(/!.*/, '').trim())
                   return Number.isFinite(num) ? num : 0
                 }
-                paParams.rotorRadius = valAt(1)
-                paParams.angularVelocity = valAt(2)
-                paParams.averageTemperature = valAt(3)
-                paParams.enrichedBaffleTemperature = valAt(4)
-                paParams.rotorSidewallPressure = valAt(5)
-                paParams.feedFlowRate = valAt(6)
-                paParams.depletedExtractionPortInnerDiameter = valAt(8)
-                paParams.depletedExtractionPortOuterDiameter = valAt(9)
-                paParams.depletedExtractionRootOuterDiameter = valAt(10)
-                paParams.depletedExtractionCenterDistance = valAt(11)
-                paParams.enrichedExtractionCenterDistance = valAt(12)
-                paParams.constantSectionStraightPipeLength = valAt(13)
-                paParams.variableSectionStraightPipeLength = valAt(14)
-                paParams.bendRadiusOfCurvature = valAt(15)
-                paParams.extractorSurfaceRoughness = valAt(16)
-                paParams.extractorAngleOfAttack = valAt(17)
-                paParams.extractorCuttingAngle = valAt(18)
-                paParams.extractorTaperAngle = valAt(19)
-                // 第20行为取料腔高度的一半
-                paParams.extractionChamberHeight = valAt(20) * 2
-                paParams.enrichedBaffleHoleDiameter = valAt(21)
-                paParams.enrichedBaffleHoleDistributionCircleDiameter = valAt(24)
+                // 使用统一的字段映射处理行式数据
+                const lineFileData: Partial<powerAnalysisConfigFormModel> = {
+                  RotorRadius: valAt(1),
+                  DegSpeed: valAt(2),
+                  Temperature: valAt(3),
+                  RichBaffleTemp: valAt(4),
+                  RotorPressure: valAt(5),
+                  PowerFlow: valAt(6),
+                  PoorTackInnerRadius: valAt(8),
+                  PoorTackOuterRadius: valAt(9),
+                  PoorTackRootOuterRadius: valAt(10),
+                  PoorTackDistance: valAt(11),
+                  RichTackDistance: valAt(12),
+                  EvenSectionPipeLength: valAt(13),
+                  ChangeSectionPipeLength: valAt(14),
+                  PipeRadius: valAt(15),
+                  TackSurfaceRoughness: valAt(16),
+                  TackAttkAngle: valAt(17),
+                  TackChamferAngle: valAt(18),
+                  TackTaperAngle: valAt(19),
+                  // 第20行为取料腔高度的一半
+                  TackHeight: valAt(20) * 2,
+                  RichBaffleHoleDiam: valAt(21),
+                  RichBaffleArrayHoleDiam: valAt(24),
+                }
+                // 直接使用文件字段名，不需要转换
+                Object.assign(paParams, lineFileData)
               }
               else {
                 // mPhysSim 的 input.dat 行式解析
@@ -716,51 +683,56 @@ export class FileManager {
             }
           }
 
-          // 基础方案对象
+          // 基础方案对象 - 根据产品类型创建不同的字段
           const schemeBase: any = {
             index: schemeIndex,
             fileName: dirName || fileName,
             radialGridCount: inputParams.radialGridCount,
             axialGridCount: inputParams.axialGridCount,
-            angularVelocity: inputParams.angularVelocity,
-            rotorRadius: inputParams.rotorRadius,
-            rotorShoulderLength: inputParams.rotorShoulderLength,
-            extractionChamberHeight: inputParams.extractionChamberHeight,
-            rotorSidewallPressure: inputParams.rotorSidewallPressure,
-            gasDiffusionCoefficient: inputParams.gasDiffusionCoefficient,
-            depletedEndCapTemperature: inputParams.depletedEndCapTemperature,
-            enrichedEndCapTemperature: inputParams.enrichedEndCapTemperature,
-            depletedMechanicalDriveAmount: inputParams.depletedMechanicalDriveAmount,
-            depletedExtractionArmRadius: inputParams.depletedExtractionArmRadius,
-            innerBoundaryMirrorPosition: inputParams.innerBoundaryMirrorPosition,
-            gridGenerationMethod: inputParams.gridGenerationMethod,
-            enrichedBaffleHoleDistributionCircleDiameter: inputParams.enrichedBaffleHoleDistributionCircleDiameter,
-            enrichedBaffleHoleDiameter: inputParams.enrichedBaffleHoleDiameter,
-            depletedExtractionPortInnerDiameter: inputParams.depletedExtractionPortInnerDiameter,
-            depletedExtractionPortOuterDiameter: inputParams.depletedExtractionPortOuterDiameter,
-            minAxialDistance: inputParams.minAxialDistance,
-            feedBoxShockDiskHeight: inputParams.feedBoxShockDiskHeight,
-            feedFlowRate: inputParams.feedFlowRate,
-            splitRatio: inputParams.splitRatio,
-            feedAngularDisturbance: inputParams.feedAngularDisturbance,
-            feedAxialDisturbance: inputParams.feedAxialDisturbance,
-            depletedBaffleInnerHoleOuterDiameter: inputParams.depletedBaffleInnerHoleOuterDiameter,
-            depletedBaffleOuterHoleInnerDiameter: inputParams.depletedBaffleOuterHoleInnerDiameter,
-            depletedBaffleOuterHoleOuterDiameter: inputParams.depletedBaffleOuterHoleOuterDiameter,
-            depletedBaffleAxialPosition: inputParams.depletedBaffleAxialPosition,
-            bwgRadialProtrusionHeight: inputParams.bwgRadialProtrusionHeight,
-            bwgAxialHeight: inputParams.bwgAxialHeight,
-            bwgAxialPosition: inputParams.bwgAxialPosition,
-            radialGridRatio: inputParams.radialGridRatio,
-            feedingMethod: inputParams.feedingMethod,
-            compensationCoefficient: inputParams.compensationCoefficient,
-            streamlineData: inputParams.streamlineData,
+            DegSpeed: inputParams.angularVelocity,
+            RotorRadius: inputParams.rotorRadius,
+            TackHeight: inputParams.extractionChamberHeight,
+            RotorPressure: inputParams.rotorSidewallPressure,
+            RichBaffleArrayHoleDiam: inputParams.enrichedBaffleHoleDistributionCircleDiameter,
+            RichBaffleHoleDiam: inputParams.enrichedBaffleHoleDiameter,
+            PoorTackInnerRadius: inputParams.depletedExtractionPortInnerDiameter,
+            PoorTackOuterRadius: inputParams.depletedExtractionPortOuterDiameter,
           }
 
-          // 若为 powerAnalysis，附加其表单字段，供多方案界面按字段显示
-          // 使用实际找到的文件名来判断，而不是配置中的文件名
+          // 根据文件类型添加特定字段
           if (['input2.txt', 'input.txt', 'input_p.txt'].includes(actualInputName)) {
+            // PowerAnalysis 产品：只添加 PowerAnalysis 字段
             Object.assign(schemeBase, paParams)
+          }
+          else {
+            // mPhysSim 产品：添加 mPhysSim 字段
+            Object.assign(schemeBase, {
+              RotorLength: inputParams.rotorShoulderLength,
+              GasParam: inputParams.gasDiffusionCoefficient,
+              PoorCoverTemp: inputParams.depletedEndCapTemperature,
+              RichCoverTemp: inputParams.enrichedEndCapTemperature,
+              PoorDrive: inputParams.depletedMechanicalDriveAmount,
+              PoorArmRadius: inputParams.depletedExtractionArmRadius,
+              innerBoundaryMirrorPosition: inputParams.innerBoundaryMirrorPosition,
+              gridGenerationMethod: inputParams.gridGenerationMethod,
+              FeedBoxAndPoorInterval: inputParams.minAxialDistance,
+              FeedBoxHeight: inputParams.feedBoxShockDiskHeight,
+              FeedFlow: inputParams.feedFlowRate,
+              SplitRatio: inputParams.splitRatio,
+              FeedDegDist: inputParams.feedAngularDisturbance,
+              FeedAxialDist: inputParams.feedAxialDisturbance,
+              PoorBaffleInnerHoleOuterRadius: inputParams.depletedBaffleInnerHoleOuterDiameter,
+              PoorBaffleOuterHoleInnerRadius: inputParams.depletedBaffleOuterHoleInnerDiameter,
+              PoorBaffleOuterHoleOuterRadius: inputParams.depletedBaffleOuterHoleOuterDiameter,
+              PoorBaffleAxialSpace: inputParams.depletedBaffleAxialPosition,
+              bwgRadialProtrusionHeight: inputParams.bwgRadialProtrusionHeight,
+              bwgAxialHeight: inputParams.bwgAxialHeight,
+              bwgAxialPosition: inputParams.bwgAxialPosition,
+              radialGridRatio: inputParams.radialGridRatio,
+              FeedMethod: inputParams.feedingMethod,
+              compensationCoefficient: inputParams.compensationCoefficient,
+              streamlineData: inputParams.streamlineData,
+            })
           }
 
           // 结果字段：按产品配置 mapping 注入动态字段

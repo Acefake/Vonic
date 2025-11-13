@@ -7,7 +7,7 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { productConfig } from '../../../../config/product.config'
-import { useDesignStore } from '../../store/designStore'
+import { useMPhysSimDesignStore } from '../../store/mPhysSimDesignStore'
 import { usePowerAnalysisDesignStore } from '../../store/powerAnalysisDesignStore'
 import CustomHeader from './CustomHeader.vue'
 import LogLayout from './LogLayout.vue'
@@ -18,7 +18,7 @@ const router = useRouter()
 // 根据产品配置选择对应的 store
 const designStore = productConfig.id === 'powerAnalysis'
   ? usePowerAnalysisDesignStore()
-  : useDesignStore()
+  : useMPhysSimDesignStore()
 
 const { isMultiScheme } = storeToRefs(designStore)
 
@@ -59,8 +59,8 @@ const menuItems = computed(() => {
 
 const selectedKeys = computed(() => [route.path])
 
-function handleMenuClick({ key }: { key: string }) {
-  router.push(key)
+function handleMenuClick({ key }: { key: string | number }) {
+  router.push(String(key))
 }
 
 function getIconComponent(iconName?: string): Component | undefined {

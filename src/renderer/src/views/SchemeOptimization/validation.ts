@@ -442,9 +442,9 @@ export function handleNSGAIILevelCountUpdate(
     return false
   }
 
-  // 校验水平数不能小于3
+  // 校验水平数大于等于2
   if (numVal < 3) {
-    showError(formatError(factor, '水平数不能小于3'))
+    showError(formatError(factor, '水平数应为大于2的正整数'))
     if (prev !== undefined) {
       restoreFieldValue(factor, record, 'levelCount', prev)
     }
@@ -507,7 +507,7 @@ export function handleMOPSOLevelCountUpdate(
 
   // 校验水平数不能小于3
   if (numVal < 3) {
-    showError(formatError(factor, '水平数不能小于3'))
+    showError(formatError(factor, '水平数应为大于2的正整数'))
     if (prev !== undefined) {
       restoreFieldValue(factor, record, 'levelCount', prev)
     }
@@ -652,7 +652,7 @@ export function validateMOPSOFactors(factors: DesignFactor[]): string[] {
     if (valuesText.length > 0) {
       const parsed = tryParseDiscreteValuesText(valuesText)
       if (!parsed) {
-        errors.push(formatBatchError(name, '取值格式错误，应为非空数组，元素为字符串或数字，如： [10,12,33]'))
+        errors.push(formatBatchError(name, '取值格式错误，应为非空数组，元素为数字，如： [10,12,33]'))
         continue
       }
       const arr = parsed.arr
@@ -662,7 +662,7 @@ export function validateMOPSOFactors(factors: DesignFactor[]): string[] {
       }
 
       if (arr.length < 3) {
-        errors.push(formatBatchError(name, '取值应为数组并且至少大于2，如： [10,12,33]'))
+        errors.push(formatBatchError(name, '取值应为数组内值大于2个，如： [10,12,33]'))
         continue
       }
       // 校验通过，可以继续处理该因子

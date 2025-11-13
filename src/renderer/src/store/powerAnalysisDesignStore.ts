@@ -1,56 +1,21 @@
+import type { powerAnalysisConfigFormModel } from '../../../shared/form-model'
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
+import { powerAnalysisFields } from '../../../shared/form-model'
 
-export interface PowerAnalysisFormData {
-  // 顶层参数
+// 前端表单数据类型 - 直接使用文件字段名，所有字段可选
+export type PowerAnalysisFormData = Partial<powerAnalysisConfigFormModel>
 
-  /** 角速度 (Hz) */
-  angularVelocity?: number
-  /** 转子半径 (m) */
-  rotorRadius?: number
+// 获取所有 PowerAnalysis 字段的键名
+export const powerAnalysisFormFields = powerAnalysisFields
 
-  // 流体参数
-
-  /** 平均温度 (K) */
-  averageTemperature?: number
-  /** 富集区温度 (K) */
-  enrichedBaffleTemperature?: number
-  /** 流量 (m^3/s) */
-  feedFlowRate?: number
-  /** 转子侧壁压力 (Pa) */
-  rotorSidewallPressure?: number
-
-  // 分离部件
-
-  /** 贫取料器内径 (m) */
-  depletedExtractionPortInnerDiameter?: number
-  /** 贫取料器外径 (m) */
-  depletedExtractionPortOuterDiameter?: number
-  /** 贫取料器根外径 (m) */
-  depletedExtractionRootOuterDiameter?: number
-  extractorAngleOfAttack?: number
-  /** 取料腔高度 (m) */
-  extractionChamberHeight?: number
-  /** 贫取料器中心距离 (m) */
-  depletedExtractionCenterDistance?: number
-  /** 富集区中心距离 (m) */
-  enrichedExtractionCenterDistance?: number
-  /** 常数段直管长度 (m) */
-  constantSectionStraightPipeLength?: number
-  /** 取料器切割角度 (°) */
-  extractorCuttingAngle?: number
-  /** 富集区隔板孔径 (m) */
-  enrichedBaffleHoleDiameter?: number
-  /** 变数段直管长度 (m) */
-  variableSectionStraightPipeLength?: number
-  /** 弯曲半径 (m) */
-  bendRadiusOfCurvature?: number
-  /** 取料器表面粗糙度 (m) */
-  extractorSurfaceRoughness?: number
-  /** 取料器锥角 (°) */
-  extractorTaperAngle?: number
-  /** 富集区隔板孔分布圆直径 (m) */
-  enrichedBaffleHoleDistributionCircleDiameter?: number
+// 创建空的表单数据对象
+function createEmptyFormData(): PowerAnalysisFormData {
+  const emptyData: PowerAnalysisFormData = {}
+  powerAnalysisFormFields.forEach((field) => {
+    emptyData[field] = undefined
+  })
+  return emptyData
 }
 
 /**
@@ -84,29 +49,7 @@ export const usePowerAnalysisDesignStore = defineStore('powerAnalysisDesign', ()
   const isMultiScheme = ref<boolean>(false)
 
   /** 表单数据 */
-  const formData = ref<PowerAnalysisFormData>({
-    angularVelocity: undefined,
-    rotorRadius: undefined,
-    averageTemperature: undefined,
-    enrichedBaffleTemperature: undefined,
-    feedFlowRate: undefined,
-    rotorSidewallPressure: undefined,
-    depletedExtractionPortInnerDiameter: undefined,
-    depletedExtractionPortOuterDiameter: undefined,
-    depletedExtractionRootOuterDiameter: undefined,
-    extractorAngleOfAttack: undefined,
-    extractionChamberHeight: undefined,
-    depletedExtractionCenterDistance: undefined,
-    enrichedExtractionCenterDistance: undefined,
-    constantSectionStraightPipeLength: undefined,
-    extractorCuttingAngle: undefined,
-    enrichedBaffleHoleDiameter: undefined,
-    variableSectionStraightPipeLength: undefined,
-    bendRadiusOfCurvature: undefined,
-    extractorSurfaceRoughness: undefined,
-    extractorTaperAngle: undefined,
-    enrichedBaffleHoleDistributionCircleDiameter: undefined,
-  })
+  const formData = ref<PowerAnalysisFormData>(createEmptyFormData())
 
   /** 输出结果 */
   const outputResults = ref<PowerAnalysisOutputResults>({
@@ -127,30 +70,8 @@ export const usePowerAnalysisDesignStore = defineStore('powerAnalysisDesign', ()
    * 检查表单是否完整
    */
   const isFormValid = (): boolean => {
-    // 必填字段校验
-    const requiredFields: Array<keyof PowerAnalysisFormData> = [
-      'angularVelocity',
-      'rotorRadius',
-      'averageTemperature',
-      'enrichedBaffleTemperature',
-      'feedFlowRate',
-      'rotorSidewallPressure',
-      'depletedExtractionPortInnerDiameter',
-      'depletedExtractionPortOuterDiameter',
-      'depletedExtractionRootOuterDiameter',
-      'extractorAngleOfAttack',
-      'extractionChamberHeight',
-      'depletedExtractionCenterDistance',
-      'enrichedExtractionCenterDistance',
-      'constantSectionStraightPipeLength',
-      'extractorCuttingAngle',
-      'enrichedBaffleHoleDiameter',
-      'variableSectionStraightPipeLength',
-      'bendRadiusOfCurvature',
-      'extractorSurfaceRoughness',
-      'extractorTaperAngle',
-      'enrichedBaffleHoleDistributionCircleDiameter',
-    ]
+    // 使用统一映射的字段作为必填字段
+    const requiredFields = powerAnalysisFormFields
 
     return requiredFields.every(
       key => formData.value[key] !== undefined && formData.value[key] !== null,
@@ -192,29 +113,7 @@ export const usePowerAnalysisDesignStore = defineStore('powerAnalysisDesign', ()
    */
   function reset(): void {
     isMultiScheme.value = false
-    formData.value = {
-      angularVelocity: undefined,
-      rotorRadius: undefined,
-      averageTemperature: undefined,
-      enrichedBaffleTemperature: undefined,
-      feedFlowRate: undefined,
-      rotorSidewallPressure: undefined,
-      depletedExtractionPortInnerDiameter: undefined,
-      depletedExtractionPortOuterDiameter: undefined,
-      depletedExtractionRootOuterDiameter: undefined,
-      extractorAngleOfAttack: undefined,
-      extractionChamberHeight: undefined,
-      depletedExtractionCenterDistance: undefined,
-      enrichedExtractionCenterDistance: undefined,
-      constantSectionStraightPipeLength: undefined,
-      extractorCuttingAngle: undefined,
-      enrichedBaffleHoleDiameter: undefined,
-      variableSectionStraightPipeLength: undefined,
-      bendRadiusOfCurvature: undefined,
-      extractorSurfaceRoughness: undefined,
-      extractorTaperAngle: undefined,
-      enrichedBaffleHoleDistributionCircleDiameter: undefined,
-    }
+    formData.value = createEmptyFormData()
     outputResults.value = {
       poorTackPower: undefined,
       tackPower: undefined,

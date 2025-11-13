@@ -1,9 +1,10 @@
-import { useDesignStore, usePowerAnalysisDesignStore } from '@/renderer/store'
+import { useMPhysSimDesignStore } from '@/renderer/store/mPhysSimDesignStore'
+import { usePowerAnalysisDesignStore } from '@/renderer/store/powerAnalysisDesignStore'
 
-const designStoreRef = useDesignStore()
 const powerAnalysisDesignStore = usePowerAnalysisDesignStore()
+const mPhysSimDesignStore = useMPhysSimDesignStore()
 
-const designStore = app.productConfig.id === 'powerAnalysis' ? powerAnalysisDesignStore : designStoreRef
+const designStore = app.productConfig.id === 'powerAnalysis' ? powerAnalysisDesignStore : mPhysSimDesignStore
 
 export function useTake(): {
   fillFormFromScheme: (scheme: any) => void

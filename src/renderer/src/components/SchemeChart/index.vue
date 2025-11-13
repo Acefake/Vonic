@@ -16,11 +16,10 @@ import VChart from 'vue-echarts'
 interface SchemeData {
   index: number
   fileName: string
-  angularVelocity: number
-  feedFlowRate: number
-  feedAxialDisturbance: number
   sepPower: number | null
   sepFactor: number | null
+  // 动态字段支持
+  [key: string]: any
 }
 
 interface Column {
