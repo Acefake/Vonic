@@ -231,6 +231,38 @@ export const FIELD_LABELS: Record<string, FieldLabelMap> = {
     'zh-CN': '流体参数',
     'en-US': 'FLUID_PARAMS',
   },
+  innerBoundaryMirrorPosition: {
+    'zh-CN': '内边界镜像位置',
+    'en-US': 'INNER_BOUNDARY_MIRROR_POSITION',
+  },
+  gridGenerationMethod: {
+    'zh-CN': '网格生成方法',
+    'en-US': 'GRID_GENERATION_METHOD',
+  },
+  bwgRadialProtrusionHeight: {
+    'zh-CN': 'BWG径向凸起高度',
+    'en-US': 'BWG_RADIAL_PROTRUSION_HEIGHT',
+  },
+  bwgAxialHeight: {
+    'zh-CN': 'BWG轴向高度',
+    'en-US': 'BWG_AXIAL_HEIGHT',
+  },
+  bwgAxialPosition: {
+    'zh-CN': 'BWG轴向位置',
+    'en-US': 'BWG_AXIAL_POSITION',
+  },
+  radialGridRatio: {
+    'zh-CN': '径向网格比',
+    'en-US': 'RADIAL_GRID_RATIO',
+  },
+  compensationCoefficient: {
+    'zh-CN': '补偿系数',
+    'en-US': 'COMPENSATION_COEFFICIENT',
+  },
+  streamlineData: {
+    'zh-CN': '流线数据',
+    'en-US': 'STREAMLINE_DATA',
+  },
 }
 
 /**
