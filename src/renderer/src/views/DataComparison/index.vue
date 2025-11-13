@@ -12,7 +12,7 @@ import DataChart from '../ExperimentalData/DataChart.vue'
 const experimentalDataStore = useExperimentalDataStore()
 const { tableColumns, tableData } = toRefs(experimentalDataStore)
 const designStore = useDesignStore()
-const { formData, isMultiScheme } = toRefs(designStore)
+const { formData, isMultiScheme, outputResults } = toRefs(designStore)
 const schemeOptimizationStore = useSchemeOptimizationStore()
 const { sampleSpaceData } = toRefs(schemeOptimizationStore)
 console.log(sampleSpaceData.value, 'sampleSpaceData---------------')
@@ -266,6 +266,7 @@ const mergedDesignData = computed(() => {
   // 合并所有参数对象，outputResults 放在最后，确保分离功率和分离系数显示在最后两列
   return {
     ...formData.value,
+    ...outputResults.value,
   }
 })
 
