@@ -290,16 +290,6 @@ export const FIELD_LABELS: Record<string, FieldLabelMap> = {
     'en-US': 'DEPLETED_BAFFLE_OUTER_HOLE_OUTER_DIAMETER',
   },
 
-  // 输出结果（兼容性）
-  sepPower: {
-    'zh-CN': '分离功率',
-    'en-US': 'SEPARATION_POWER',
-  },
-  sepFactor: {
-    'zh-CN': '分离系数',
-    'en-US': 'SEPARATION_FACTOR',
-  },
-
   // 分组标题
   topLevelParams: {
     'zh-CN': '顶层参数',

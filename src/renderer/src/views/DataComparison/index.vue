@@ -121,6 +121,7 @@ const chartConfig = ref<ChartConfig>({
 const mergedDesignData = computed(() => {
   return {
     ...formData.value,
+    ...outputResults.value,
   }
 })
 
