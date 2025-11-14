@@ -61,7 +61,7 @@ export class DoeProcessManager {
 
     this.config = {
       port: defaultPort,
-      startupTimeout: productConfig.doe?.startupTimeout || 30000,
+      startupTimeout: productConfig.doe?.startupTimeout || 60000,
       healthCheckUrl: defaultHealthCheckUrl,
       ...config,
     }

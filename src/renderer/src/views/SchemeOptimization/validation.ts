@@ -201,6 +201,7 @@ export function validateLowerLimitNSGAII(
   }
   // 将字符串转换为数字（如果可能）
   const numVal = toNumber(newVal) as number
+
   // 下限应小于上限
   if (hasFieldValue(factor, 'upperLimit') && numVal >= factor.upperLimit!) {
     showError(formatError(factor, '下限应小于其上限'))

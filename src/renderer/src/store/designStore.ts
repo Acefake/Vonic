@@ -63,9 +63,9 @@ export interface DesignFormData {
  */
 export interface OutputResults {
   /** 分离功率 (W) */
-  separationPower?: number
+  sepPower?: number
   /** 分离系数 */
-  separationFactor?: number
+  sepFactor?: number
 }
 
 /**
@@ -131,8 +131,8 @@ export const useDesignStore = defineStore('design', () => {
 
   /** 输出结果 */
   const outputResults = ref<OutputResults>({
-    separationPower: undefined,
-    separationFactor: undefined,
+    sepPower: undefined,
+    sepFactor: undefined,
   })
 
   /**
@@ -265,8 +265,8 @@ export const useDesignStore = defineStore('design', () => {
       streamlineData: undefined,
     }
     outputResults.value = {
-      separationPower: undefined,
-      separationFactor: undefined,
+      sepPower: undefined,
+      sepFactor: undefined,
     }
   }
 

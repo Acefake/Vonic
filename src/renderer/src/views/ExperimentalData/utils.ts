@@ -28,8 +28,7 @@ function calculateMeanSquareDeviation(values: number[]): number {
   // 4. 计算标准差（均方差）= 方差的平方根
   const standardDeviation = Math.sqrt(variance)
 
-  // 保留两位小数
-  return Math.round(standardDeviation * 100) / 100
+  return standardDeviation
 }
 
 /**
@@ -50,8 +49,7 @@ function calculateMaxDeviation(values: number[]): number {
   // 3. 取最大值
   const maxDev = Math.max(...deviations)
 
-  // 保留两位小数
-  return Math.round(maxDev * 100) / 100
+  return maxDev
 }
 
 /**

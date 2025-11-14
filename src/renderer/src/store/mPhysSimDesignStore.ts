@@ -19,36 +19,6 @@ export const FEEDING_METHOD_MAP = [
 // 前端表单数据类型 - 直接使用文件字段名，所有字段可选
 export type MPhysSimFormData = Partial<mPhysSimConfigFormModel>
 
-// 兼容性类型 - 支持旧的前端字段名（用于 InitialDesign 组件）
-export type MPhysSimCompatFormData = Partial<mPhysSimConfigFormModel> & {
-  // 兼容性字段映射
-  angularVelocity?: number
-  rotorRadius?: number
-  rotorShoulderLength?: number
-  feedingMethod?: FeedingMethod
-  rotorSidewallPressure?: number
-  gasDiffusionCoefficient?: number
-  feedFlowRate?: number
-  splitRatio?: number
-  depletedEndCapTemperature?: number
-  enrichedEndCapTemperature?: number
-  feedAxialDisturbance?: number
-  feedAngularDisturbance?: number
-  depletedMechanicalDriveAmount?: number
-  extractionChamberHeight?: number
-  enrichedBaffleHoleDiameter?: number
-  feedBoxShockDiskHeight?: number
-  depletedExtractionArmRadius?: number
-  depletedExtractionPortInnerDiameter?: number
-  depletedExtractionPortOuterDiameter?: number
-  depletedBaffleInnerHoleOuterDiameter?: number
-  depletedBaffleOuterHoleInnerDiameter?: number
-  depletedBaffleOuterHoleOuterDiameter?: number
-  enrichedBaffleHoleDistributionCircleDiameter?: number
-  minAxialDistance?: number
-  depletedBaffleAxialPosition?: number
-}
-
 // 获取所有 mPhysSim 字段的键名
 export const mPhysSimFormFields = mPhysSimFields
 
@@ -66,9 +36,9 @@ function createEmptyFormData(): MPhysSimFormData {
  */
 export interface MPhysSimOutputResults {
   /** 分离功率 (W) */
-  separationPower?: number
+  sepPower?: number
   /** 分离系数 */
-  separationFactor?: number
+  sepFactor?: number
 }
 
 /**
@@ -96,8 +66,8 @@ export const useMPhysSimDesignStore = defineStore('mPhysSimDesign', () => {
 
   /** 输出结果 */
   const outputResults = ref<MPhysSimOutputResults>({
-    separationPower: undefined,
-    separationFactor: undefined,
+    sepPower: undefined,
+    sepFactor: undefined,
   })
 
   /**
@@ -169,8 +139,8 @@ export const useMPhysSimDesignStore = defineStore('mPhysSimDesign', () => {
     isMultiScheme.value = false
     formData.value = createEmptyFormData()
     outputResults.value = {
-      separationPower: undefined,
-      separationFactor: undefined,
+      sepPower: undefined,
+      sepFactor: undefined,
     }
   }
 

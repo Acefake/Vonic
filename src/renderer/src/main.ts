@@ -22,11 +22,33 @@ vueApp.config.globalProperties.$app = app
 
 const productConfig = getProductConfig()
 app.http.setBaseURL(productConfig.api.baseUrl)
-// 使用配置中的 DOE 端口构建验证 URL
+
+// DOE 服务验证 - 延迟执行并添加重试机制
 const doePort = productConfig.doe?.port || 25504
-app.http.get(`http://localhost:${doePort}/api/v1/integ/doe/validate`).then((res) => {
-  app.logger.info(JSON.stringify(res))
-})
+async function validateDoeService(): Promise<void> {
+  const maxRetries = 10
+  const retryDelay = 3000 // 3秒
+
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const res = await app.http.get(`http://localhost:${doePort}/api/v1/integ/doe/validate`)
+      app.logger.info(`DOE 服务验证成功: ${JSON.stringify(res)}`)
+      return
+    }
+    catch (error) {
+      app.logger.warn(`DOE 服务验证失败 (第${i + 1}次尝试): ${error}`)
+      if (i < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, retryDelay))
+      }
+    }
+  }
+  app.logger.error('DOE 服务验证最终失败，请检查服务状态')
+}
+
+// 延迟5秒后开始验证，给后端服务足够的启动时间
+setTimeout(() => {
+  validateDoeService()
+}, 5000)
 
 interface MainProcessLog {
   level: string

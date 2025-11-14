@@ -5,20 +5,27 @@ import { message } from 'ant-design-vue'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref } from 'vue'
 import { useMultiSchemeStore } from '@/renderer/store/msStore'
-
+import { usePowerAnalysisDesignStore } from '@/renderer/store/powerAnalysisDesignStore'
 import { useExperimentalDataStore } from '../../store'
-import { useMPhysSimDesignStore } from '../../store/mPhysSimDesignStore'
+import { FEEDING_METHOD_MAP, useMPhysSimDesignStore } from '../../store/mPhysSimDesignStore'
 import { getFieldLabel } from '../../utils/field-labels'
-
 import DataChart from '../ExperimentalData/DataChart.vue'
 
 const experimentalDataStore = useExperimentalDataStore()
 const { tableColumns, tableData } = storeToRefs(experimentalDataStore)
-const designStore = useMPhysSimDesignStore()
-const { formData, isMultiScheme } = storeToRefs(designStore)
+const designStore = app.productConfig.id === 'mPhysSim' ? useMPhysSimDesignStore() : usePowerAnalysisDesignStore()
+const { formData, isMultiScheme, outputResults } = storeToRefs(designStore)
 
 const multiSchemeStore = useMultiSchemeStore()
-const { schemes } = storeToRefs(multiSchemeStore)
+const { schemes, columns: multiSchemeColumns } = storeToRefs(multiSchemeStore)
+
+// 供料方式转换函数
+function getFeedingMethodLabel(value: number | undefined): string {
+  if (value === undefined || value === null)
+    return ''
+  const method = FEEDING_METHOD_MAP.find(item => item.value === value)
+  return method ? method.label : String(value)
+}
 
 // 试验数据（从 store 获取）
 const experimentalTableColumns = tableColumns
@@ -67,21 +74,26 @@ const multiSchemeSimulationData = computed<TableDataRow[]>(() => {
     return []
   }
 
+  console.log(schemes.value)
+
   return schemes.value
-    .filter(scheme => scheme.index !== -1) // 过滤掉最优方案行
+    .filter(scheme => scheme.index > -1)
     .map((scheme, index) => {
       const row: TableDataRow = {
         key: `scheme-${scheme.index || index}`,
         序号: index + 1,
       }
 
-      // 复制所有字段（排除内部字段和不需要显示的仿真字段）
-      // 同时创建中文标签映射，以便与列配置匹配
       Object.keys(scheme).forEach((key) => {
         if (!EXCLUDE_FIELDS.includes(key)) {
+          let value = (scheme as any)[key]
+          // 供料方式特殊处理：转换为中文描述
+          if (key === 'FeedMethod') {
+            value = getFeedingMethodLabel(value as number)
+          }
           const label = getFieldLabel(key) || key
-          row[key] = scheme[key] // 保留原始字段名
-          row[label] = scheme[key] // 添加中文标签映射
+          row[key] = value // 保留原始字段名
+          row[label] = value // 添加中文标签映射
         }
       })
 
@@ -89,11 +101,8 @@ const multiSchemeSimulationData = computed<TableDataRow[]>(() => {
     })
 })
 
-// 已删除 loadMultiSchemeResults 函数，直接使用多方案 Store 数据
-
 /**
  * 图表配置
- * 包含试验曲线颜色和仿真曲线颜色
  */
 const chartConfig = ref<ChartConfig>({
   xAxis: '', // X轴不设置默认值
@@ -108,10 +117,8 @@ const chartConfig = ref<ChartConfig>({
 
 /**
  * 合并设计参数数据
- * 将 topLevelParams、operatingParams、drivingParams、separationComponents、outputResults 合并成一个对象
  */
 const mergedDesignData = computed(() => {
-  // 合并所有参数对象，outputResults 放在最后，确保分离功率和分离系数显示在最后两列
   return {
     ...formData.value,
   }
@@ -162,6 +169,54 @@ const singleSchemeSimulationColumns = computed<TableColumn[]>(() => {
     }
   })
 
+  // 根据产品配置动态添加输出结果列
+  const resultFields = app.productConfig.resultFields ?? []
+
+  resultFields.forEach((resultField) => {
+    if (!resultField.field)
+      return
+
+    // 尝试多种可能的键名
+    const possibleKeys = [
+      resultField.field, // sepPower
+      resultField.field.charAt(0).toLowerCase() + resultField.field.slice(1), // sepPower
+      resultField.field.toUpperCase(), // SEPPOWER
+      resultField.field.toLowerCase(), // seppower
+    ]
+
+    let outputValue: any
+    let foundKey = ''
+
+    for (const key of possibleKeys) {
+      if ((outputResults.value as any)?.[key] !== undefined) {
+        outputValue = (outputResults.value as any)[key]
+        foundKey = key
+        break
+      }
+    }
+
+    console.log(`结果字段 ${resultField.field}:`, { possibleKeys, foundKey, outputValue })
+
+    if (outputValue !== undefined) {
+      // 为分离功率添加单位，其他字段根据需要可以扩展
+      const displayTitle = resultField.field === 'sepPower'
+        ? `${resultField.label}(W)`
+        : resultField.label
+
+      columns.push({
+        title: displayTitle,
+        dataIndex: resultField.field,
+        key: resultField.field,
+        width: calculateColumnWidth(displayTitle),
+      })
+
+      console.log(`成功添加结果列: ${displayTitle}`)
+    }
+    else {
+      console.warn(`结果字段 ${resultField.field} 未找到对应的输出值`)
+    }
+  })
+
   return columns
 })
 
@@ -189,43 +244,78 @@ const singleSchemeSimulationData = computed<TableDataRow[]>(() => {
   // 只添加不在排除列表中的字段
   Object.keys(data).forEach((key) => {
     if (!EXCLUDE_FIELDS.includes(key)) {
-      row[key] = data[key]
+      let value = data[key]
+      // 供料方式特殊处理：转换为中文描述
+      if (key === 'FeedMethod') {
+        value = getFeedingMethodLabel(value as number)
+      }
+      row[key] = value
     }
   })
 
-  return [row] // 只返回一条数据
+  /** 图表尾部对结果赋值 */
+  const resultFields = app.productConfig.resultFields ?? []
+
+  resultFields.forEach((resultField) => {
+    if (!resultField.field)
+      return
+
+    // 尝试多种可能的键名
+    const possibleKeys = [
+      resultField.field, // sepPower
+      resultField.field.charAt(0).toLowerCase() + resultField.field.slice(1), // sepPower
+      resultField.field.toUpperCase(), // SEPPOWER
+      resultField.field.toLowerCase(), // seppower
+    ]
+
+    let outputValue
+
+    for (const key of possibleKeys) {
+      if ((outputResults.value as any)?.[key] !== undefined) {
+        outputValue = (outputResults.value as any)[key]
+        break
+      }
+    }
+
+    if (outputValue !== undefined) {
+      // 使用原始字段名作为 dataIndex
+      row[resultField.field] = outputValue
+      // 同时添加中文标签映射
+      row[resultField.label] = outputValue
+    }
+  })
+
+  return [row]
 })
 
 // 数据对比内容选项
 const compareFieldOptions = computed(() => {
+  const allFields = new Set<string>()
   if (isMultiScheme.value) {
-    // 多方案：从多方案数据和试验数据中提取字段
-    const allFields = new Set<string>()
+    // 多方案：仿真数据表头 + 试验数据表头（去重
+    // 从仿真数据表头中提取字段（使用中文标签）
+    multiSchemeColumns.value
+      .filter(col => col.dataIndex !== 'index' && col.dataIndex !== '序号')
+      .forEach((col) => {
+        if (col.title) {
+          // 去掉单位，只保留字段名
+          const fieldName = col.title.includes('(')
+            ? col.title.replace(/\([^)]*\)/g, '').trim()
+            : col.title
+          allFields.add(fieldName)
+        }
+      })
 
-    // 从多方案数据中提取字段（转换为中文标签）
-    if (schemes.value && schemes.value.length > 0) {
-      const firstScheme = schemes.value.find(scheme => scheme.index !== -1)
-      if (firstScheme) {
-        Object.keys(firstScheme).forEach((key) => {
-          if (!EXCLUDE_FIELDS.includes(key)) {
-            const label = getFieldLabel(key) || key
-            allFields.add(label) // 使用中文标签
-          }
-        })
-      }
-    }
-
-    // 从试验数据中提取字段
+    // 从试验数据表头中提取字段（去重）
     experimentalTableColumns.value
       .filter(col => col.dataIndex !== '序号')
       .forEach((col) => {
-        const fieldName = typeof col.dataIndex === 'string' ? col.dataIndex.trim() : String(col.dataIndex)
-        allFields.add(fieldName)
+        allFields.add(col.title)
       })
 
     return Array.from(allFields).map(field => ({
-      label: field, // 直接使用中文标签作为显示
-      value: field, // 使用中文标签作为值
+      label: field,
+      value: field,
     }))
   }
   else {
@@ -234,7 +324,7 @@ const compareFieldOptions = computed(() => {
       .filter(col => col.dataIndex !== '序号')
       .map(col => ({
         label: col.title,
-        value: col.dataIndex,
+        value: col.title,
       }))
   }
 })
@@ -245,20 +335,13 @@ const compareFieldOptions = computed(() => {
  * 多方案时：根据选中的字段过滤仿真数据列，并支持搜索
  */
 const filteredSimulationColumns = computed<TableColumn[]>(() => {
-  // ===== 处理仿真数据表格的列过滤逻辑 =====
-  // 单方案：使用设计参数的列配置，并根据选中字段过滤
   if (!isMultiScheme.value) {
-    // 如果没有选择任何字段，显示所有列
     if (selectedCompareFields.value.length === 0) {
       return singleSchemeSimulationColumns.value
     }
 
-    // 获取选中字段对应的中文标签（试验数据表头的 title）
-    // 因为试验数据的 dataIndex 是中文，而设计参数的 dataIndex 是英文
-    // 所以需要通过中文标签（title）来匹配两个表格的列
     const selectedTitles = selectedCompareFields.value.map((fieldDataIndex) => {
       const col = experimentalTableColumns.value.find(c => c.dataIndex === fieldDataIndex)
-      // 去除首尾空格，避免匹配失败
       return (col?.title || fieldDataIndex).trim()
     })
 
@@ -274,44 +357,41 @@ const filteredSimulationColumns = computed<TableColumn[]>(() => {
     ]
   }
 
-  // 多方案：基于多方案 Store 数据动态生成列配置
+  // 多方案：直接使用 multiSchemeStore 的 columns 配置
   if (!schemes.value || schemes.value.length === 0) {
     return []
   }
 
-  const columns: TableColumn[] = [
-    { title: '序号', dataIndex: '序号', key: '序号', width: 80 },
-  ]
+  // 直接使用多方案对比页面的列配置，确保完全一致
+  const columns = multiSchemeColumns.value.map((col: any) => {
+    // 复制列配置并适配数据对比页面的需求
+    const columnConfig = { ...col }
 
-  // 从第一个方案中提取字段作为列（排除内部字段和不需要显示的仿真字段）
-  const firstScheme = schemes.value.find(scheme => scheme.index !== -1)
-  if (firstScheme) {
-    Object.keys(firstScheme).forEach((key) => {
-      if (!EXCLUDE_FIELDS.includes(key)) {
-        const title = getFieldLabel(key) || key // 使用中文标签或原字段名
+    // 如果是序号列，调整 dataIndex 以匹配数据结构
+    if (col.dataIndex === 'index') {
+      columnConfig.dataIndex = '序号'
+      columnConfig.title = '序号'
+    }
+    else {
+      // 对于其他列，使用中文标签作为 dataIndex
+      const label = getFieldLabel(col.dataIndex) || col.dataIndex
+      columnConfig.dataIndex = label
+    }
 
-        // 为非序号列添加筛选功能
-        const columnConfig: any = {
-          title,
-          dataIndex: title, // 使用中文标签作为 dataIndex，与数据行键名一致
-          key,
-          width: calculateColumnWidth(title),
-        }
-
-        // 添加筛选功能（复选框列表）
-        if (key !== '序号') {
-          columnConfig.customFilterDropdown = true
-          columnConfig.filteredValue = simulationTableFilters.value[title] || null
-          columnConfig.onFilter = (value: string, record: any) => {
-            const recordValue = String(record[title] || '')
-            return recordValue === value
-          }
-        }
-
-        columns.push(columnConfig)
+    // 添加自定义筛选功能
+    if (col.dataIndex !== 'index') {
+      columnConfig.customFilterDropdown = true
+      columnConfig.filteredValue = simulationTableFilters.value[columnConfig.dataIndex] || null
+      columnConfig.onFilter = (value: string, record: any) => {
+        const recordValue = String(record[columnConfig.dataIndex] || '')
+        return recordValue === value
       }
-    })
-  }
+      // 移除原有的 filterDropdown，使用自定义的
+      delete columnConfig.filterDropdown
+    }
+
+    return columnConfig
+  })
 
   // 如果选择了特定字段，只显示选中的字段
   if (selectedCompareFields.value.length > 0) {
@@ -368,7 +448,7 @@ const filteredSimulationData = computed(() => {
   })
 })
 
-// 保存仿真表格实际显示的数据（应用了复选框筛选后的数据）
+// 保存仿真表格实际显示的数据
 const actualSimulationTableData = computed<TableDataRow[]>(() => {
   // 单方案：直接返回 filteredSimulationData
   if (!isMultiScheme.value) {
@@ -446,9 +526,7 @@ const filteredExperimentalColumns = computed(() => {
     return addWidth(experimentalTableColumns.value)
   }
 
-  // 序号列 + 选中的字段列（匹配时去除空格）
   const sequenceCol = experimentalTableColumns.value.find(col => col.dataIndex === '序号')
-  // 对选中的字段也去除空格，确保匹配准确
   const trimmedSelectedFields = selectedCompareFields.value.map(field =>
     typeof field === 'string' ? field.trim() : field,
   )
@@ -507,8 +585,6 @@ const processedComparisonChartData = computed<ProcessedChartData | null>(() => {
   if (!xAxis || !yAxis) {
     return null
   }
-
-  // ===== 散点图/曲线图：X-Y 坐标点 =====
 
   const series: SeriesData[] = []
 

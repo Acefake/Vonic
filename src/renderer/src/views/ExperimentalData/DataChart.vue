@@ -281,6 +281,7 @@ const chartOption = computed<EChartsOption>(() => {
       radar: undefined,
       xAxis: {
         type: 'value',
+        nameLocation: 'middle',
         name: props.chartData?.xAxisName || '',
         nameTextStyle: {
           fontSize: 12,
@@ -288,6 +289,7 @@ const chartOption = computed<EChartsOption>(() => {
       },
       yAxis: {
         type: 'value',
+        nameLocation: 'middle',
         name: props.chartData?.yAxisName || '',
         nameTextStyle: {
           fontSize: 12,
@@ -333,6 +335,7 @@ const chartOption = computed<EChartsOption>(() => {
     radar: undefined,
     xAxis: {
       type: 'value',
+      nameLocation: 'middle',
       name: props.chartConfig.xAxis,
       nameTextStyle: {
         fontSize: 12,
@@ -340,6 +343,7 @@ const chartOption = computed<EChartsOption>(() => {
     },
     yAxis: {
       type: 'value',
+      nameLocation: 'middle',
       name: props.chartConfig.yAxis,
       nameTextStyle: {
         fontSize: 12,
@@ -413,7 +417,7 @@ const chartOption = computed<EChartsOption>(() => {
           class="config-input"
           :options="chartTypeOptions.map(t => ({ label: t, value: t }))"
           not-found-content="暂无数据"
-          @update:value="(val) => updateChartConfig('chartType', val)"
+          @update:value="(val) => updateChartConfig('chartType', val as any)"
         />
       </div>
 
@@ -460,7 +464,7 @@ const chartOption = computed<EChartsOption>(() => {
           :options="headerOptions"
           not-found-content="暂无数据"
           allow-clear
-          @update:value="(val) => updateChartConfig('xAxis', val)"
+          @update:value="(val) => updateChartConfig('xAxis', val as any)"
         />
       </div>
 
@@ -473,7 +477,7 @@ const chartOption = computed<EChartsOption>(() => {
           :options="headerOptions"
           not-found-content="暂无数据"
           allow-clear
-          @update:value="(val) => updateChartConfig('yAxis', val)"
+          @update:value="(val) => updateChartConfig('yAxis', val as any)"
         />
       </div>
 
@@ -484,7 +488,7 @@ const chartOption = computed<EChartsOption>(() => {
           class="config-input"
           :options="titleFontOptions"
           not-found-content="暂无数据"
-          @update:value="(val) => updateChartConfig('titleFont', val)"
+          @update:value="(val) => updateChartConfig('titleFont', val as any)"
         />
       </div>
     </div>

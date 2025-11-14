@@ -1,7 +1,3 @@
-/**
- * 产品配置
- * 根据环境变量 VITE_APP_PRODUCT 加载不同的产品配置
- */
 export interface ProductConfig {
   /** 产品标识 */
   id: string

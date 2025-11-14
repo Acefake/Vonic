@@ -336,7 +336,7 @@ function generateChartConfig(validData: any[], xData: number[], yData: number[],
         },
       },
       tooltip: {
-        trigger: 'item',
+        show: false,
         textStyle: {
           fontFamily,
         },
@@ -359,14 +359,15 @@ function generateChartConfig(validData: any[], xData: number[], yData: number[],
         },
       },
       grid: {
-        left: '3%',
+        // 增大左侧留白，避免 y 轴标题被遮挡
+        left: '10%',
         right: '4%',
         bottom: '15%',
         containLabel: true,
       },
       xAxis: {
         type: 'value',
-        name: `${xAxisLabel}(${xAxisUnit})`,
+        name: `${xAxisLabel}`,
         nameLocation: 'middle',
         nameGap: 30,
         nameTextStyle: {
@@ -384,7 +385,7 @@ function generateChartConfig(validData: any[], xData: number[], yData: number[],
       },
       yAxis: {
         type: 'value',
-        name: `${yAxisLabel}(${yAxisUnit})`,
+        name: `${yAxisLabel}`,
         nameLocation: 'middle',
         nameGap: 50,
         nameTextStyle: {
@@ -460,7 +461,7 @@ function generateChartConfig(validData: any[], xData: number[], yData: number[],
         },
       },
       tooltip: {
-        trigger: 'axis',
+        show: false,
         textStyle: {
           fontFamily,
         },
@@ -476,15 +477,15 @@ function generateChartConfig(validData: any[], xData: number[], yData: number[],
         },
       },
       grid: {
-        left: '3%',
+        left: '10%',
         right: '4%',
         bottom: '15%',
         containLabel: true,
       },
       xAxis: {
         type: 'value',
-        name: `${xAxisLabel}(${xAxisUnit})`,
         nameLocation: 'middle',
+        name: `${xAxisLabel}`,
         nameGap: 30,
         nameTextStyle: {
           fontFamily,
@@ -501,8 +502,8 @@ function generateChartConfig(validData: any[], xData: number[], yData: number[],
       },
       yAxis: {
         type: 'value',
-        name: `${yAxisLabel}(${yAxisUnit})`,
         nameLocation: 'middle',
+        name: `${yAxisLabel}`,
         nameGap: 50,
         nameTextStyle: {
           fontFamily,
@@ -562,137 +563,6 @@ function generateChartConfig(validData: any[], xData: number[], yData: number[],
     }
     return
   }
-
-  // if (chartType.value === CHART_TYPE_RADAR) {
-  //   const schemesToCompare = validData
-
-  //   console.log('schemesToCompare--雷达图', schemesToCompare)
-
-  //   if (schemesToCompare.length < 2) {
-  //     chartOption.value = {}
-  //     return
-  //   }
-
-  //   // 获取所有数值字段（排除index和fileName）
-  //   const numericFields = allFieldOptions.value.filter(
-  //     field => field.value !== 'index' && field.value !== 'fileName',
-  //   )
-
-  //   if (numericFields.length === 0) {
-  //     chartOption.value = {}
-  //     return
-  //   }
-
-  //   // 预定义的颜色数组，用于为不同方案分配颜色
-  //   const schemeColors = [
-  //     curveColor.value, // 第一个方案使用用户选择的颜色
-  //     '#1890ff', // 蓝色
-  //     '#52c41a', // 绿色
-  //     '#faad14', // 橙色
-  //     '#f5222d', // 红色
-  //     '#722ed1', // 紫色
-  //     '#13c2c2', // 青色
-  //     '#eb2f96', // 粉色
-  //     '#fa8c16', // 橙红色
-  //     '#2f54eb', // 深蓝色
-  //   ]
-
-  //   // 计算每个字段在所有方案中的最小值和最大值
-  //   const radarDimensions = numericFields.map((field) => {
-  //     const values: number[] = []
-
-  //     validData.forEach((item) => {
-  //       const val = item[field.value as keyof SchemeData] as number | null
-  //       if (val !== null && val !== undefined) {
-  //         values.push(val)
-  //       }
-  //     })
-
-  //     const min = values.length > 0 ? Math.min(...values) : 0
-  //     const max = values.length > 0 ? Math.max(...values) : 0
-
-  //     return {
-  //       name: field.label,
-  //       min,
-  //       max,
-  //     }
-  //   })
-
-  //   // 构建方案的数据，每个方案使用不同的颜色
-  //   const schemeRadarData = schemesToCompare.map((item, idx) => {
-  //     const values = numericFields.map((field) => {
-  //       const val = item[field.value as keyof SchemeData] as number | null
-  //       return val !== null && val !== undefined ? val : 0
-  //     })
-
-  //     // 循环使用颜色数组，确保每个方案都有不同的颜色
-  //     const color = schemeColors[idx % schemeColors.length]
-
-  //     return {
-  //       value: values,
-  //       name: `方案${item.index === -1 ? '*' : item.index + 1}`,
-  //       itemStyle: {
-  //         color,
-  //       },
-  //       lineStyle: {
-  //         color,
-  //         width: 1,
-  //       },
-  //       areaStyle: {
-  //         color,
-  //         opacity: 0.3, // 设置透明度，让多个方案重叠时都能看到
-  //       },
-  //       emphasis: {
-  //         lineStyle: {
-  //           width: 2,
-  //         },
-  //         areaStyle: {
-  //           opacity: 0.5, // 鼠标悬停时增加不透明度
-  //         },
-  //       },
-  //     }
-  //   })
-
-  //   chartOption.value = {
-  //     title: {
-  //       text: '方案对比',
-  //       left: 'center',
-  //       textStyle: {
-  //         fontFamily: chartFont.value,
-  //         color: titleColor.value,
-  //       },
-  //     },
-  //     legend: {
-  //       bottom: 10,
-  //       data: schemeRadarData.map(d => d.name),
-  //       textStyle: {
-  //         fontFamily,
-  //       },
-  //     },
-  //     radar: {
-  //       indicator: radarDimensions,
-  //       radius: '60%',
-  //       // @ts-expect-error - ECharts radar nameTextStyle 类型定义不完整
-  //       nameTextStyle: {
-  //         fontFamily,
-  //       },
-  //       axisLabel: {
-  //         fontFamily,
-  //       },
-  //     },
-  //     series: [
-  //       {
-  //         name: '数据对比',
-  //         type: 'radar',
-  //         data: schemeRadarData,
-  //       },
-  //     ],
-  //     xAxis: undefined,
-  //     yAxis: undefined,
-  //     grid: undefined,
-  //   }
-  // }
-
   if (chartType.value === CHART_TYPE_RADAR) {
     // 雷达图配置 - 使用X轴字段作为指标名称，Y轴字段作为值
     // 构建雷达图数据：每个数据点的Y轴值作为指标的值
@@ -767,7 +637,7 @@ function generateChartConfig(validData: any[], xData: number[], yData: number[],
         },
       },
       tooltip: {
-        trigger: 'item',
+        show: false,
         formatter: (params: any) => {
           if (Array.isArray(params)) {
             return params.map((p: any) => {
@@ -793,7 +663,7 @@ function generateChartConfig(validData: any[], xData: number[], yData: number[],
           showMinLabel: true,
           showMaxLabel: true,
         },
-        splitNumber: 5, // 设置分割段数，控制刻度数量
+        splitNumber: 5,
       },
       series: [
         {
@@ -853,6 +723,20 @@ onMounted(() => {
             </a-select>
           </div>
 
+          <div class="control-item">
+            <span class="control-label">仿真曲线颜色</span>
+            <div class="color-picker-wrapper">
+              <input v-model="curveColor" type="color" class="color-input">
+            </div>
+          </div>
+
+          <div class="control-item">
+            <span class="control-label">标题颜色</span>
+            <div class="color-picker-wrapper">
+              <input v-model="titleColor" type="color" class="color-input">
+            </div>
+          </div>
+
           <div v-if="showXAxisSelector" class="control-item">
             <span class="control-label">X轴</span>
             <a-select v-model:value="xAxisField" style="width: 100%">
@@ -871,21 +755,6 @@ onMounted(() => {
             </a-select>
           </div>
 
-          <div class="color-item-group">
-            <div class="control-item">
-              <span class="control-label">仿真曲线颜色</span>
-              <div class="color-picker-wrapper">
-                <input v-model="curveColor" type="color" class="color-input">
-              </div>
-            </div>
-
-            <div class="control-item">
-              <span class="control-label">标题颜色</span>
-              <div class="color-picker-wrapper">
-                <input v-model="titleColor" type="color" class="color-input">
-              </div>
-            </div>
-          </div>
           <div class="control-item">
             <span class="control-label">图表字体</span>
             <a-select v-model:value="chartFont" style="width: 100%">
@@ -911,16 +780,14 @@ onMounted(() => {
   flex: 1;
   min-width: 0;
   height: 600px;
-  min-height: 400px;
+  min-width: 600px;
   background: #fff;
-  border-radius: 6px;
-  overflow: hidden;
 }
 
-.chart {
+/* .chart {
   width: 100%;
   height: 100%;
-}
+} */
 
 .chart-controls {
   width: 280px;
@@ -956,12 +823,12 @@ onMounted(() => {
 }
 
 .color-input {
-  width: 40px;
+  width: 100%;
   height: 32px;
   border: 1px solid #d9d9d9;
   border-radius: 4px;
   cursor: pointer;
-  padding: 0;
+  padding:3px;
   background: none;
 }
 

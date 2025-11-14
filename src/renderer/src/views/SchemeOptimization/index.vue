@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import type { DesignFactor, FactorType, SampleData, SampleSpaceData } from './type'
+import type { DesignFactor, SampleData, SampleSpaceData } from './type'
+
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue'
-import { debounce } from 'lodash'
+import { throttle } from 'lodash'
 import { storeToRefs } from 'pinia'
 import { computed, ref } from 'vue'
 import { getProductConfig } from '../../../../config/product.config'
@@ -132,103 +133,103 @@ async function addDesignFactor(): Promise<void> {
 /**
  * 调试功能：一键添加所有设计因子
  */
-async function debugAddAllFactors(): Promise<void> {
-  const productConfig = getProductConfig()
-  const productId = productConfig.id
+// async function debugAddAllFactors(): Promise<void> {
+//   const productConfig = getProductConfig()
+//   const productId = productConfig.id
 
-  // 根据产品类型获取所有字段
-  let allFields: Array<{ key: string, label: string }> = []
+//   // 根据产品类型获取所有字段
+//   let allFields: Array<{ key: string, label: string }> = []
 
-  if (productId === 'mPhysSim') {
-    // mPhysSim 产品的所有字段
-    const mPhysSimFields = [
-      'DegSpeed',
-      'RotorRadius',
-      'RotorLength',
-      'RotorPressure',
-      'GasParam',
-      'FeedFlow',
-      'FeedMethod',
-      'SplitRatio',
-      'PoorCoverTemp',
-      'RichCoverTemp',
-      'FeedAxialDist',
-      'FeedDegDist',
-      'PoorDrive',
-      'TackHeight',
-      'RichBaffleHoleDiam',
-      'FeedBoxHeight',
-      'PoorArmRadius',
-      'PoorTackInnerRadius',
-      'PoorTackOuterRadius',
-      'PoorBaffleInnerHoleOuterRadius',
-      'PoorBaffleOuterHoleInnerRadius',
-      'PoorBaffleOuterHoleOuterRadius',
-      'RichBaffleArrayHoleDiam',
-      'FeedBoxAndPoorInterval',
-      'PoorBaffleAxialSpace',
-    ]
-    allFields = mPhysSimFields.map(key => ({
-      key,
-      label: FIELD_LABELS[key]?.['zh-CN'] || key,
-    }))
-  }
-  else if (productId === 'powerAnalysis') {
-    // PowerAnalysis 产品的所有字段
-    const powerAnalysisFields = [
-      'DegSpeed',
-      'RotorRadius',
-      'Temperature',
-      'RichBaffleTemp',
-      'RotorPressure',
-      'PowerFlow',
-      'PoorTackInnerRadius',
-      'PoorTackOuterRadius',
-      'PoorTackRootOuterRadius',
-      'TackAttkAngle',
-      'TackHeight',
-      'PoorTackDistance',
-      'RichTackDistance',
-      'EvenSectionPipeLength',
-      'TackChamferAngle',
-      'RichBaffleHoleDiam',
-      'ChangeSectionPipeLength',
-      'PipeRadius',
-      'TackSurfaceRoughness',
-      'TackTaperAngle',
-      'RichBaffleArrayHoleDiam',
-    ]
-    allFields = powerAnalysisFields.map(key => ({
-      key,
-      label: FIELD_LABELS[key]?.['zh-CN'] || key,
-    }))
-  }
+//   if (productId === 'mPhysSim') {
+//     // mPhysSim 产品的所有字段
+//     const mPhysSimFields = [
+//       'DegSpeed',
+//       'RotorRadius',
+//       'RotorLength',
+//       'RotorPressure',
+//       'GasParam',
+//       'FeedFlow',
+//       'FeedMethod',
+//       'SplitRatio',
+//       'PoorCoverTemp',
+//       'RichCoverTemp',
+//       'FeedAxialDist',
+//       'FeedDegDist',
+//       'PoorDrive',
+//       'TackHeight',
+//       'RichBaffleHoleDiam',
+//       'FeedBoxHeight',
+//       'PoorArmRadius',
+//       'PoorTackInnerRadius',
+//       'PoorTackOuterRadius',
+//       'PoorBaffleInnerHoleOuterRadius',
+//       'PoorBaffleOuterHoleInnerRadius',
+//       'PoorBaffleOuterHoleOuterRadius',
+//       'RichBaffleArrayHoleDiam',
+//       'FeedBoxAndPoorInterval',
+//       'PoorBaffleAxialSpace',
+//     ]
+//     allFields = mPhysSimFields.map(key => ({
+//       key,
+//       label: FIELD_LABELS[key]?.['zh-CN'] || key,
+//     }))
+//   }
+//   else if (productId === 'powerAnalysis') {
+//     // PowerAnalysis 产品的所有字段
+//     const powerAnalysisFields = [
+//       'DegSpeed',
+//       'RotorRadius',
+//       'Temperature',
+//       'RichBaffleTemp',
+//       'RotorPressure',
+//       'PowerFlow',
+//       'PoorTackInnerRadius',
+//       'PoorTackOuterRadius',
+//       'PoorTackRootOuterRadius',
+//       'TackAttkAngle',
+//       'TackHeight',
+//       'PoorTackDistance',
+//       'RichTackDistance',
+//       'EvenSectionPipeLength',
+//       'TackChamferAngle',
+//       'RichBaffleHoleDiam',
+//       'ChangeSectionPipeLength',
+//       'PipeRadius',
+//       'TackSurfaceRoughness',
+//       'TackTaperAngle',
+//       'RichBaffleArrayHoleDiam',
+//     ]
+//     allFields = powerAnalysisFields.map(key => ({
+//       key,
+//       label: FIELD_LABELS[key]?.['zh-CN'] || key,
+//     }))
+//   }
 
-  // 模拟从弹窗返回所有字段
-  const prevByName = new Map<string, DesignFactor>(
-    designFactors.value.map(f => [f.name, f]),
-  )
+//   // 模拟从弹窗返回所有字段
+//   const prevByName = new Map<string, DesignFactor>(
+//     designFactors.value.map(f => [f.name, f]),
+//   )
 
-  const newFactors: DesignFactor[] = allFields.map((field, index) => {
-    const existing = prevByName.get(field.label)
-    return existing || {
-      id: Date.now() + index, // 简单的 ID 生成
-      name: field.label,
-      type: '实数' as FactorType,
-      lowerLimit: 1,
-      upperLimit: 100,
-      levelCount: 3,
-      values: '',
-    }
-  })
+//   const newFactors: DesignFactor[] = allFields.map((field, index) => {
+//     const existing = prevByName.get(field.label)
+//     return existing || {
+//       id: Date.now() + index, // 简单的 ID 生成
+//       name: field.label,
+//       type: '实数' as FactorType,
+//       lowerLimit: 1,
+//       upperLimit: 100,
+//       levelCount: 3,
+//       values: '',
+//     }
+//   })
 
-  designFactors.value = newFactors
+//   designFactors.value = newFactors
 
-  // 清空样本空间数据
-  sampleSpaceData.value = []
+//   // 清空样本空间数据
+//   sampleSpaceData.value = []
 
-  app.message.success(`已添加 ${newFactors.length} 个设计因子`)
-}
+//   app.message.success(`已添加 ${newFactors.length} 个设计因子`)
+// }
 
 /**
  * 删除选中的设计因子
@@ -243,8 +244,6 @@ function deleteSelectedDesignFactors(): void {
   designFactors.value = designFactors.value.filter(
     factor => !idsToDelete.includes(factor.id),
   )
-
-  // 因子数量由 store 的 factorCount 自动推导
 
   // 清空选中状态
   selectedDesignFactorIds.value = []
@@ -968,8 +967,8 @@ async function executeOptimization(): Promise<void> {
           }
           else {
             designStore.updateOutputResults({
-              separationPower: optimal.sepPower ?? undefined,
-              separationFactor: optimal.sepFactor ?? undefined,
+              sepPower: optimal.sepPower ?? undefined,
+              sepFactor: optimal.sepFactor ?? undefined,
             } as any)
           }
 
@@ -1096,7 +1095,7 @@ async function executeOptimization(): Promise<void> {
 }
 
 // 错误提示回调函数（使用防抖减少频繁提示）
-const showError = debounce((message: string) => app.message.error(message), 500)
+const showError = throttle((message: string) => app.message.error(message), 1000)
 
 /**
  * values 列的更新处理，抽离到脚本中避免模板内含复杂正则导致编译报错
@@ -1546,9 +1545,9 @@ async function executeSampleSpace(params: any) {
                   </template>
                   添加参数
                 </a-button>
-                <a-button size="small" type="dashed" @click="debugAddAllFactors">
+                <!-- <a-button size="small" type="dashed" @click="debugAddAllFactors">
                   🚀 一键添加全部
-                </a-button>
+                </a-button> -->
                 <a-button
                   danger size="small" :disabled="selectedDesignFactorIds.length === 0"
                   @click="deleteSelectedDesignFactors"
@@ -1587,15 +1586,28 @@ async function executeSampleSpace(params: any) {
                 <template v-else-if="column.key === 'lowerLimit'">
                   <a-input-number
                     :value="record.lowerLimit" style="width: 100%" :min="0"
-                    :disabled="optimizationAlgorithm === 'MOPSO' && hasValues(record as DesignFactor)" @update:value="(val) => {
+                    :disabled="optimizationAlgorithm === 'MOPSO' && hasValues(record as DesignFactor)"
+                    @focus="() => {
+                      // 记录进入编辑前的下限值，用于校验失败时恢复
                       const factor = designFactors.find(f => f.id === record.id)
                       if (!factor) return
-                      const prev = factor.lowerLimit
-                      let newVal = val ?? undefined
+                      ;(record as any)._lowerPrev = factor.lowerLimit
+                    }"
+                    @update:value="(val) => {
+                      // 输入过程中只更新当前行显示的值，不做即时校验
+                      record.lowerLimit = val ?? undefined
+                    }"
+                    @blur="() => {
+                      const factor = designFactors.find(f => f.id === record.id)
+                      if (!factor) return
+                      const prev = (record as any)._lowerPrev ?? factor.lowerLimit
+                      const newVal = (record.lowerLimit ?? undefined) as number | undefined
 
                       if (optimizationAlgorithm === 'NSGA-II') {
-                        // NSGA-II: 校验（清空时不触发必填校验）
-                        if (!validateLowerLimitNSGAII(factor, newVal as number | undefined, prev ?? undefined, showError, record as DesignFactor)) {
+                        // NSGA-II: 失焦时再进行数值校验
+                        if (!validateLowerLimitNSGAII(factor, newVal, prev ?? undefined, showError, record as DesignFactor)) {
+                          factor.lowerLimit = prev ?? undefined
+                          record.lowerLimit = prev ?? undefined
                           return
                         }
                         if (newVal === undefined || newVal === null) {
@@ -1608,8 +1620,8 @@ async function executeSampleSpace(params: any) {
                         }
                       }
                       else if (optimizationAlgorithm === 'MOPSO') {
-                        // MOPSO: 处理更新逻辑
-                        handleMOPSOLowerLimitUpdate(factor, record as DesignFactor, newVal as number | undefined, prev ?? undefined, showError)
+                        // MOPSO: 失焦时统一处理更新逻辑
+                        handleMOPSOLowerLimitUpdate(factor, record as DesignFactor, newVal, prev ?? undefined, showError)
                       }
                     }"
                   />
@@ -1617,15 +1629,31 @@ async function executeSampleSpace(params: any) {
                 <template v-else-if="column.key === 'upperLimit'">
                   <a-input-number
                     :value="record.upperLimit" style="width: 100%" :min="0"
-                    :disabled="optimizationAlgorithm === 'MOPSO' && hasValues(record as DesignFactor)" @update:value="(val) => {
+                    :disabled="optimizationAlgorithm === 'MOPSO' && hasValues(record as DesignFactor)"
+                    @focus="() => {
+                      // 记录进入编辑前的上限值，用于校验失败时恢复
                       const factor = designFactors.find(f => f.id === record.id)
                       if (!factor) return
-                      const prev = factor.upperLimit
-                      let newVal = val ?? undefined
+                      ;(record as any)._upperPrev = factor.upperLimit
+                    }"
+                    @update:value="(val) => {
+                      // 输入过程中只更新当前行显示的值，不做即时校验
+                      record.upperLimit = val ?? undefined
+                    }"
+                    @blur="() => {
+                      const factor = designFactors.find(f => f.id === record.id)
+                      if (!factor) return
+                      const prev = (record as any)._upperPrev ?? factor.upperLimit
+                      const newVal = (record.upperLimit ?? undefined) as number | undefined
+
+                      console.log(prev);
 
                       if (optimizationAlgorithm === 'NSGA-II') {
-                        // NSGA-II: 校验（清空时不触发必填校验）
-                        if (!validateUpperLimitNSGAII(factor, newVal as number | undefined, prev ?? undefined, showError, record as DesignFactor)) {
+                        // NSGA-II: 失焦时再进行数值校验
+                        if (!validateUpperLimitNSGAII(factor, newVal, prev ?? undefined, showError, record as DesignFactor)) {
+                          // 校验失败时显式恢复显示值
+                          factor.upperLimit = prev ?? undefined
+                          record.upperLimit = prev ?? undefined
                           return
                         }
                         if (newVal === undefined || newVal === null) {
@@ -1638,8 +1666,8 @@ async function executeSampleSpace(params: any) {
                         }
                       }
                       else if (optimizationAlgorithm === 'MOPSO') {
-                        // MOPSO: 处理更新逻辑
-                        handleMOPSOUpperLimitUpdate(factor, record as DesignFactor, newVal as number | undefined, prev ?? undefined, showError)
+                        // MOPSO: 失焦时统一处理更新逻辑
+                        handleMOPSOUpperLimitUpdate(factor, record as DesignFactor, newVal, prev ?? undefined, showError)
                       }
                     }"
                   />

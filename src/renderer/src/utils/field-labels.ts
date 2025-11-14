@@ -291,11 +291,11 @@ export const FIELD_LABELS: Record<string, FieldLabelMap> = {
   },
 
   // 输出结果（兼容性）
-  separationPower: {
+  sepPower: {
     'zh-CN': '分离功率',
     'en-US': 'SEPARATION_POWER',
   },
-  separationFactor: {
+  sepFactor: {
     'zh-CN': '分离系数',
     'en-US': 'SEPARATION_FACTOR',
   },

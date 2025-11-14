@@ -20,7 +20,7 @@ const mPhysSimConfig: ProductConfig = {
   },
   doe: {
     port: 25504,
-    startupTimeout: 30000,
+    startupTimeout: 100000,
     enabled: true,
   },
   services: {

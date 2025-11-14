@@ -3,7 +3,6 @@ productName: 多物理场数值模拟仿真计算
 directories:
   buildResources: build
   output: dist
-# 禁用差异更新文件
 buildVersion: 1.0.0
 files:
   - '!**/.vscode/*'

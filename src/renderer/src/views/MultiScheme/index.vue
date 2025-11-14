@@ -219,6 +219,21 @@ function handleRowSelectionChange(selectedKeys: (string | number)[], selectedRow
 
   const row = selectedRowsData[0]
   if (row) {
+    // 🔧 修复：同时更新 formData 和 outputResults，确保表单正确填充
+    // 提取所有设计参数（排除内部字段和结果字段）
+    const formDataPayload: Record<string, any> = {}
+    const excludeKeys = ['index', 'fileName', 'originalIndex', 'isOptimalCopy', 'sepPower', 'sepFactor', 'key']
+
+    Object.keys(row).forEach((key) => {
+      if (!excludeKeys.includes(key)) {
+        formDataPayload[key] = (row as any)[key]
+      }
+    })
+
+    // 更新表单数据
+    designStoreAny.updateFormData(formDataPayload)
+
+    // 更新输出结果
     if (app.productConfig.id === 'powerAnalysis') {
       const payload: Record<string, number | undefined> = {}
       const rf = app.productConfig.resultFields ?? []
@@ -232,8 +247,8 @@ function handleRowSelectionChange(selectedKeys: (string | number)[], selectedRow
     }
     else {
       designStoreAny.updateOutputResults({
-        separationPower: (row as any).sepPower ?? undefined,
-        separationFactor: (row as any).sepFactor ?? undefined,
+        sepPower: (row as any).sepPower ?? undefined,
+        sepFactor: (row as any).sepFactor ?? undefined,
       })
     }
   }
@@ -266,8 +281,8 @@ function onDesignSubmitted(payload: { formData: any, outputResults: any }) {
   // 更新选中行的各字段 - 直接使用 payload.formData，因为现在都使用文件字段名
   const updates: Partial<SchemeData> = {
     ...payload.formData,
-    sepPower: payload.outputResults.separationPower ?? row.sepPower,
-    sepFactor: payload.outputResults.separationFactor ?? row.sepFactor,
+    sepPower: payload.outputResults.sepPower ?? row.sepPower,
+    sepFactor: payload.outputResults.sepFactor ?? row.sepFactor,
   }
 
   // 定位在 schemes 中的相应行

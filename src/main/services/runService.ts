@@ -68,9 +68,14 @@ export class DoeServiceManager {
 
     try {
       await this.doeManager.start()
+
+      // 等待服务完全就绪
+      await this.logger?.log('info', 'DOE 服务进程已启动，等待服务就绪...')
+      await this.waitForServiceReady()
+
       this.isRunning = true
       this.isStarting = false
-      await this.logger?.log('info', 'DOE 服务启动成功')
+      await this.logger?.log('info', 'DOE 服务启动成功并已就绪')
 
       // 启动健康检查
       this.startHealthCheck()
@@ -78,7 +83,7 @@ export class DoeServiceManager {
       // 延迟进行首次健康检查
       setTimeout(() => {
         this.performHealthCheck()
-      }, 5000)
+      }, 2000)
     }
     catch (error) {
       this.isStarting = false
@@ -194,6 +199,33 @@ export class DoeServiceManager {
         }
       }
     }, 3000000) // 每30秒检查一次
+  }
+
+  /**
+   * 等待服务就绪
+   */
+  private async waitForServiceReady(): Promise<void> {
+    const maxRetries = 30 // 最多重试30次
+    const retryInterval = 2000 // 每2秒重试一次
+
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        const isReady = await this.healthCheck()
+        if (isReady) {
+          await this.logger?.log('info', `DOE 服务就绪检查通过 (第${i + 1}次尝试)`)
+          return
+        }
+      }
+      catch (error) {
+        await this.logger?.log('warn', `DOE 服务就绪检查失败 (第${i + 1}次尝试): ${error}`)
+      }
+
+      if (i < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, retryInterval))
+      }
+    }
+
+    throw new Error(`DOE 服务在 ${maxRetries * retryInterval / 1000} 秒内未能就绪`)
   }
 
   /**

@@ -7,7 +7,6 @@ import { FileTextOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { useTake } from '../../hooks/useTake'
 import { useSchemeOptimizationStore } from '../../store'
 import { useLogStore } from '../../store/logStore'
 import { FEEDING_METHOD_MAP, useMPhysSimDesignStore } from '../../store/mPhysSimDesignStore'
@@ -31,8 +30,6 @@ const props = defineProps({
 const emit = defineEmits<{
   (e: 'submitted', payload: { formData: any, outputResults: any }): void
 }>()
-
-const { fillFormFromScheme } = useTake()
 
 const designStore = useMPhysSimDesignStore()
 const logStore = useLogStore()
@@ -298,7 +295,7 @@ async function executeSimulateCalculation(): Promise<void> {
 async function submitDesign(): Promise<void> {
   syncFormFromStore()
 
-  if (!outputResults.value.separationPower || !outputResults.value.separationFactor) {
+  if (!outputResults.value.sepPower || !outputResults.value.sepFactor) {
     message.error('请先进行仿真计算，获取分离功率和分离系数')
     return
   }
@@ -351,8 +348,8 @@ async function submitDesign(): Promise<void> {
   })
 
   // 输出结果
-  lines.push(`SplitPower=${outputResults.value.separationPower ?? ''}`)
-  lines.push(`SplitParam=${outputResults.value.separationFactor ?? ''}`)
+  lines.push(`SplitPower=${outputResults.value.sepPower ?? ''}`)
+  lines.push(`SplitParam=${outputResults.value.sepFactor ?? ''}`)
 
   // 写入到 testFile/output.txt
   const baseDir = await app.file.getWorkDir()
@@ -379,16 +376,16 @@ function replaceSepPowerParams(content: string): void {
   // 记录解析到的所有字段，用于调试
   logStore.info(`解析到的字段: ${Object.keys(result).join(', ')}`)
 
-  const separationPower = findValue(result, ['ACTURAL SEPERATIVE POWER', 'ACTUAL SEPERATIVE POWER'])
-  const separationFactor = findValue(result, ['ACTURAL SEPERATIVE FACTOR', 'ACTUAL SEPERATIVE FACTOR'])
+  const sepPower = findValue(result, ['ACTURAL SEPERATIVE POWER', 'ACTUAL SEPERATIVE POWER'])
+  const sepFactor = findValue(result, ['ACTURAL SEPERATIVE FACTOR', 'ACTUAL SEPERATIVE FACTOR'])
 
-  if (separationPower !== undefined || separationFactor !== undefined) {
+  if (sepPower !== undefined || sepFactor !== undefined) {
     designStore.updateOutputResults({
-      separationPower,
-      separationFactor,
+      sepPower,
+      sepFactor,
     })
     syncFormFromStore()
-    logStore.info(`成功读取结果值: 分离功率=${separationPower ?? '未找到'}, 分离系数=${separationFactor ?? '未找到'}`)
+    logStore.info(`成功读取结果值: 分离功率=${sepPower ?? '未找到'}, 分离系数=${sepFactor ?? '未找到'}`)
   }
   else {
     logStore.warning(`未找到结果字段，解析到的字段名: ${Object.keys(result).join(', ')}`)
@@ -550,21 +547,20 @@ async function handleExeClose(_: Electron.IpcRendererEvent, exeName: string, res
   }
 }
 
-watch(() => props.selectedScheme, (newScheme) => {
+watch(() => props.selectedScheme, (newScheme, oldScheme) => {
   if (newScheme) {
-    // 🔧 修复：只有在设计 Store 数据为空或不完整时才填充选中方案数据
-    // 这样可以避免覆盖已经修正的数据
-    const hasValidStoreData = Object.values(formData.value).some(value =>
-      value !== undefined && value !== null && String(value).trim() !== '',
-    )
+    // 🔧 修复：检查是否为真正的方案变化
+    // 避免在页面切换或重新渲染时覆盖已修正的数据
+    const schemeChanged = !oldScheme
+      || (newScheme.index !== oldScheme.index || newScheme.fileName !== oldScheme.fileName)
 
-    if (!hasValidStoreData) {
-      fillFormFromScheme(newScheme)
+    if (schemeChanged) {
+      // 选中方案变化时，formData 已经在 handleRowSelectionChange 中通过 updateFormData 更新
+      // 这里只需要同步到表单模型
+      syncFormFromStore()
     }
-    // 同步到表单模型
-    syncFormFromStore()
   }
-}, { immediate: true })
+})
 
 // 注释掉自动路由跳转逻辑，用户不希望自动跳转
 // watch(() => isMultiScheme.value, (newValue) => {
@@ -986,21 +982,21 @@ defineExpose({
     <div class="output-results">
       <a-space size="large">
         <div class="result-item">
-          <span class="result-label">{{ getFieldLabel('separationPower', fieldLabelMode) }}:</span>
+          <span class="result-label">{{ getFieldLabel('sepPower', fieldLabelMode) }}:</span>
           <span class="result-value">
             {{
-              outputResults.separationPower !== null && outputResults.separationPower !== undefined
-                ? outputResults.separationPower.toFixed(2) : '-'
+              outputResults.sepPower !== undefined
+                ? outputResults.sepPower.toFixed(2) : '-'
             }}
             W
           </span>
         </div>
         <div class="result-item">
-          <span class="result-label">{{ getFieldLabel('separationFactor', fieldLabelMode) }}:</span>
+          <span class="result-label">{{ getFieldLabel('sepFactor', fieldLabelMode) }}:</span>
           <span class="result-value">
             {{
-              outputResults.separationFactor !== null && outputResults.separationFactor !== undefined
-                ? outputResults.separationFactor.toFixed(4)
+              outputResults.sepFactor !== undefined
+                ? outputResults.sepFactor.toFixed(2)
                 : '-'
             }}
           </span>
