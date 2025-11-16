@@ -14,27 +14,31 @@ const fieldConfigs = computed(() => {
     { key: 'RotorRadius', label: getFieldLabel('RotorRadius'), width: 120, unit: 'mm' },
     { key: 'TackHeight', label: getFieldLabel('TackHeight'), width: 140, unit: 'mm' },
     { key: 'RotorPressure', label: getFieldLabel('RotorPressure'), width: 140, unit: 'Pa' },
-    { key: 'FeedFlow', label: getFieldLabel('FeedFlow'), width: 120, unit: 'kg/s' },
+    // 流量字段根据产品类型动态显示
+    ...(isPowerAnalysis
+      ? [{ key: 'PowerFlow', label: getFieldLabel('PowerFlow'), width: 120, unit: 'kg/s' }]
+      : [{ key: 'FeedFlow', label: getFieldLabel('FeedFlow'), width: 120, unit: 'kg/s' }]
+    ),
     { key: 'RichBaffleArrayHoleDiam', label: getFieldLabel('RichBaffleArrayHoleDiam'), width: 180, unit: 'mm' },
     { key: 'RichBaffleHoleDiam', label: getFieldLabel('RichBaffleHoleDiam'), width: 140, unit: 'mm' },
     { key: 'PoorTackInnerRadius', label: getFieldLabel('PoorTackInnerRadius'), width: 160, unit: 'mm' },
     { key: 'PoorTackOuterRadius', label: getFieldLabel('PoorTackOuterRadius'), width: 160, unit: 'mm' },
   ]
 
-  // 功率分析特有字段
+  // 功率分析特有字段 - 使用文件字段名
   const powerAnalysisFields = [
-    { key: 'averageTemperature', label: getFieldLabel('averageTemperature'), width: 140, unit: 'K' },
-    { key: 'enrichedBaffleTemperature', label: getFieldLabel('enrichedBaffleTemperature'), width: 160, unit: 'K' },
-    { key: 'depletedExtractionRootOuterDiameter', label: getFieldLabel('depletedExtractionRootOuterDiameter'), width: 180, unit: 'mm' },
-    { key: 'extractorAngleOfAttack', label: getFieldLabel('extractorAngleOfAttack'), width: 140, unit: 'rad' },
-    { key: 'depletedExtractionCenterDistance', label: getFieldLabel('depletedExtractionCenterDistance'), width: 160, unit: 'mm' },
-    { key: 'enrichedExtractionCenterDistance', label: getFieldLabel('enrichedExtractionCenterDistance'), width: 160, unit: 'mm' },
-    { key: 'constantSectionStraightPipeLength', label: getFieldLabel('constantSectionStraightPipeLength'), width: 180, unit: 'mm' },
-    { key: 'extractorCuttingAngle', label: getFieldLabel('extractorCuttingAngle'), width: 140, unit: 'rad' },
-    { key: 'variableSectionStraightPipeLength', label: getFieldLabel('variableSectionStraightPipeLength'), width: 180, unit: 'mm' },
-    { key: 'bendRadiusOfCurvature', label: getFieldLabel('bendRadiusOfCurvature'), width: 140, unit: 'mm' },
-    { key: 'extractorSurfaceRoughness', label: getFieldLabel('extractorSurfaceRoughness'), width: 160, unit: 'mm' },
-    { key: 'extractorTaperAngle', label: getFieldLabel('extractorTaperAngle'), width: 140, unit: 'rad' },
+    { key: 'Temperature', label: getFieldLabel('Temperature'), width: 140, unit: 'K' },
+    { key: 'RichBaffleTemp', label: getFieldLabel('RichBaffleTemp'), width: 160, unit: 'K' },
+    { key: 'PoorTackRootOuterRadius', label: getFieldLabel('PoorTackRootOuterRadius'), width: 180, unit: 'mm' },
+    { key: 'TackAttkAngle', label: getFieldLabel('TackAttkAngle'), width: 140, unit: 'rad' },
+    { key: 'PoorTackDistance', label: getFieldLabel('PoorTackDistance'), width: 160, unit: 'mm' },
+    { key: 'RichTackDistance', label: getFieldLabel('RichTackDistance'), width: 160, unit: 'mm' },
+    { key: 'EvenSectionPipeLength', label: getFieldLabel('EvenSectionPipeLength'), width: 180, unit: 'mm' },
+    { key: 'TackChamferAngle', label: getFieldLabel('TackChamferAngle'), width: 140, unit: 'rad' },
+    { key: 'ChangeSectionPipeLength', label: getFieldLabel('ChangeSectionPipeLength'), width: 180, unit: 'mm' },
+    { key: 'PipeRadius', label: getFieldLabel('PipeRadius'), width: 140, unit: 'mm' },
+    { key: 'TackSurfaceRoughness', label: getFieldLabel('TackSurfaceRoughness'), width: 160, unit: 'mm' },
+    { key: 'TackTaperAngle', label: getFieldLabel('TackTaperAngle'), width: 140, unit: 'rad' },
   ]
 
   // 多物理场数值模拟仿真计算特有字段 - 使用文件字段名

@@ -281,8 +281,27 @@ function onDesignSubmitted(payload: { formData: any, outputResults: any }) {
   // 更新选中行的各字段 - 直接使用 payload.formData，因为现在都使用文件字段名
   const updates: Partial<SchemeData> = {
     ...payload.formData,
-    sepPower: payload.outputResults.sepPower ?? row.sepPower,
-    sepFactor: payload.outputResults.sepFactor ?? row.sepFactor,
+  }
+
+  // 根据产品类型更新结果字段
+  if (app.productConfig.id === 'powerAnalysis') {
+    // powerAnalysis 的结果字段：PoorTackPower 和 TackPower
+    const rf = app.productConfig.resultFields ?? []
+    for (const f of rf) {
+      if (!f.field)
+        continue
+      // 将 store 中的字段名（如 poorTackPower）转换为表格中的字段名（如 PoorTackPower）
+      const storeKey = f.field.charAt(0).toLowerCase() + f.field.slice(1)
+      const value = payload.outputResults[storeKey]
+      if (value !== undefined && value !== null) {
+        updates[f.field] = value
+      }
+    }
+  }
+  else {
+    // mPhysSim 的结果字段：sepPower 和 sepFactor
+    updates.sepPower = payload.outputResults.sepPower ?? row.sepPower
+    updates.sepFactor = payload.outputResults.sepFactor ?? row.sepFactor
   }
 
   // 定位在 schemes 中的相应行

@@ -1,6 +1,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { app } from 'electron'
+import { getProductConfig } from '../../config/product.config'
 
 /**
  * 根据传入的参数和值生成输入文件
@@ -65,19 +66,31 @@ export function writeDatFile(
 
     const filePath = path.join(targetDir, fileName)
 
-    // 根据目标文件名构建内容：
-    // - input2.txt 使用 key=value 行（功耗分析导出）
-    // - input_p.txt 使用 1-28 数字+注释行（功耗分析程序 PowerLoss.exe 读取）
-    // - 其他（如 input.dat）使用分离计算数值行
+    // 根据产品配置和文件名构建内容：
+    // - powerAnalysis 产品：
+    //   - input.txt 或 input_p.txt 使用 1-28 数字+注释行（功耗分析程序 PowerLoss.exe 读取）
+    //   - input2.txt 使用 key=value 行（功耗分析导出）
+    // - mPhysSim 产品：
+    //   - input.dat 或其他使用分离计算数值行
+    const productConfig = getProductConfig()
     const lowerName = fileName.toLowerCase()
     let content: string
-    if (lowerName === 'input2.txt') {
-      content = buildInput2TxtContent(designData)
-    }
-    else if (lowerName === 'input_p.txt') {
-      content = buildInputPTxtContent(designData)
+    if (productConfig.id === 'powerAnalysis') {
+      // powerAnalysis 产品
+      if (lowerName === 'input2.txt') {
+        content = buildInput2TxtContent(designData)
+      }
+      else if (lowerName === 'input.txt' || lowerName === 'input_p.txt') {
+        // input.txt 或 input_p.txt 都使用 powerAnalysis 的 28 行格式
+        content = buildInputPTxtContent(designData)
+      }
+      else {
+        // 其他文件名，默认使用 powerAnalysis 格式
+        content = buildInputPTxtContent(designData)
+      }
     }
     else {
+      // mPhysSim 产品或其他，使用分离计算数值行格式
       content = buildInputDatContent(designData)
     }
 

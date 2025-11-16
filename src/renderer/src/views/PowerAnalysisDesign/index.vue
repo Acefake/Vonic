@@ -457,6 +457,14 @@ function replacePowerParams(content: string): void {
       tackPower,
     })
     logStore.info(`成功读取功耗值: 贫取料器功耗=${poorTackPower ?? '未找到'}, 取料器总功耗=${tackPower ?? '未找到'}`)
+
+    // 🔧 修复：如果在多方案修正页面（有 selectedScheme prop），仿真计算完成后自动触发 submitted 事件更新表格
+    if (props.selectedScheme) {
+      emit('submitted', {
+        formData: { ...formData.value },
+        outputResults: { ...outputResults.value },
+      })
+    }
   }
   else {
     logStore.warning(`未找到功耗字段，解析到的字段名: ${Object.keys(result).join(', ')}`)
