@@ -1,9 +1,10 @@
 import { resolve } from 'node:path'
 import vue from '@vitejs/plugin-vue'
-import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
+import { bytecodePlugin, defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import UnoCSS from 'unocss/vite'
 import { AntDesignVueResolver } from 'unplugin-vue-components/resolvers'
 import Components from 'unplugin-vue-components/vite'
+import { visualizer } from 'rollup-plugin-visualizer'
 
 // 公共路径别名配置
 const alias = {
@@ -13,23 +14,32 @@ const alias = {
   '@/config': resolve('src/config'),
 }
 
-export default defineConfig(({ command }) => {
-  // 判断是否为生产构建（electron-vite 的 command 参数：'build' 为生产，'serve' 为开发）
+export default defineConfig(({ command, mode }) => {
   const isProduction = command === 'build'
+  // 是否启用构建分析
+  const isAnalyze = mode === 'analyze'
 
   return {
     main: {
-      plugins: [externalizeDepsPlugin()],
+      plugins: [
+        externalizeDepsPlugin(),
+        // 生产环境启用字节码保护
+        ...(isProduction ? [bytecodePlugin({ transformArrowFunctions: true })] : []),
+      ],
       resolve: {
         alias,
       },
       build: {
         minify: isProduction ? 'esbuild' : false,
         sourcemap: !isProduction,
-        // 优化构建输出
+        target: 'node18',
         rollupOptions: {
+          // 优化 treeshaking
+          treeshake: {
+            moduleSideEffects: false,
+            propertyReadSideEffects: false,
+          },
           output: {
-            // 手动代码分割，优化主进程代码
             manualChunks: undefined,
           },
         },
@@ -40,6 +50,7 @@ export default defineConfig(({ command }) => {
         externalizeDepsPlugin({
           exclude: ['@electron-toolkit/preload'],
         }),
+        ...(isProduction ? [bytecodePlugin({ transformArrowFunctions: true })] : []),
       ],
       resolve: {
         alias,
@@ -47,6 +58,12 @@ export default defineConfig(({ command }) => {
       build: {
         minify: isProduction ? 'esbuild' : false,
         sourcemap: !isProduction,
+        target: 'node18',
+        rollupOptions: {
+          treeshake: {
+            moduleSideEffects: false,
+          },
+        },
       },
     },
     renderer: {
@@ -54,7 +71,11 @@ export default defineConfig(({ command }) => {
         alias,
       },
       plugins: [
-        vue(),
+        vue({
+          script: {
+            defineModel: true,
+          },
+        }),
         UnoCSS() as any,
         Components({
           resolvers: [
@@ -64,48 +85,60 @@ export default defineConfig(({ command }) => {
           ],
           dts: 'src/components.d.ts',
         }),
+        // 构建分析插件
+        ...(isAnalyze
+          ? [
+              visualizer({
+                filename: 'stats.html',
+                open: true,
+                gzipSize: true,
+                brotliSize: true,
+              }),
+            ]
+          : []),
       ],
       build: {
         minify: isProduction ? 'esbuild' : false,
         sourcemap: !isProduction,
         // 优化构建输出
         rollupOptions: {
+          treeshake: {
+            moduleSideEffects: 'no-external',
+            propertyReadSideEffects: false,
+            tryCatchDeoptimization: false,
+          },
           output: {
             // 手动代码分割策略
             manualChunks: (id) => {
-              // 将 node_modules 中的大型库单独打包
               if (id.includes('node_modules')) {
-                // Vue 相关
-                if (id.includes('vue') || id.includes('vue-router') || id.includes('pinia')) {
-                  return 'vue-vendor'
+                // Vue 核心
+                if (id.includes('vue') || id.includes('@vue')) {
+                  return 'vue-core'
+                }
+                // Vue 生态
+                if (id.includes('vue-router') || id.includes('pinia')) {
+                  return 'vue-ecosystem'
                 }
                 // Ant Design Vue
-                if (id.includes('ant-design-vue')) {
-                  return 'antd-vendor'
+                if (id.includes('ant-design-vue') || id.includes('@ant-design')) {
+                  return 'antd'
                 }
                 // ECharts
-                if (id.includes('echarts')) {
-                  return 'echarts-vendor'
+                if (id.includes('echarts') || id.includes('zrender')) {
+                  return 'echarts'
                 }
-                // 其他工具库
-                if (
-                  id.includes('axios')
-                  || id.includes('lodash')
-                  || id.includes('xlsx')
-                  || id.includes('iconv-lite')
-                ) {
-                  return 'utils-vendor'
+                // 工具库
+                if (id.includes('axios') || id.includes('lodash')) {
+                  return 'utils'
                 }
-                // 其他 node_modules
+                // 其他依赖
                 return 'vendor'
               }
-              // 非 node_modules 的代码不进行分割
               return undefined
             },
-            // 优化 chunk 文件命名
-            chunkFileNames: 'assets/[name]-[hash].js',
-            entryFileNames: 'assets/[name]-[hash].js',
-            assetFileNames: 'assets/[name]-[hash].[ext]',
+            chunkFileNames: 'assets/js/[name]-[hash].js',
+            entryFileNames: 'assets/js/[name]-[hash].js',
+            assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
           },
         },
         // 优化构建性能
@@ -115,10 +148,39 @@ export default defineConfig(({ command }) => {
         // 优化资源内联阈值（小于 4kb 的资源内联为 base64）
         assetsInlineLimit: 4096,
       },
-      // 优化依赖预构建
+      // 依赖预构建优化
       optimizeDeps: {
-        include: ['vue', 'vue-router', 'pinia', 'ant-design-vue'],
+        include: [
+          'vue',
+          'vue-router',
+          'pinia',
+          'ant-design-vue',
+          'axios',
+          'echarts',
+          'vue-echarts',
+          '@ant-design/icons-vue',
+        ],
         exclude: ['electron'],
+        // 强制预构建，避免首次加载慢
+        force: false,
+      },
+      // 开发服务器
+      server: {
+        hmr: true,
+        warmup: {
+          clientFiles: [
+            './src/renderer/src/main.ts',
+            './src/renderer/src/App.vue',
+            './src/renderer/src/router/index.ts',
+          ],
+        },
+      },
+      // esbuild 优化
+      esbuild: {
+        // 生产环境移除 console 和 debugger
+        drop: isProduction ? ['console', 'debugger'] : [],
+        // 优化压缩
+        legalComments: 'none',
       },
     },
   }

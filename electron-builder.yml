@@ -1,24 +1,65 @@
 appId: com.vonic.app
 productName: Vonic
+copyright: Copyright © 2024 ${author}
+
 directories:
   buildResources: build
+  output: dist
+
+# 文件过滤 - 排除不需要打包的文件
 files:
   - '!**/.vscode/*'
+  - '!**/.github/*'
   - '!src/*'
+  - '!scripts/*'
+  - '!.windsurf/*'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
-  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
-  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml}'
+  - '!{dev-app-update.yml,CHANGELOG.md,README.md,stats.html}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml,yarn.lock,package-lock.json}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!{.gitignore,.editorconfig}'
+
+# 需要解压的资源（原生模块、二进制文件等）
 asarUnpack:
   - resources/**
+  - out/main/chunks/*.node
+
+# 压缩配置
+compression: maximum
+
+# Windows 配置
 win:
   executableName: vonic
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+
+# NSIS 安装程序配置
 nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
+  createStartMenuShortcut: true
+  deleteAppDataOnUninstall: false
+  include: build/installer.nsh
+
+# macOS 配置
 mac:
+  icon: build/icon.icns
+  category: public.app-category.developer-tools
+  hardenedRuntime: true
+  gatekeeperAssess: false
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
@@ -26,20 +67,75 @@ mac:
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false
-dmg:
-  artifactName: ${name}-${version}.${ext}
-linux:
   target:
-    - AppImage
-    - snap
-    - deb
-  maintainer: electronjs.org
-  category: Utility
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+
+# DMG 配置
+dmg:
+  artifactName: ${name}-${version}-${arch}.${ext}
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+# Linux 配置
+linux:
+  icon: build/icons
+  category: Development
+  maintainer: hua wang
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+    - target: rpm
+      arch:
+        - x64
+
+# AppImage 配置
 appImage:
-  artifactName: ${name}-${version}.${ext}
+  artifactName: ${name}-${version}-${arch}.${ext}
+
+# Deb 配置
+deb:
+  artifactName: ${name}-${version}-${arch}.${ext}
+  depends:
+    - gconf2
+    - gconf-service
+    - libnotify4
+    - libappindicator1
+    - libxtst6
+    - libnss3
+
+# RPM 配置
+rpm:
+  artifactName: ${name}-${version}-${arch}.${ext}
+
+# 禁用 npm rebuild（使用 electron-builder 的原生模块重建）
 npmRebuild: false
+
+# 自动更新配置
 publish:
-  provider: generic
-  url: https://example.com/auto-updates
+  provider: github
+  owner: your-github-username
+  repo: Vonic
+  releaseType: release
+
+# Electron 下载镜像（国内加速）
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/
+
+# 构建后钩子
+afterPack: ./build/afterPack.js

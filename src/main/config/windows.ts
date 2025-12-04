@@ -14,6 +14,8 @@ const browserWindowDefaultOptions: BrowserWindowConstructorOptions = {
     webSecurity: false,
     zoomFactor: 1,
     partition: `persist:${getProductConfig().id}`,
+    // bytecodePlugin 要求禁用 sandbox 以支持 preload 字节码
+    sandbox: false,
   },
 }
 

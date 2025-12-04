@@ -51,7 +51,7 @@ app.whenReady().then(async () => {
     })
   }
 
-  logger.info('App initialized')
+  logger.info('App初始化完成')
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
