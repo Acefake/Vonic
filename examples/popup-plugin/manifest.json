@@ -1,0 +1,8 @@
+{
+  "id": "popup-plugin",
+  "name": "弹窗助手",
+  "version": "1.0.0",
+  "author": "Developer",
+  "description": "展示视图、子窗口和弹窗功能",
+  "main": "index.js"
+}

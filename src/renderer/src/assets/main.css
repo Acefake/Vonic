@@ -1,0 +1,58 @@
+/**
+ * 全局样式覆盖
+ * 仅保留 Ant Design 主题配置无法覆盖的样式
+ */
+
+/* 代码样式 */
+code {
+  font-weight: 600;
+  padding: 3px 5px;
+  border-radius: 2px;
+  background-color: var(--bg-container);
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace;
+  font-size: 85%;
+}
+
+/* 按钮 hover 状态 */
+.ant-btn-default:hover {
+  color: var(--primary) !important;
+  border-color: var(--primary) !important;
+}
+
+/* 卡片紧凑样式 */
+.ant-card-head {
+  min-height: 35px !important;
+  padding: 10px !important;
+}
+.ant-card-body {
+  padding: 10px !important;
+}
+
+/* 下拉菜单边框 */
+.ant-dropdown-menu {
+  border: 1px solid var(--border) !important;
+}
+
+/* 弹窗文字色 */
+.ant-modal-title {
+  color: var(--text-primary) !important;
+}
+.ant-modal-close:hover {
+  color: var(--text-primary) !important;
+}
+.ant-modal-footer {
+  border-color: var(--border) !important;
+}
+
+/* 输入框 hover/focus */
+.ant-input:hover,
+.ant-select:hover .ant-select-selector {
+  border-color: var(--primary) !important;
+}
+.ant-input:focus {
+  box-shadow: 0 0 0 2px var(--primary)33 !important;
+}
+.ant-input::placeholder {
+  color: var(--text-placeholder) !important;
+}

@@ -1,0 +1,126 @@
+/**
+ * 全局 CSS 变量
+ * 由 useTheme.ts 动态设置
+ */
+
+:root {
+  /* 基础色 */
+  --primary: #0078d4;
+  --primary-hover: #1a8cdb;
+  --primary-active: #005a9e;
+
+  /* 背景色 */
+  --bg-base: #1e1e1e;
+  --bg-elevated: #252526;
+  --bg-container: #2d2d2d;
+  --bg-layout: #181818;
+  --bg-spotlight: #3c3c3c;
+
+  /* 文字色 */
+  --text-primary: #cccccc;
+  --text-secondary: #9d9d9d;
+  --text-tertiary: #6e6e6e;
+  --text-disabled: #5a5a5a;
+  --text-placeholder: #6e6e6e;
+
+  /* 边框色 */
+  --border: #3c3c3c;
+  --border-secondary: #2d2d2d;
+
+  /* 活动栏 */
+  --activity-bar-bg: #333333;
+  --activity-bar-fg: #858585;
+  --activity-bar-fg-active: #ffffff;
+  --activity-bar-indicator: #0078d4;
+
+  /* 侧边栏 */
+  --sidebar-bg: #252526;
+  --sidebar-fg: #cccccc;
+  --sidebar-header-bg: #252526;
+  --sidebar-border: #1e1e1e;
+
+  /* 标题栏 */
+  --title-bar-bg: #323233;
+  --title-bar-fg: #cccccc;
+  --title-bar-border: #252526;
+
+  /* 编辑区 */
+  --editor-bg: #1e1e1e;
+  --editor-fg: #d4d4d4;
+
+  /* 状态色 */
+  --success: #4ec9b0;
+  --warning: #dcdcaa;
+  --error: #f14c4c;
+  --info: #3794ff;
+
+  /* 交互状态 */
+  --hover-bg: #2a2d2e;
+  --active-bg: #37373d;
+  --selected-bg: #094771;
+
+  /* 滚动条 */
+  --scrollbar-bg: transparent;
+  --scrollbar-thumb: #5a5a5a4d;
+  --scrollbar-thumb-hover: #5a5a5a80;
+
+  /* 阴影 */
+  --shadow: rgba(0, 0, 0, 0.36);
+  --shadow-secondary: rgba(0, 0, 0, 0.2);
+
+  /* 尺寸变量 */
+  --title-bar-height: 36px;
+  --activity-bar-width: 48px;
+  --sidebar-width: 280px;
+  --sidebar-min-width: 200px;
+  --sidebar-max-width: 500px;
+
+  /* 动画 */
+  --transition-fast: 0.1s ease;
+  --transition-normal: 0.2s ease;
+  --transition-slow: 0.3s ease;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* 全局基础样式 */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--bg-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 选中文本样式 */
+::selection {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* 焦点样式 */
+:focus-visible {
+  outline: 1px solid var(--primary);
+  outline-offset: -1px;
+}
