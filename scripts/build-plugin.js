@@ -8,8 +8,15 @@
  * 1. 编译 TypeScript 为 JavaScript
  * 2. 压缩代码（可选）
  * 3. 更新 manifest.json 入口
- * 4. 打包成 zip 文件
+ * 4. 打包成 .vpkg 文件（Vonic 专属插件包格式）
+ *
+ * .vpkg 格式说明:
+ * - 魔数头: VPKG\x00\x01 (6 字节)
+ * - 内容: ZIP 压缩数据
  */
+
+// Vonic 插件包魔数头
+const VPKG_MAGIC = Buffer.from([0x56, 0x50, 0x4B, 0x47, 0x00, 0x01]) // 'VPKG' + version 1
 
 const fs = require('node:fs')
 const path = require('node:path')
@@ -56,7 +63,8 @@ fs.mkdirSync(buildDir, { recursive: true })
 const filesToCopy = fs.readdirSync(pluginDir).filter(f =>
   f !== '.build'
   && f !== 'node_modules'
-  && !f.endsWith('.zip'),
+  && !f.endsWith('.zip')
+  && !f.endsWith('.vpkg'),
 )
 
 for (const file of filesToCopy) {
@@ -126,32 +134,38 @@ for (const dtsFile of dtsFiles) {
   fs.unlinkSync(dtsFile)
 }
 
-// 打包成 zip
-const outputZip = path.join(path.dirname(pluginDir), `${pluginId}.zip`)
-console.log(`📦 打包成 zip...`)
+// 打包成 .vpkg
+const outputVpkg = path.join(path.dirname(pluginDir), `${pluginId}.vpkg`)
+console.log(`📦 打包成 .vpkg...`)
 
-// 删除旧的 zip
-if (fs.existsSync(outputZip)) {
-  fs.unlinkSync(outputZip)
+// 删除旧的 .vpkg
+if (fs.existsSync(outputVpkg)) {
+  fs.unlinkSync(outputVpkg)
 }
 
-// 使用 archiver 打包
+// 使用 archiver 打包，先生成 zip 到内存
 const archiver = require('archiver')
+const { PassThrough } = require('node:stream')
 
-const output = fs.createWriteStream(outputZip)
+const chunks = []
+const passThrough = new PassThrough()
 const archive = archiver('zip', { zlib: { level: 9 } })
 
-output.on('close', () => {
-  console.log(`  ✓ ${outputZip} (${(archive.pointer() / 1024).toFixed(1)} KB)`)
-
+passThrough.on('data', chunk => chunks.push(chunk))
+passThrough.on('end', () => {
+  // 合并 ZIP 数据
+  const zipData = Buffer.concat(chunks)
+  // 写入 .vpkg 文件：魔数头 + ZIP 数据
+  const vpkgData = Buffer.concat([VPKG_MAGIC, zipData])
+  fs.writeFileSync(outputVpkg, vpkgData)
+  console.log(`  ✓ ${outputVpkg} (${(vpkgData.length / 1024).toFixed(1)} KB)`)
   // 清理构建目录
   fs.rmSync(buildDir, { recursive: true })
-
   console.log('')
-  console.log(`✅ 插件打包完成: ${outputZip}`)
+  console.log(`✅ 插件打包完成: ${outputVpkg}`)
   console.log('')
   console.log('安装方式:')
-  console.log('  在应用中点击"安装插件"，选择生成的 zip 文件')
+  console.log('  在应用中点击"安装插件"，选择生成的 .vpkg 文件')
 })
 
 archive.on('error', (err) => {
@@ -160,7 +174,7 @@ archive.on('error', (err) => {
   process.exit(1)
 })
 
-archive.pipe(output)
+archive.pipe(passThrough)
 archive.directory(buildDir, false)
 archive.finalize()
 

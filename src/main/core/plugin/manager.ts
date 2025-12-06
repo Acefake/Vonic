@@ -8,9 +8,12 @@ import type {
 } from './types'
 import { Buffer } from 'node:buffer'
 import * as fs from 'node:fs'
-import { createReadStream } from 'node:fs'
 import * as path from 'node:path'
+import { Readable } from 'node:stream'
 import * as vm from 'node:vm'
+
+// Vonic 插件包魔数头 (6 字节)
+const VPKG_MAGIC = Buffer.from([0x56, 0x50, 0x4B, 0x47, 0x00, 0x01]) // 'VPKG' + version 1
 /**
  * 插件管理器
  * 负责插件的安装、激活、停用、卸载
@@ -91,14 +94,34 @@ export class PluginManager {
     return null
   }
 
-  public async installPlugin(zipPath: string): Promise<PluginManifest> {
-    logger.info(`Installing plugin from: ${zipPath}`)
+  public async installPlugin(vpkgPath: string): Promise<PluginManifest> {
+    logger.info(`Installing plugin from: ${vpkgPath}`)
     const tempDir = path.join(this.pluginsDir, `_temp_${Date.now()}`)
     fs.mkdirSync(tempDir, { recursive: true })
 
     try {
+      // 读取文件并验证魔数头
+      const fileData = fs.readFileSync(vpkgPath)
+      const isVpkg = vpkgPath.endsWith('.vpkg')
+      let zipData: Buffer
+
+      if (!isVpkg) {
+        throw new Error('不支持的文件格式，请使用 .vpkg 插件包')
+      }
+      // 验证 .vpkg 魔数头
+      if (fileData.length < VPKG_MAGIC.length) {
+        throw new Error('无效的 .vpkg 文件：文件过小')
+      }
+      const magic = fileData.subarray(0, VPKG_MAGIC.length)
+      if (!magic.equals(VPKG_MAGIC)) {
+        throw new Error('无效的 .vpkg 文件：不是有效的 Vonic 插件包')
+      }
+      // 提取 ZIP 数据（跳过魔数头）
+      zipData = fileData.subarray(VPKG_MAGIC.length)
+
+      // 从内存中解压 ZIP 数据
       await new Promise<void>((resolve, reject) => {
-        createReadStream(zipPath)
+        Readable.from(zipData)
           .pipe(Extract({ path: tempDir }))
           .on('close', resolve)
           .on('error', reject)
@@ -278,9 +301,38 @@ export class PluginManager {
       pluginModule = moduleExports.exports
     }
     else {
-      pluginModule = await import(`file://${mainPath}?t=${timestamp}`)
+      // 加载 CJS 格式的 JS 文件
+      const jsCode = fs.readFileSync(mainPath, 'utf-8')
+      const moduleExports = { exports: {} as any }
+      const moduleRequire = (id: string): any => {
+        if (id.startsWith('./') || id.startsWith('../')) {
+          const resolvedPath = path.resolve(path.dirname(mainPath), id)
+          // 清除缓存以支持热重载
+          delete require.cache[require.resolve(resolvedPath)]
+          return require(resolvedPath)
+        }
+        return require(id)
+      }
+      const script = new vm.Script(jsCode, { filename: mainPath })
+      const context = vm.createContext({
+        module: moduleExports,
+        exports: moduleExports.exports,
+        require: moduleRequire,
+        __filename: mainPath,
+        __dirname: path.dirname(mainPath),
+        console,
+        process,
+        Buffer,
+        setTimeout,
+        setInterval,
+        clearTimeout,
+        clearInterval,
+      })
+      script.runInContext(context)
+      pluginModule = moduleExports.exports
     }
 
+    // 支持 default 导出和直接导出
     const plugin: Plugin = pluginModule.default || pluginModule
 
     plugin.id = plugin.id || manifest.id
@@ -477,7 +529,7 @@ export class PluginManager {
     ipcMain.handle('plugin:install', async () => {
       const result = await dialog.showOpenDialog({
         title: '选择插件包',
-        filters: [{ name: '插件包', extensions: ['zip'] }],
+        filters: [{ name: 'Vonic 插件包', extensions: ['vpkg'] }],
         properties: ['openFile'],
       })
       if (result.canceled || !result.filePaths.length)
