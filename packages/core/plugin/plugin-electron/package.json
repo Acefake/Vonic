@@ -1,0 +1,34 @@
+{
+  "name": "@vonic/plugin-electron",
+  "version": "1.0.0",
+  "description": "Vonic 插件核心功能与开发 SDK",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "sucrase": "^3.35.0",
+    "unzipper": "^0.12.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.12",
+    "@types/unzipper": "^0.10.10",
+    "typescript": "^5.9.2"
+  },
+  "peerDependencies": {
+    "electron": ">=28.0.0"
+  }
+}

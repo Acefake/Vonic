@@ -1,0 +1,9 @@
+{
+  "name": "@vonic/plugin-popup",
+  "version": "1.0.0",
+  "private": true,
+  "description": "弹窗插件",
+  "devDependencies": {
+    "@vonic/plugin-electron": "workspace:*"
+  }
+}

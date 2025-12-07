@@ -25,6 +25,9 @@ AGENTS
 .windsurf
 
 
+# Turborepo
+.turbo
+
 # Electron
 out
 doeService

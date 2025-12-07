@@ -1,0 +1,9 @@
+{
+  "name": "@vonic/plugin-codemaps",
+  "version": "1.0.0",
+  "private": true,
+  "description": "代码地图插件",
+  "devDependencies": {
+    "@vonic/plugin-electron": "workspace:*"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "@vonic/plugin-todo-list",
+  "version": "1.0.0",
+  "private": true,
+  "description": "待办清单插件",
+  "devDependencies": {
+    "@vonic/plugin-electron": "workspace:*"
+  }
+}

@@ -1,7 +1,5 @@
 # Vonic
-<<<<<<< HEAD
 electron+vue
-=======
 
 基于 Electron + Vue 3 + TypeScript 的桌面应用开发框架。
 
@@ -45,4 +43,3 @@ pnpm dev
 ```bash
 pnpm build
 ```
->>>>>>> feat/new

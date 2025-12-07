@@ -1,0 +1,6 @@
+packages:
+  - 'packages/*'
+  - 'packages/effects/*'
+  - 'packages/core/plugin/*'
+  - 'apps/*'
+  - 'plugins/*'
