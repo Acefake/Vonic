@@ -71,18 +71,18 @@ watch(viewId, loadViewData)
 </script>
 
 <template>
-  <div class="absolute inset-0 flex flex-col bg-gray-100 overflow-auto">
-    <a-spin :spinning="loading" class="flex-1 flex flex-col">
+  <div class="plugin-view-container">
+    <a-spin :spinning="loading" class="plugin-view-spin">
       <!-- Vue 组件 -->
-      <div v-if="dynamicComponent" class="flex-1 bg-white p-6 overflow-auto">
+      <div v-if="dynamicComponent" class="plugin-view-content">
         <component :is="dynamicComponent" v-bind="renderData?.props || {}" />
       </div>
 
       <!-- HTML 内容 -->
-      <div v-else-if="renderData?.html" class="flex-1 bg-white p-6 overflow-auto" v-html="renderData.html" />
+      <div v-else-if="renderData?.html" class="plugin-view-html" v-html="renderData.html" />
 
       <!-- 错误或空状态 -->
-      <div v-else class="flex-1 flex flex-col items-center justify-center bg-white">
+      <div v-else class="plugin-view-empty">
         <h2 class="text-gray-800 mb-2">
           {{ viewConfig?.title || '插件视图' }}
         </h2>
@@ -101,6 +101,42 @@ watch(viewId, loadViewData)
 </template>
 
 <style scoped>
+.plugin-view-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #1a1a1a;
+}
+.plugin-view-spin {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.plugin-view-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.plugin-view-html {
+  flex: 1;
+  padding: 24px;
+  overflow: auto;
+  background: white;
+}
+.plugin-view-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #252526;
+  color: #ccc;
+}
 :deep(.ant-spin-nested-loading),
 :deep(.ant-spin-container) {
   height: 100%;

@@ -1,0 +1,8 @@
+{
+  "id": "file-manager",
+  "name": "文件管理",
+  "version": "1.0.0",
+  "author": "Developer",
+  "description": "文件管理插件，支持图片、文档的导入导出，并保留扩展可以随时添加新的格式",
+  "main": "index.ts"
+}

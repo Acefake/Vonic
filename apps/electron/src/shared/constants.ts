@@ -6,10 +6,6 @@ export enum WindowName {
   LOADING = 'loading',
   WINDOW_EXAMPLE = 'windowExample',
   SETTINGS = 'settings',
-  EMBEDDED = 'embedded',
-  ADD_DESIGN_FACTOR = 'addDesignFactor',
-  DASHBOARD = 'dashboard',
-  TOOLBAR = 'toolbar',
 }
 
 /**

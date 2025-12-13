@@ -1,0 +1,8 @@
+{
+  "id": "github-jump",
+  "name": "GitHub 跳转",
+  "version": "1.0.0",
+  "author": "开发者",
+  "description": "快速跳转到 GitHub 官网的插件",
+  "main": "index.ts"
+}

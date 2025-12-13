@@ -6,6 +6,12 @@ import type { Component } from 'vue'
 import type { Options } from 'vue3-sfc-loader'
 import * as AntDesignIcons from '@ant-design/icons-vue'
 import * as AntDesignVue from 'ant-design-vue'
+import * as AntvX6 from '@antv/x6'
+import * as AntvX6Clipboard from '@antv/x6-plugin-clipboard'
+import * as AntvX6History from '@antv/x6-plugin-history'
+import * as AntvX6Keyboard from '@antv/x6-plugin-keyboard'
+import * as AntvX6Selection from '@antv/x6-plugin-selection'
+import * as AntvX6Snapline from '@antv/x6-plugin-snapline'
 import * as Vue from 'vue'
 import { loadModule } from 'vue3-sfc-loader'
 
@@ -30,6 +36,12 @@ export const loadPluginComponent = async (
       'vue': Vue,
       'ant-design-vue': AntDesignVue,
       '@ant-design/icons-vue': AntDesignIcons,
+      '@antv/x6': AntvX6,
+      '@antv/x6-plugin-clipboard': AntvX6Clipboard,
+      '@antv/x6-plugin-history': AntvX6History,
+      '@antv/x6-plugin-keyboard': AntvX6Keyboard,
+      '@antv/x6-plugin-selection': AntvX6Selection,
+      '@antv/x6-plugin-snapline': AntvX6Snapline,
     },
     async getFile(url: string) {
       // npm 模块应该在 moduleCache 中，不从文件系统加载

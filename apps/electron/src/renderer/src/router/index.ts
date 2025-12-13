@@ -86,7 +86,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: '插件视图',
       hidden: true,
-      noLayout: true, // 插件视图不使用主布局
+      // noLayout: true, // 注释掉以保留主布局（左侧边栏）
     },
   },
   // 插件详情页

@@ -1,0 +1,8 @@
+{
+  "id": "sysml-editor",
+  "name": "SysML v2 编辑器",
+  "version": "1.0.0",
+  "author": "Developer",
+  "description": "SysML v2 图形编辑器与元模型管理",
+  "main": "index.js"
+}

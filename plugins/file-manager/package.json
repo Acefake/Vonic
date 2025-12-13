@@ -1,0 +1,9 @@
+{
+  "name": "@vonic/plugin-file-manager",
+  "version": "1.0.0",
+  "private": true,
+  "description": "文件管理插件，支持图片、文档的导入导出，并保留扩展可以随时添加新的格式",
+  "devDependencies": {
+    "@vonic/plugin-electron": "workspace:*"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "@vonic/plugin-to-day-file",
+  "version": "1.0.0",
+  "private": true,
+  "description": "到日文件系统管理插件，支持每日文件创建、管理、归档",
+  "main": "index.ts",
+  "devDependencies": {
+    "@vonic/plugin-electron": "workspace:*"
+  }
+}

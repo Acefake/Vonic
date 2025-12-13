@@ -1,0 +1,16 @@
+{
+  "name": "github-jump-plugin",
+  "version": "1.0.0",
+  "description": "快速跳转到 GitHub 官网的插件",
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@vonic/plugin-electron": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vue": "^3.4.15"
+  }
+}

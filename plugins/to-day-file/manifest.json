@@ -1,0 +1,8 @@
+{
+  "id": "to-day-file",
+  "name": "到日文件",
+  "version": "1.0.0",
+  "author": "Developer",
+  "description": "到日文件系统管理插件，支持每日文件创建、管理、归档",
+  "main": "index.ts"
+}

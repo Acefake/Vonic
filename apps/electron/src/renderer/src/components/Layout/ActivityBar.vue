@@ -196,37 +196,23 @@ onUnmounted(() => {
     <!-- 活动图标栏 -->
     <div class="activity-icon-bar">
       <div class="flex-1 flex-col items-center">
-        <div
-          v-for="item in topActivities"
-          :key="item.id"
-          class="activity-icon-item"
-          :class="{ active: selectedActivity === item.id }"
-          :title="item.tooltip || item.name"
-          @click="handleActivitySelect(item.id)"
-        >
+        <div v-for="item in topActivities" :key="item.id" class="activity-icon-item"
+          :class="{ active: selectedActivity === item.id }" :title="item.tooltip || item.name"
+          @click="handleActivitySelect(item.id)">
           <component :is="getIconComponent(item.icon)" />
         </div>
       </div>
       <div class="flex-col items-center">
-        <div
-          v-for="item in bottomActivities"
-          :key="item.id"
-          class="activity-icon-item"
-          :class="{ active: selectedActivity === item.id }"
-          :title="item.tooltip || item.name"
-          @click="handleActivitySelect(item.id)"
-        >
+        <div v-for="item in bottomActivities" :key="item.id" class="activity-icon-item"
+          :class="{ active: selectedActivity === item.id }" :title="item.tooltip || item.name"
+          @click="handleActivitySelect(item.id)">
           <component :is="getIconComponent(item.icon)" />
         </div>
       </div>
     </div>
 
     <!-- 面板区域 -->
-    <div
-      v-show="!panelCollapsed && selectedActivity"
-      class="panel-container"
-      :style="{ width: `${panelWidth}px` }"
-    >
+    <div v-show="!panelCollapsed && selectedActivity" class="panel-container" :style="{ width: `${panelWidth}px` }">
       <div class="h-35px px-5 pr-2 flex-between shrink-0">
         <span class="text-11px font-400 uppercase tracking-wide text-text-2">{{ panelTitle }}</span>
         <MenuFoldOutlined class="collapse-btn" @click="togglePanel" />
@@ -269,10 +255,12 @@ onUnmounted(() => {
   border-radius: 6px;
   transition: all var(--transition-fast);
 }
+
 .activity-icon-item:hover {
   color: var(--activity-bar-fg-active);
   background: rgba(255, 255, 255, 0.1);
 }
+
 .activity-icon-item.active {
   color: var(--activity-bar-fg-active);
   background: rgba(255, 255, 255, 0.15);
@@ -296,7 +284,10 @@ onUnmounted(() => {
   padding: 4px;
   transition: color var(--transition-fast);
 }
-.collapse-btn:hover { color: var(--text-primary); }
+
+.collapse-btn:hover {
+  color: var(--text-primary);
+}
 
 .panel-content {
   flex: 1;
@@ -315,7 +306,10 @@ onUnmounted(() => {
   cursor: ew-resize;
   transition: background var(--transition-fast);
 }
-.resize-handle:hover { background: var(--primary); }
+
+.resize-handle:hover {
+  background: var(--primary);
+}
 
 /* 折叠按钮 */
 .collapsed-btn {
@@ -331,5 +325,8 @@ onUnmounted(() => {
   flex-shrink: 0;
   transition: color var(--transition-fast);
 }
-.collapsed-btn:hover { color: var(--text-primary); }
+
+.collapsed-btn:hover {
+  color: var(--text-primary);
+}
 </style>

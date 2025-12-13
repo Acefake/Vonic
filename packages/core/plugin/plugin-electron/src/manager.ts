@@ -63,11 +63,13 @@ export class PluginManager {
 
   private scanDevPlugins(): void {
     const devDir = this.config.devPluginsDir
-    if (!devDir || !fs.existsSync(devDir)) return
+    if (!devDir || !fs.existsSync(devDir))
+      return
     try {
       for (const dir of fs.readdirSync(devDir)) {
         const pluginPath = path.join(devDir, dir)
-        if (!fs.statSync(pluginPath).isDirectory()) continue
+        if (!fs.statSync(pluginPath).isDirectory())
+          continue
         const manifestPath = path.join(pluginPath, 'manifest.json')
         if (fs.existsSync(manifestPath)) {
           try {
@@ -104,9 +106,12 @@ export class PluginManager {
   }
 
   public getPluginType(pluginId: string): PluginType | null {
-    if (this.devPlugins.has(pluginId)) return PluginType.DEV
-    if (this.externalPlugins.has(pluginId)) return PluginType.EXTERNAL
-    if (this.plugins.has(pluginId)) return PluginType.BUILTIN
+    if (this.devPlugins.has(pluginId))
+      return PluginType.DEV
+    if (this.externalPlugins.has(pluginId))
+      return PluginType.EXTERNAL
+    if (this.plugins.has(pluginId))
+      return PluginType.BUILTIN
     return null
   }
 
@@ -131,7 +136,8 @@ export class PluginManager {
         Readable.from(zipData).pipe(Extract({ path: tempDir })).on('close', resolve).on('error', reject)
       })
       const manifestPath = this.findManifest(tempDir)
-      if (!manifestPath) throw new Error('插件包中未找到 manifest.json')
+      if (!manifestPath)
+        throw new Error('插件包中未找到 manifest.json')
       const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as PluginManifest
       if (!manifest.id || !manifest.name || !manifest.version || !manifest.main) {
         throw new Error('manifest.json 缺少必要字段')
@@ -141,7 +147,8 @@ export class PluginManager {
       }
       const pluginRoot = path.dirname(manifestPath)
       const targetDir = path.join(this.pluginsDir, manifest.id)
-      if (fs.existsSync(targetDir)) fs.rmSync(targetDir, { recursive: true, force: true })
+      if (fs.existsSync(targetDir))
+        fs.rmSync(targetDir, { recursive: true, force: true })
       fs.renameSync(pluginRoot, targetDir)
       this.externalPlugins.set(manifest.id, { manifest, pluginPath: targetDir })
       this.pluginStates.set(manifest.id, { enabled: false, loaded: false })
@@ -149,13 +156,15 @@ export class PluginManager {
       return manifest
     }
     finally {
-      if (fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true, force: true })
+      if (fs.existsSync(tempDir))
+        fs.rmSync(tempDir, { recursive: true, force: true })
     }
   }
 
   public async uninstallPlugin(pluginId: string): Promise<void> {
     const plugin = this.externalPlugins.get(pluginId)
-    if (!plugin) throw new Error(`插件未找到: ${pluginId}`)
+    if (!plugin)
+      throw new Error(`插件未找到: ${pluginId}`)
     await this.deactivatePlugin(pluginId)
     if (fs.existsSync(plugin.pluginPath)) {
       fs.rmSync(plugin.pluginPath, { recursive: true, force: true })
@@ -170,8 +179,10 @@ export class PluginManager {
 
   public async activatePlugin(pluginId: string): Promise<void> {
     const state = this.pluginStates.get(pluginId)
-    if (!state) throw new Error(`插件未找到: ${pluginId}`)
-    if (state.loaded) return
+    if (!state)
+      throw new Error(`插件未找到: ${pluginId}`)
+    if (state.loaded)
+      return
     // 清理可能残留的旧 API 实例
     const existingApi = this.pluginAPIs.get(pluginId)
     if (existingApi) {
@@ -182,7 +193,8 @@ export class PluginManager {
       await this.loadPluginModule(pluginId)
     }
     const plugin = this.plugins.get(pluginId)
-    if (!plugin) throw new Error(`插件加载失败: ${pluginId}`)
+    if (!plugin)
+      throw new Error(`插件加载失败: ${pluginId}`)
     const api = new PluginAPIImpl({
       pluginId,
       electron: this.config.electron,
@@ -200,7 +212,8 @@ export class PluginManager {
       state.loaded = true
       this.savePluginStates()
       this.config.electron.BrowserWindow.getAllWindows().forEach((win) => {
-        if (!win.isDestroyed()) win.webContents.send('plugin:activated', { pluginId })
+        if (!win.isDestroyed())
+          win.webContents.send('plugin:activated', { pluginId })
       })
       this.config.logger.info(`Plugin activated: ${pluginId}`)
     }
@@ -213,7 +226,8 @@ export class PluginManager {
 
   public async deactivatePlugin(pluginId: string): Promise<void> {
     const state = this.pluginStates.get(pluginId)
-    if (!state?.enabled) return
+    if (!state?.enabled)
+      return
     const plugin = this.plugins.get(pluginId)
     const api = this.pluginAPIs.get(pluginId)
     try {
@@ -247,7 +261,8 @@ export class PluginManager {
       throw new Error(`插件未注册: ${pluginId}`)
     }
     const mainPath = path.join(pluginPath, manifest.main)
-    if (!fs.existsSync(mainPath)) throw new Error(`入口文件不存在: ${mainPath}`)
+    if (!fs.existsSync(mainPath))
+      throw new Error(`入口文件不存在: ${mainPath}`)
     let pluginModule: Record<string, unknown>
     if (mainPath.endsWith('.ts')) {
       const tsCode = fs.readFileSync(mainPath, 'utf-8')
@@ -261,9 +276,18 @@ export class PluginManager {
       }
       const script = new vm.Script(result.code, { filename: mainPath })
       const context = vm.createContext({
-        module: moduleExports, exports: moduleExports.exports, require: moduleRequire,
-        __filename: mainPath, __dirname: path.dirname(mainPath),
-        console, process, Buffer, setTimeout, setInterval, clearTimeout, clearInterval,
+        module: moduleExports,
+        exports: moduleExports.exports,
+        require: moduleRequire,
+        __filename: mainPath,
+        __dirname: path.dirname(mainPath),
+        console,
+        process,
+        Buffer,
+        setTimeout,
+        setInterval,
+        clearTimeout,
+        clearInterval,
       })
       script.runInContext(context)
       pluginModule = moduleExports.exports
@@ -281,9 +305,18 @@ export class PluginManager {
       }
       const script = new vm.Script(jsCode, { filename: mainPath })
       const context = vm.createContext({
-        module: moduleExports, exports: moduleExports.exports, require: moduleRequire,
-        __filename: mainPath, __dirname: path.dirname(mainPath),
-        console, process, Buffer, setTimeout, setInterval, clearTimeout, clearInterval,
+        module: moduleExports,
+        exports: moduleExports.exports,
+        require: moduleRequire,
+        __filename: mainPath,
+        __dirname: path.dirname(mainPath),
+        console,
+        process,
+        Buffer,
+        setTimeout,
+        setInterval,
+        clearTimeout,
+        clearInterval,
       })
       script.runInContext(context)
       pluginModule = moduleExports.exports
@@ -298,9 +331,11 @@ export class PluginManager {
 
   public async loadDevPlugin(pluginPath: string): Promise<PluginManifest> {
     const manifestPath = path.join(pluginPath, 'manifest.json')
-    if (!fs.existsSync(manifestPath)) throw new Error('manifest.json 不存在')
+    if (!fs.existsSync(manifestPath))
+      throw new Error('manifest.json 不存在')
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as PluginManifest
-    if (this.devPlugins.has(manifest.id)) await this.unloadDevPlugin(manifest.id)
+    if (this.devPlugins.has(manifest.id))
+      await this.unloadDevPlugin(manifest.id)
     this.devPlugins.set(manifest.id, { manifest, pluginPath })
     this.pluginStates.set(manifest.id, { enabled: false, loaded: false })
     this.config.logger.info(`Dev plugin loaded: ${manifest.id}`)
@@ -317,13 +352,15 @@ export class PluginManager {
 
   public async reloadDevPlugin(pluginId: string): Promise<void> {
     const devPlugin = this.devPlugins.get(pluginId)
-    if (!devPlugin) throw new Error(`开发插件未找到: ${pluginId}`)
+    if (!devPlugin)
+      throw new Error(`开发插件未找到: ${pluginId}`)
     const wasEnabled = this.pluginStates.get(pluginId)?.enabled
     await this.deactivatePlugin(pluginId)
     this.plugins.delete(pluginId)
     const manifestPath = path.join(devPlugin.pluginPath, 'manifest.json')
     devPlugin.manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
-    if (wasEnabled) await this.activatePlugin(pluginId)
+    if (wasEnabled)
+      await this.activatePlugin(pluginId)
     this.config.logger.info(`Dev plugin reloaded: ${pluginId}`)
   }
 
@@ -332,16 +369,30 @@ export class PluginManager {
     for (const [id, plugin] of this.plugins.entries()) {
       const state = this.pluginStates.get(id)!
       result.push({
-        id: plugin.id, name: plugin.name, version: plugin.version, author: plugin.author, description: plugin.description,
-        enabled: state.enabled, loaded: state.loaded, isExternal: this.externalPlugins.has(id), isDev: this.devPlugins.has(id),
+        id: plugin.id,
+        name: plugin.name,
+        version: plugin.version,
+        author: plugin.author,
+        description: plugin.description,
+        enabled: state.enabled,
+        loaded: state.loaded,
+        isExternal: this.externalPlugins.has(id),
+        isDev: this.devPlugins.has(id),
       })
     }
     for (const [id, { manifest, pluginPath }] of this.externalPlugins.entries()) {
       if (!this.plugins.has(id)) {
         const state = this.pluginStates.get(id) || { enabled: false, loaded: false }
         result.push({
-          id: manifest.id, name: manifest.name, version: manifest.version, author: manifest.author, description: manifest.description,
-          enabled: state.enabled, loaded: state.loaded, isExternal: true, pluginPath,
+          id: manifest.id,
+          name: manifest.name,
+          version: manifest.version,
+          author: manifest.author,
+          description: manifest.description,
+          enabled: state.enabled,
+          loaded: state.loaded,
+          isExternal: true,
+          pluginPath,
         })
       }
     }
@@ -349,8 +400,15 @@ export class PluginManager {
       if (!this.plugins.has(id)) {
         const state = this.pluginStates.get(id) || { enabled: false, loaded: false }
         result.push({
-          id: manifest.id, name: manifest.name, version: manifest.version, author: manifest.author, description: manifest.description,
-          enabled: state.enabled, loaded: state.loaded, isDev: true, pluginPath,
+          id: manifest.id,
+          name: manifest.name,
+          version: manifest.version,
+          author: manifest.author,
+          description: manifest.description,
+          enabled: state.enabled,
+          loaded: state.loaded,
+          isDev: true,
+          pluginPath,
         })
       }
     }
@@ -363,12 +421,14 @@ export class PluginManager {
 
   private findManifest(dir: string): string | null {
     const rootManifest = path.join(dir, 'manifest.json')
-    if (fs.existsSync(rootManifest)) return rootManifest
+    if (fs.existsSync(rootManifest))
+      return rootManifest
     for (const item of fs.readdirSync(dir)) {
       const itemPath = path.join(dir, item)
       if (fs.statSync(itemPath).isDirectory()) {
         const subManifest = path.join(itemPath, 'manifest.json')
-        if (fs.existsSync(subManifest)) return subManifest
+        if (fs.existsSync(subManifest))
+          return subManifest
       }
     }
     return null
@@ -377,7 +437,8 @@ export class PluginManager {
   private scanInstalledPlugins(): void {
     try {
       for (const dir of fs.readdirSync(this.pluginsDir)) {
-        if (dir.startsWith('_temp_')) continue
+        if (dir.startsWith('_temp_'))
+          continue
         const pluginPath = path.join(this.pluginsDir, dir)
         const manifestPath = path.join(pluginPath, 'manifest.json')
         if (fs.existsSync(manifestPath)) {
@@ -432,7 +493,8 @@ export class PluginManager {
         filters: [{ name: 'Vonic 插件包', extensions: ['vpkg'] }],
         properties: ['openFile'],
       })
-      if (result.canceled || !result.filePaths.length) return null
+      if (result.canceled || !result.filePaths.length)
+        return null
       return await this.installPlugin(result.filePaths[0])
     })
     ipcMain.handle('plugin:uninstall', async (_, ...args: unknown[]) => {
@@ -442,7 +504,8 @@ export class PluginManager {
     ipcMain.handle('plugin:get-dir', () => this.pluginsDir)
     ipcMain.handle('plugin:load-dev', async () => {
       const result = await dialog.showOpenDialog({ title: '选择插件目录', properties: ['openDirectory'] })
-      if (result.canceled || !result.filePaths.length) return null
+      if (result.canceled || !result.filePaths.length)
+        return null
       const manifest = await this.loadDevPlugin(result.filePaths[0])
       return { manifest, pluginPath: result.filePaths[0] }
     })
@@ -473,9 +536,11 @@ export class PluginManager {
     ipcMain.handle('plugin:getPath', (_, ...args: unknown[]) => {
       const pluginId = args[0] as string
       const dev = this.devPlugins.get(pluginId)
-      if (dev) return dev.pluginPath
+      if (dev)
+        return dev.pluginPath
       const ext = this.externalPlugins.get(pluginId)
-      if (ext) return ext.pluginPath
+      if (ext)
+        return ext.pluginPath
       return null
     })
     ipcMain.handle('plugin:getReadme', (_, ...args: unknown[]) => {
@@ -483,7 +548,8 @@ export class PluginManager {
       const dev = this.devPlugins.get(pluginId)
       const ext = this.externalPlugins.get(pluginId)
       const pluginPath = dev?.pluginPath ?? ext?.pluginPath
-      if (!pluginPath) return null
+      if (!pluginPath)
+        return null
       const readmeNames = ['README.md', 'readme.md', 'Readme.md', 'README.MD']
       for (const name of readmeNames) {
         const readmePath = path.join(pluginPath, name)
@@ -497,11 +563,14 @@ export class PluginManager {
       const result: { menus: { pluginId: string, items: unknown[] }[], panels: { pluginId: string, panel: unknown }[] } = { menus: [], panels: [] }
       for (const [pluginId, api] of this.pluginAPIs.entries()) {
         const state = this.pluginStates.get(pluginId)
-        if (!state?.enabled || !state?.loaded) continue
+        if (!state?.enabled || !state?.loaded)
+          continue
         const menus = api.getRegisteredMenus()
-        if (menus.length > 0) result.menus.push({ pluginId, items: menus })
+        if (menus.length > 0)
+          result.menus.push({ pluginId, items: menus })
         const panel = api.getRegisteredPanel()
-        if (panel) result.panels.push({ pluginId, panel })
+        if (panel)
+          result.panels.push({ pluginId, panel })
       }
       this.config.logger.info(`Syncing UI state: ${result.menus.length} menus, ${result.panels.length} panels`)
       return result

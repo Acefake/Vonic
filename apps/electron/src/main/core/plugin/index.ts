@@ -3,8 +3,8 @@
  */
 import { join } from 'node:path'
 import { is } from '@electron-toolkit/utils'
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, shell } from 'electron'
 import { PluginManager } from '@vonic/plugin-electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Notification, shell } from 'electron'
 import { logger } from '../logger'
 import store from '../store'
 
@@ -66,10 +66,4 @@ export { pluginManager as PluginManager }
 export default pluginManager
 
 // 重新导出类型
-export type {
-  Plugin,
-  PluginInfo,
-  PluginManifest,
-  PluginState,
-  PluginType,
-} from '@vonic/plugin-electron'
+export type { Plugin, PluginInfo, PluginManifest, PluginState, PluginType } from '@vonic/plugin-electron'

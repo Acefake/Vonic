@@ -1,0 +1,883 @@
+<script setup lang="ts">
+import {
+  AppstoreOutlined,
+  DeleteOutlined,
+  FileAddOutlined,
+  FullscreenExitOutlined,
+  FullscreenOutlined,
+  RedoOutlined,
+  SaveOutlined,
+  UndoOutlined,
+  ZoomInOutlined,
+  ZoomOutOutlined,
+} from '@ant-design/icons-vue'
+import { Graph, type Node } from '@antv/x6'
+import { Clipboard } from '@antv/x6-plugin-clipboard'
+import { History } from '@antv/x6-plugin-history'
+import { Keyboard } from '@antv/x6-plugin-keyboard'
+import { Selection } from '@antv/x6-plugin-selection'
+import { Snapline } from '@antv/x6-plugin-snapline'
+import { Button as AButton, message, Tooltip as ATooltip } from 'ant-design-vue'
+import { computed, onMounted, onUnmounted, ref, shallowRef } from 'vue'
+
+// 声明 window.electron 类型
+declare global {
+  interface Window {
+    electron: {
+      ipcRenderer: {
+        invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
+        on: (channel: string, listener: (...args: unknown[]) => void) => void
+        removeListener: (channel: string, listener: (...args: unknown[]) => void) => void
+      }
+    }
+  }
+}
+
+const PLUGIN_ID = 'sysml-editor'
+
+// 状态
+const graphContainer = ref<HTMLDivElement | null>(null)
+const minimapContainer = ref<HTMLDivElement | null>(null)
+const graph = shallowRef<Graph | null>(null)
+const currentModel = ref<SysMLModel | null>(null)
+const models = ref<SysMLModel[]>([])
+const selectedElement = ref<SysMLElement | null>(null)
+const metaModel = ref<MetaModelDefinition | null>(null)
+const zoom = ref(100)
+const isFullscreen = ref(false)
+
+// 类型定义
+interface SysMLModel {
+  id: string
+  name: string
+  elements: SysMLElement[]
+  relations: SysMLRelation[]
+  createdAt: number
+  updatedAt: number
+}
+
+interface SysMLElement {
+  id: string
+  type: string
+  name: string
+  attributes: Record<string, unknown>
+  position: { x: number; y: number }
+  size: { width: number; height: number }
+}
+
+interface SysMLRelation {
+  id: string
+  type: string
+  sourceId: string
+  targetId: string
+  label?: string
+}
+
+interface MetaElementDef {
+  type: string
+  label: string
+  icon: string
+  category: string
+  defaultSize: { width: number; height: number }
+  ports: string[]
+}
+
+interface MetaRelationDef {
+  type: string
+  label: string
+  lineStyle: string
+  arrowType: string
+}
+
+interface MetaCategoryDef {
+  id: string
+  label: string
+  color: string
+}
+
+interface MetaModelDefinition {
+  elements: MetaElementDef[]
+  relations: MetaRelationDef[]
+  categories: MetaCategoryDef[]
+}
+
+// 分类颜色映射
+const categoryColors: Record<string, string> = {
+  structure: '#1890ff',
+  interface: '#52c41a',
+  data: '#faad14',
+  requirement: '#eb2f96',
+  constraint: '#722ed1',
+  behavior: '#13c2c2',
+}
+
+// 计算属性：按分类分组的元素
+const groupedElements = computed(() => {
+  if (!metaModel.value) return {}
+
+  const groups: Record<string, MetaElementDef[]> = {}
+  for (const element of metaModel.value.elements) {
+    if (!groups[element.category]) {
+      groups[element.category] = []
+    }
+    groups[element.category].push(element)
+  }
+  return groups
+})
+
+// IPC 调用
+const invokePlugin = async <T>(channel: string, ...args: unknown[]): Promise<T> => {
+  return await window.electron.ipcRenderer.invoke(`plugin:${PLUGIN_ID}:${channel}`, ...args)
+}
+
+// 初始化图形编辑器
+const initGraph = () => {
+  if (!graphContainer.value) return
+
+  const g = new Graph({
+    container: graphContainer.value,
+    autoResize: true,
+    background: { color: '#1e1e1e' },
+    grid: {
+      visible: true,
+      type: 'doubleMesh',
+      args: [
+        { color: '#2a2a2a', thickness: 1 },
+        { color: '#333333', thickness: 1, factor: 5 },
+      ],
+    },
+    panning: {
+      enabled: true,
+      modifiers: ['ctrl', 'meta'],
+    },
+    mousewheel: {
+      enabled: true,
+      modifiers: ['ctrl', 'meta'],
+      minScale: 0.2,
+      maxScale: 3,
+    },
+    connecting: {
+      router: 'manhattan',
+      connector: {
+        name: 'rounded',
+        args: { radius: 8 },
+      },
+      allowBlank: false,
+      allowLoop: false,
+      allowNode: true,
+      allowEdge: false,
+      createEdge() {
+        return g.createEdge({
+          shape: 'edge',
+          attrs: {
+            line: {
+              stroke: '#5F95FF',
+              strokeWidth: 2,
+              targetMarker: {
+                name: 'block',
+                width: 12,
+                height: 8,
+              },
+            },
+          },
+          zIndex: 0,
+        })
+      },
+    },
+    highlighting: {
+      magnetAvailable: {
+        name: 'stroke',
+        args: { attrs: { fill: '#fff', stroke: '#47C769' } },
+      },
+    },
+  })
+
+  // 插件配置
+  g.use(new Selection({
+    enabled: true,
+    multiple: true,
+    rubberband: true,
+    movable: true,
+    showNodeSelectionBox: true,
+  }))
+
+  g.use(new Snapline({ enabled: true }))
+  g.use(new Keyboard({ enabled: true }))
+  g.use(new Clipboard({ enabled: true }))
+  g.use(new History({ enabled: true }))
+
+  // 键盘快捷键
+  g.bindKey(['meta+c', 'ctrl+c'], () => {
+    const cells = g.getSelectedCells()
+    if (cells.length) {
+      g.copy(cells)
+    }
+    return false
+  })
+
+  g.bindKey(['meta+v', 'ctrl+v'], () => {
+    if (!g.isClipboardEmpty()) {
+      const cells = g.paste({ offset: 32 })
+      g.cleanSelection()
+      g.select(cells)
+    }
+    return false
+  })
+
+  g.bindKey(['meta+z', 'ctrl+z'], () => {
+    if (g.canUndo()) {
+      g.undo()
+    }
+    return false
+  })
+
+  g.bindKey(['meta+shift+z', 'ctrl+shift+z', 'ctrl+y'], () => {
+    if (g.canRedo()) {
+      g.redo()
+    }
+    return false
+  })
+
+  g.bindKey(['delete', 'backspace'], () => {
+    const cells = g.getSelectedCells()
+    if (cells.length) {
+      g.removeCells(cells)
+    }
+    return false
+  })
+
+  // 事件监听
+  g.on('scale', ({ sx }) => {
+    zoom.value = Math.round(sx * 100)
+  })
+
+  g.on('node:selected', ({ node }) => {
+    const data = node.getData()
+    selectedElement.value = data as SysMLElement
+  })
+
+  g.on('blank:click', () => {
+    selectedElement.value = null
+  })
+
+  graph.value = g
+}
+
+// 加载数据
+const loadData = async () => {
+  try {
+    const [modelsData, metaModelData] = await Promise.all([
+      invokePlugin<SysMLModel[]>('getModels'),
+      invokePlugin<MetaModelDefinition>('getMetaModel'),
+    ])
+    models.value = modelsData || []
+    metaModel.value = metaModelData
+
+    // 如果有模型，加载第一个
+    if (models.value.length > 0) {
+      await loadModel(models.value[0].id)
+    }
+  } catch (e) {
+    console.error('Failed to load data:', e)
+  }
+}
+
+// 加载模型到画布
+const loadModel = async (modelId: string) => {
+  const model = await invokePlugin<SysMLModel>('getModel', modelId)
+  if (!model || !graph.value) return
+
+  currentModel.value = model
+  graph.value.clearCells()
+
+  // 渲染元素
+  for (const element of model.elements) {
+    addNodeToGraph(element)
+  }
+
+  // 渲染关系
+  for (const relation of model.relations) {
+    addEdgeToGraph(relation)
+  }
+
+  graph.value.centerContent()
+}
+
+// 添加节点到画布
+const addNodeToGraph = (element: SysMLElement) => {
+  if (!graph.value || !metaModel.value) return
+
+  const elementDef = metaModel.value.elements.find(e => e.type === element.type)
+  const category = elementDef?.category || 'structure'
+  const color = categoryColors[category] || '#1890ff'
+
+  graph.value.addNode({
+    id: element.id,
+    x: element.position.x,
+    y: element.position.y,
+    width: element.size.width,
+    height: element.size.height,
+    data: element,
+    attrs: {
+      body: {
+        fill: '#252526',
+        stroke: color,
+        strokeWidth: 2,
+        rx: 6,
+        ry: 6,
+      },
+      label: {
+        text: element.name,
+        fill: '#ffffff',
+        fontSize: 13,
+        fontWeight: 500,
+      },
+    },
+    ports: {
+      groups: {
+        in: {
+          position: 'left',
+          attrs: {
+            circle: {
+              r: 5,
+              magnet: true,
+              stroke: color,
+              strokeWidth: 2,
+              fill: '#1e1e1e',
+            },
+          },
+        },
+        out: {
+          position: 'right',
+          attrs: {
+            circle: {
+              r: 5,
+              magnet: true,
+              stroke: color,
+              strokeWidth: 2,
+              fill: '#1e1e1e',
+            },
+          },
+        },
+      },
+      items: [
+        { id: `${element.id}-in`, group: 'in' },
+        { id: `${element.id}-out`, group: 'out' },
+      ],
+    },
+  })
+}
+
+// 添加边到画布
+const addEdgeToGraph = (relation: SysMLRelation) => {
+  if (!graph.value || !metaModel.value) return
+
+  const relationDef = metaModel.value.relations.find(r => r.type === relation.type)
+
+  graph.value.addEdge({
+    id: relation.id,
+    source: { cell: relation.sourceId, port: `${relation.sourceId}-out` },
+    target: { cell: relation.targetId, port: `${relation.targetId}-in` },
+    data: relation,
+    attrs: {
+      line: {
+        stroke: '#5F95FF',
+        strokeWidth: 2,
+        strokeDasharray: relationDef?.lineStyle === 'dashed' ? '5 5' : undefined,
+        targetMarker: {
+          name: relationDef?.arrowType === 'triangle' ? 'classic' : 'block',
+          width: 12,
+          height: 8,
+        },
+      },
+    },
+    labels: relation.label ? [{ attrs: { text: { text: relation.label, fill: '#aaa' } } }] : [],
+  })
+}
+
+// 创建新模型
+const handleCreateModel = async () => {
+  const model = await invokePlugin<SysMLModel>('createModel', '新建模型')
+  if (model) {
+    models.value.push(model)
+    await loadModel(model.id)
+    message.success('模型已创建')
+  }
+}
+
+// 从工具栏拖拽创建元素
+const handleDragStart = (event: DragEvent, elementDef: MetaElementDef) => {
+  if (!event.dataTransfer) return
+  event.dataTransfer.setData('application/json', JSON.stringify(elementDef))
+  event.dataTransfer.effectAllowed = 'copy'
+}
+
+// 画布拖放处理
+const handleDrop = async (event: DragEvent) => {
+  event.preventDefault()
+  if (!event.dataTransfer || !graph.value || !currentModel.value) return
+
+  const data = event.dataTransfer.getData('application/json')
+  if (!data) return
+
+  const elementDef: MetaElementDef = JSON.parse(data)
+  const rect = graphContainer.value?.getBoundingClientRect()
+  if (!rect) return
+
+  const point = graph.value.clientToLocal({
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top,
+  })
+
+  const newElement: SysMLElement = {
+    id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+    type: elementDef.type,
+    name: `${elementDef.label} 1`,
+    attributes: {},
+    position: { x: point.x, y: point.y },
+    size: elementDef.defaultSize,
+  }
+
+  // 保存到后端
+  await invokePlugin('addElement', currentModel.value.id, newElement)
+
+  // 添加到画布
+  addNodeToGraph(newElement)
+  currentModel.value.elements.push(newElement)
+}
+
+const handleDragOver = (event: DragEvent) => {
+  event.preventDefault()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'copy'
+  }
+}
+
+// 保存模型
+const handleSaveModel = async () => {
+  if (!currentModel.value || !graph.value) return
+
+  // 同步画布状态到模型
+  const nodes = graph.value.getNodes()
+  for (const node of nodes) {
+    const pos = node.getPosition()
+    const size = node.getSize()
+    const element = currentModel.value.elements.find(e => e.id === node.id)
+    if (element) {
+      element.position = pos
+      element.size = size
+    }
+  }
+
+  await invokePlugin('saveModel', currentModel.value)
+  message.success('模型已保存')
+}
+
+// 缩放控制
+const handleZoomIn = () => {
+  graph.value?.zoom(0.1)
+}
+
+const handleZoomOut = () => {
+  graph.value?.zoom(-0.1)
+}
+
+const handleZoomReset = () => {
+  graph.value?.zoomTo(1)
+  graph.value?.centerContent()
+}
+
+// 撤销/重做
+const handleUndo = () => {
+  graph.value?.undo()
+}
+
+const handleRedo = () => {
+  graph.value?.redo()
+}
+
+// 删除选中
+const handleDelete = () => {
+  const cells = graph.value?.getSelectedCells()
+  if (cells?.length) {
+    graph.value?.removeCells(cells)
+  }
+}
+
+// 全屏切换
+const handleToggleFullscreen = () => {
+  isFullscreen.value = !isFullscreen.value
+}
+
+onMounted(() => {
+  initGraph()
+  loadData()
+})
+
+onUnmounted(() => {
+  graph.value?.dispose()
+})
+</script>
+
+<template>
+  <div class="sysml-editor" :class="{ fullscreen: isFullscreen }">
+    <!-- 工具栏 -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <ATooltip title="新建模型">
+          <AButton type="text" size="small" @click="handleCreateModel">
+            <template #icon><FileAddOutlined /></template>
+          </AButton>
+        </ATooltip>
+        <ATooltip title="保存">
+          <AButton type="text" size="small" @click="handleSaveModel">
+            <template #icon><SaveOutlined /></template>
+          </AButton>
+        </ATooltip>
+        <div class="toolbar-divider" />
+        <ATooltip title="撤销 (Ctrl+Z)">
+          <AButton type="text" size="small" @click="handleUndo">
+            <template #icon><UndoOutlined /></template>
+          </AButton>
+        </ATooltip>
+        <ATooltip title="重做 (Ctrl+Shift+Z)">
+          <AButton type="text" size="small" @click="handleRedo">
+            <template #icon><RedoOutlined /></template>
+          </AButton>
+        </ATooltip>
+        <div class="toolbar-divider" />
+        <ATooltip title="删除 (Delete)">
+          <AButton type="text" size="small" @click="handleDelete">
+            <template #icon><DeleteOutlined /></template>
+          </AButton>
+        </ATooltip>
+      </div>
+      <div class="toolbar-center">
+        <span class="model-name">{{ currentModel?.name || '未选择模型' }}</span>
+      </div>
+      <div class="toolbar-right">
+        <ATooltip title="缩小">
+          <AButton type="text" size="small" @click="handleZoomOut">
+            <template #icon><ZoomOutOutlined /></template>
+          </AButton>
+        </ATooltip>
+        <span class="zoom-level">{{ zoom }}%</span>
+        <ATooltip title="放大">
+          <AButton type="text" size="small" @click="handleZoomIn">
+            <template #icon><ZoomInOutlined /></template>
+          </AButton>
+        </ATooltip>
+        <ATooltip title="重置视图">
+          <AButton type="text" size="small" @click="handleZoomReset">
+            <template #icon><FullscreenExitOutlined /></template>
+          </AButton>
+        </ATooltip>
+        <div class="toolbar-divider" />
+        <ATooltip :title="isFullscreen ? '退出全屏' : '全屏'">
+          <AButton type="text" size="small" @click="handleToggleFullscreen">
+            <template #icon>
+              <FullscreenExitOutlined v-if="isFullscreen" />
+              <FullscreenOutlined v-else />
+            </template>
+          </AButton>
+        </ATooltip>
+      </div>
+    </div>
+
+    <div class="main-content">
+      <!-- 左侧元素面板 -->
+      <div class="element-palette">
+        <div class="palette-header">
+          <AppstoreOutlined />
+          <span>元素</span>
+        </div>
+        <div class="palette-content">
+          <template v-for="(elements, category) in groupedElements" :key="category">
+            <div class="category-group">
+              <div class="category-title" :style="{ color: categoryColors[category] }">
+                {{ metaModel?.categories.find(c => c.id === category)?.label || category }}
+              </div>
+              <div class="category-elements">
+                <div
+                  v-for="element in elements"
+                  :key="element.type"
+                  class="element-item"
+                  draggable="true"
+                  :style="{ borderColor: categoryColors[element.category] }"
+                  @dragstart="handleDragStart($event, element)"
+                >
+                  <span class="element-label">{{ element.label }}</span>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- 画布区域 -->
+      <div
+        ref="graphContainer"
+        class="graph-container"
+        @drop="handleDrop"
+        @dragover="handleDragOver"
+      />
+
+      <!-- 右侧属性面板 -->
+      <div class="property-panel">
+        <div class="panel-header">
+          <span>属性</span>
+        </div>
+        <div class="panel-content">
+          <template v-if="selectedElement">
+            <div class="property-item">
+              <label>名称</label>
+              <input v-model="selectedElement.name" type="text" class="property-input" />
+            </div>
+            <div class="property-item">
+              <label>类型</label>
+              <span class="property-value">{{ selectedElement.type }}</span>
+            </div>
+            <div class="property-item">
+              <label>位置</label>
+              <span class="property-value">
+                ({{ Math.round(selectedElement.position.x) }}, {{ Math.round(selectedElement.position.y) }})
+              </span>
+            </div>
+            <div class="property-item">
+              <label>尺寸</label>
+              <span class="property-value">
+                {{ selectedElement.size.width }} × {{ selectedElement.size.height }}
+              </span>
+            </div>
+          </template>
+          <div v-else class="empty-hint">
+            选择一个元素查看属性
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 小地图 -->
+    <div ref="minimapContainer" class="minimap" />
+  </div>
+</template>
+
+<style scoped>
+.sysml-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1e1e1e;
+  color: #cccccc;
+  font-size: 13px;
+}
+
+.sysml-editor.fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px;
+  background: #252526;
+  border-bottom: 1px solid #333;
+  min-height: 40px;
+}
+
+.toolbar-left,
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.toolbar-center {
+  display: flex;
+  align-items: center;
+}
+
+.model-name {
+  font-weight: 500;
+  color: #e0e0e0;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: #404040;
+  margin: 0 8px;
+}
+
+.zoom-level {
+  min-width: 48px;
+  text-align: center;
+  font-size: 12px;
+  color: #888;
+}
+
+.main-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.element-palette {
+  width: 200px;
+  background: #252526;
+  border-right: 1px solid #333;
+  display: flex;
+  flex-direction: column;
+}
+
+.palette-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #888;
+  border-bottom: 1px solid #333;
+}
+
+.palette-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.category-group {
+  margin-bottom: 16px;
+}
+
+.category-title {
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.category-elements {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.element-item {
+  padding: 8px 12px;
+  background: #2d2d2d;
+  border: 1px solid #404040;
+  border-left-width: 3px;
+  border-radius: 4px;
+  cursor: grab;
+  transition: all 0.2s;
+}
+
+.element-item:hover {
+  background: #333;
+  border-color: #555;
+}
+
+.element-item:active {
+  cursor: grabbing;
+}
+
+.element-label {
+  font-size: 12px;
+  color: #ccc;
+}
+
+.graph-container {
+  flex: 1;
+  min-width: 0;
+  background: #1e1e1e;
+}
+
+.property-panel {
+  width: 240px;
+  background: #252526;
+  border-left: 1px solid #333;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-header {
+  padding: 12px 16px;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #888;
+  border-bottom: 1px solid #333;
+}
+
+.panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.property-item {
+  margin-bottom: 12px;
+}
+
+.property-item label {
+  display: block;
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 4px;
+}
+
+.property-input {
+  width: 100%;
+  padding: 6px 8px;
+  background: #2d2d2d;
+  border: 1px solid #404040;
+  border-radius: 4px;
+  color: #ccc;
+  font-size: 13px;
+}
+
+.property-input:focus {
+  outline: none;
+  border-color: #007acc;
+}
+
+.property-value {
+  font-size: 13px;
+  color: #ccc;
+}
+
+.empty-hint {
+  color: #666;
+  font-size: 12px;
+  text-align: center;
+  padding: 20px;
+}
+
+.minimap {
+  position: absolute;
+  right: 256px;
+  bottom: 16px;
+  width: 160px;
+  height: 120px;
+  background: #252526;
+  border: 1px solid #333;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+:deep(.ant-btn-text) {
+  color: #888;
+}
+
+:deep(.ant-btn-text:hover) {
+  color: #ccc;
+  background: #333;
+}
+</style>
